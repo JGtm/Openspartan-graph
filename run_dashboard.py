@@ -33,6 +33,8 @@ def main() -> int:
         "localhost",
         "--server.port",
         str(port),
+        "--server.headless",
+        "true",
     ]
 
     print("Lancement du dashboard…")
