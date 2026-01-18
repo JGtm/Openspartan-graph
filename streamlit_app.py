@@ -258,11 +258,10 @@ def plot_spree_headshots_accuracy(df: pd.DataFrame) -> go.Figure:
             x=d["start_time"],
             y=d["accuracy"],
             mode="lines+markers",
-            name="Précision",
+            name="Précision (%)",
             yaxis="y2",
-            hovertemplate="%{x|%Y-%m-%d %H:%M}<br>précision=%{y:.2f}%<extra></extra>",
             marker=dict(size=6, color="#7B61FF"),
-            hovertemplate="%{x|%Y-%m-%d %H:%M}<br>accuracy=%{y:.2f}%<extra></extra>",
+            hovertemplate="%{x|%Y-%m-%d %H:%M}<br>précision=%{y:.2f}%<extra></extra>",
         )
     )
 
@@ -274,7 +273,7 @@ def plot_spree_headshots_accuracy(df: pd.DataFrame) -> go.Figure:
         hovermode="x unified",
         yaxis=dict(title="Counts (spree / headshots)", rangemode="tozero"),
         yaxis2=dict(
-            title="Accuracy (%)",
+            title="Précision (%)",
             overlaying="y",
             side="right",
             showgrid=False,
