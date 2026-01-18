@@ -330,6 +330,20 @@ def _mark_firefight(df: pd.DataFrame) -> pd.DataFrame:
     return d
 
 
+def _is_allowed_playlist_name(name: str) -> bool:
+    s = (name or "").strip().lower()
+    if not s:
+        return False
+    if re.search(r"\bquick\s*play\b", s):
+        return True
+    # Variantes possibles: "Ranked Slayer", "Ranked: Slayer", etc.
+    if re.search(r"\branked\b.*\bslayer\b", s):
+        return True
+    if re.search(r"\branked\b.*\barena\b", s):
+        return True
+    return False
+
+
 def plot_timeseries(df: pd.DataFrame, title: str) -> go.Figure:
     fig = make_subplots(rows=1, cols=1, specs=[[{"secondary_y": True}]])
 
@@ -763,6 +777,12 @@ def main() -> None:
 
         last_n_acc = st.slider("Précision: derniers matchs", 5, 50, 20, step=1)
 
+        restrict_playlists = st.toggle(
+            "Limiter aux playlists (Quick Play / Ranked Slayer / Ranked Arena)",
+            value=True,
+            help="Exclut par défaut tous les autres modes.",
+        )
+
         include_firefight = st.toggle(
             "Inclure Firefight (PvE)",
             value=False,
@@ -790,6 +810,17 @@ def main() -> None:
     base = df.copy()
     if not include_firefight and "is_firefight" in base.columns:
         base = base.loc[~base["is_firefight"]].copy()
+
+    if restrict_playlists:
+        pl = base["playlist_name"].fillna("").astype(str)
+        allowed_mask = pl.apply(_is_allowed_playlist_name)
+        if allowed_mask.any():
+            base = base.loc[allowed_mask].copy()
+        else:
+            st.sidebar.warning(
+                "Aucune playlist n'a matché Quick Play / Ranked Slayer / Ranked Arena. "
+                "Désactive ce filtre si tes libellés sont différents."
+            )
     if playlist_id is not None:
         base = base.loc[base["playlist_id"].fillna("") == playlist_id]
     if map_id is not None:
