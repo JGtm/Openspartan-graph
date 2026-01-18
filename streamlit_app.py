@@ -281,41 +281,61 @@ def plot_map_comparison(df_breakdown: pd.DataFrame, metric: str, title: str) -> 
 
 
 def plot_spree_headshots_accuracy(df: pd.DataFrame) -> go.Figure:
-    d = df.copy()
-    fig = go.Figure()
+    # Axe X indexé (robuste pour les barres) + labels temps.
+    d = df.sort_values("start_time").reset_index(drop=True).copy()
+    x_idx = list(range(len(d)))
+
+    fig = make_subplots(rows=1, cols=1, specs=[[{"secondary_y": True}]])
 
     fig.add_trace(
-        go.Scatter(
-            x=d["start_time"],
+        go.Bar(
+            x=x_idx,
             y=d["max_killing_spree"],
-            mode="lines",
-            name="Max killing spree",
-            line=dict(width=2.2, color=HALO_COLORS["amber"]),
+            name="Spree (max)",
+            marker_color=HALO_COLORS["amber"],
+            opacity=0.85,
+            alignmentgroup="spree_hs",
+            offsetgroup="spree",
+            width=0.42,
             hovertemplate="spree=%{y}<extra></extra>",
-        )
+        ),
+        secondary_y=False,
+    )
+
+    fig.add_trace(
+        go.Bar(
+            x=x_idx,
+            y=d["headshot_kills"],
+            name="Headshots",
+            marker_color=HALO_COLORS["red"],
+            opacity=0.70,
+            alignmentgroup="spree_hs",
+            offsetgroup="headshots",
+            width=0.42,
+            hovertemplate="headshots=%{y}<extra></extra>",
+        ),
+        secondary_y=False,
     )
 
     fig.add_trace(
         go.Scatter(
-            x=d["start_time"],
-            y=d["headshot_kills"],
-            mode="lines",
-            name="Headshot kills",
-            line=dict(width=2.2, color=HALO_COLORS["red"]),
-            hovertemplate="headshots=%{y}<extra></extra>",
-        )
-    )
-
-    fig.add_trace(
-            go.Scatter(
-            x=d["start_time"],
+            x=x_idx,
             y=d["accuracy"],
             mode="lines",
             name="Précision (%)",
-            yaxis="y2",
             line=dict(width=2.2, color=HALO_COLORS["violet"]),
             hovertemplate="précision=%{y:.2f}%<extra></extra>",
-        )
+        ),
+        secondary_y=True,
+    )
+
+    labels = d["start_time"].dt.strftime("%m-%d %H:%M").tolist()
+    step = max(1, len(labels) // 10) if labels else 1
+    fig.update_xaxes(
+        title_text="Match (chronologique)",
+        tickmode="array",
+        tickvals=x_idx[::step],
+        ticktext=labels[::step],
     )
 
     fig.update_layout(
@@ -323,16 +343,13 @@ def plot_spree_headshots_accuracy(df: pd.DataFrame) -> go.Figure:
         margin=dict(l=40, r=50, t=30, b=40),
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
         hovermode="x unified",
-        yaxis=dict(title="Counts (spree / headshots)", rangemode="tozero"),
-        yaxis2=dict(
-            title="Précision (%)",
-            overlaying="y",
-            side="right",
-            showgrid=False,
-            rangemode="tozero",
-            ticksuffix="%",
-        ),
+        barmode="group",
+        bargap=0.15,
+        bargroupgap=0.06,
     )
+
+    fig.update_yaxes(title_text="Spree / Headshots", rangemode="tozero", secondary_y=False)
+    fig.update_yaxes(title_text="Précision (%)", ticksuffix="%", rangemode="tozero", secondary_y=True)
     return _apply_halo_plot_style(fig, height=420)
 
 
@@ -703,13 +720,37 @@ def plot_trio_metric(
     return _apply_halo_plot_style(fig, title=title, height=360)
 
 
-def plot_outcomes_mom(df: pd.DataFrame) -> go.Figure:
+def plot_outcomes_over_time(df: pd.DataFrame) -> tuple[go.Figure, str]:
     # Outcome codes per OpenSpartan docs:
     # 2=Wins, 3=Losses, 1=Ties, 4=NoFinishes
     d = df.dropna(subset=["outcome"]).copy()
-    d["month"] = d["start_time"].dt.to_period("M").astype(str)
+    if d.empty:
+        fig = go.Figure()
+        fig.update_layout(height=360, margin=dict(l=40, r=20, t=30, b=40))
+        fig.update_yaxes(title_text="Nombre")
+        return _apply_halo_plot_style(fig, height=360), "période"
+
+    tmin = pd.to_datetime(d["start_time"], errors="coerce").min()
+    tmax = pd.to_datetime(d["start_time"], errors="coerce").max()
+    days = int((tmax - tmin).days) if (tmin == tmin and tmax == tmax) else 999
+
+    # Heuristique simple: si on filtre sur peu de jours, "par mois" n'a plus de sens.
+    # - <= 10 jours: par jour
+    # - <= 45 jours: par semaine
+    # - sinon: par mois
+    if days <= 10:
+        bucket = d["start_time"].dt.to_period("D").astype(str)
+        bucket_label = "jour"
+    elif days <= 45:
+        bucket = d["start_time"].dt.to_period("W-MON").astype(str)
+        bucket_label = "semaine"
+    else:
+        bucket = d["start_time"].dt.to_period("M").astype(str)
+        bucket_label = "mois"
+
+    d["bucket"] = bucket
     pivot = (
-        d.pivot_table(index="month", columns="outcome", values="match_id", aggfunc="count")
+        d.pivot_table(index="bucket", columns="outcome", values="match_id", aggfunc="count")
         .fillna(0)
         .astype(int)
         .sort_index()
@@ -730,24 +771,28 @@ def plot_outcomes_mom(df: pd.DataFrame) -> go.Figure:
     fig.add_bar(x=pivot.index, y=nofin, name="Non terminés", marker_color=HALO_COLORS["violet"])
     fig.update_layout(barmode="stack", height=360, margin=dict(l=40, r=20, t=30, b=40))
     fig.update_yaxes(title_text="Nombre")
-    return _apply_halo_plot_style(fig, height=360)
+    return _apply_halo_plot_style(fig, height=360), bucket_label
 
 
 def plot_kda_distribution(df: pd.DataFrame) -> go.Figure:
     d = df.dropna(subset=["kda"]).copy()
     fig = go.Figure(
         data=[
-            go.Histogram(
+            go.Violin(
                 x=d["kda"],
-                nbinsx=40,
-                marker_color=HALO_COLORS["cyan"],
-                hovertemplate="FDA=%{x:.2f}<br>nombre=%{y}<extra></extra>",
+                name="FDA",
+                line_color=HALO_COLORS["cyan"],
+                fillcolor="rgba(53,208,255,0.20)",
+                box_visible=True,
+                meanline_visible=True,
+                points="outliers",
+                hovertemplate="FDA=%{x:.2f}<extra></extra>",
             )
         ]
     )
     fig.update_layout(height=360, margin=dict(l=40, r=20, t=30, b=40))
-    fig.update_xaxes(title_text="FDA")
-    fig.update_yaxes(title_text="Nombre")
+    fig.update_xaxes(title_text="FDA", zeroline=True)
+    fig.update_yaxes(visible=False)
     return _apply_halo_plot_style(fig, height=360)
 
 
@@ -1182,8 +1227,8 @@ def main() -> None:
     tab_series, tab_mom, tab_kda, tab_friend, tab_friends, tab_maps, tab_table = st.tabs(
         [
             "Séries temporelles",
-            "Victoires/Défaites (par mois)",
-            "FDA (distribution)",
+            "Victoires/Défaites (par période)",
+            "FDA (répartition)",
             "Avec un joueur",
             "Avec mes amis",
             "Comparaison maps",
@@ -1217,12 +1262,13 @@ def main() -> None:
         st.plotly_chart(plot_accuracy_last_n(dff, last_n_acc), width="stretch")
 
     with tab_mom:
+        fig_out, bucket_label = plot_outcomes_over_time(dff)
         st.markdown(
-            "Par mois : on regroupe les parties **par mois** et on compte le nombre de "
+            f"Par **{bucket_label}** : on regroupe les parties par {bucket_label} et on compte le nombre de "
             "victoires/défaites (et autres statuts) pour suivre l'évolution."
         )
         st.caption("Basé sur Players[].Outcome (2=win, 3=loss, 1=tie, 4=no finish).")
-        st.plotly_chart(plot_outcomes_mom(dff), width="stretch")
+        st.plotly_chart(fig_out, width="stretch")
 
     with tab_kda:
         valid = dff.dropna(subset=["kda"]) if "kda" in dff.columns else pd.DataFrame()
@@ -1231,6 +1277,7 @@ def main() -> None:
         else:
             st.metric("FDA médiane", f"{valid['kda'].median():.2f}")
             st.metric("FDA moyenne", f"{valid['kda'].mean():.2f}")
+            st.caption("Violin + boxplot : médiane, quartiles et dispersion (points = outliers).")
             st.plotly_chart(plot_kda_distribution(dff), width="stretch")
 
     with tab_friend:
@@ -1467,6 +1514,11 @@ def main() -> None:
                     st.warning("Aucun match trouvé (avec les filtres actuels).")
                     continue
 
+                # Filtre côté ami: uniquement les matchs réellement joués ensemble (évite les dates "hors duo").
+                shared_ids = set(sub["match_id"].astype(str))
+                friend_df = load_df(db_path, fx)
+                friend_sub = friend_df.loc[friend_df["match_id"].astype(str).isin(shared_ids)].copy()
+
                 rates_sub = compute_outcome_rates(sub)
                 total_out = max(1, rates_sub["total"])
                 win_rate_sub = rates_sub["wins"] / total_out
@@ -1491,12 +1543,28 @@ def main() -> None:
                 per_min[1].metric("Morts / min", f"{dpm_sub:.2f}" if dpm_sub is not None else "-")
                 per_min[2].metric("Assistances / min", f"{apm_sub:.2f}" if apm_sub is not None else "-")
 
-                st.plotly_chart(plot_timeseries(sub, title=f"{me_name} avec {name}"), width="stretch")
-
-                st.plotly_chart(
-                    plot_per_minute_timeseries(sub, title=f"{me_name} avec {name} — stats par minute"),
-                    width="stretch",
-                )
+                c1, c2 = st.columns(2)
+                with c1:
+                    st.plotly_chart(
+                        plot_timeseries(sub, title=f"{me_name} — matchs avec {name}"),
+                        width="stretch",
+                    )
+                    st.plotly_chart(
+                        plot_per_minute_timeseries(sub, title=f"{me_name} — stats/min (avec {name})"),
+                        width="stretch",
+                    )
+                with c2:
+                    if friend_sub.empty:
+                        st.warning("Impossible de charger les stats de l'ami sur les matchs partagés.")
+                    else:
+                        st.plotly_chart(
+                            plot_timeseries(friend_sub, title=f"{name} — matchs avec {me_name}"),
+                            width="stretch",
+                        )
+                        st.plotly_chart(
+                            plot_per_minute_timeseries(friend_sub, title=f"{name} — stats/min (avec {me_name})"),
+                            width="stretch",
+                        )
 
     with tab_maps:
         st.caption(
