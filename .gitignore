@@ -6,3 +6,6 @@ out/
 .DS_Store
 Thumbs.db
 .vscode/
+build/
+dist/
+*.spec
