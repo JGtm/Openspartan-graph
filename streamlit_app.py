@@ -301,6 +301,22 @@ def _build_xuid_option_map(xuids: list[str]) -> dict[str, str]:
     return dict(sorted(out.items(), key=lambda kv: kv[0].lower()))
 
 
+def _mark_firefight(df: pd.DataFrame) -> pd.DataFrame:
+    # Heuristique: on se base sur les libellés Playlist / Pair.
+    # Objectif: exclure Firefight par défaut (PvE) des stats "compétitives".
+    d = df.copy()
+    pl = d.get("playlist_name")
+    pair = d.get("pair_name")
+    pl_s = pl.fillna("").astype(str) if pl is not None else pd.Series([""] * len(d))
+    pair_s = pair.fillna("").astype(str) if pair is not None else pd.Series([""] * len(d))
+
+    pat = r"\bfirefight\b"
+    d["is_firefight"] = pl_s.str.contains(pat, case=False, regex=True) | pair_s.str.contains(
+        pat, case=False, regex=True
+    )
+    return d
+
+
 def plot_timeseries(df: pd.DataFrame, title: str) -> go.Figure:
     fig = make_subplots(rows=1, cols=1, specs=[[{"secondary_y": True}]])
 
@@ -656,6 +672,8 @@ def main() -> None:
         st.warning("Aucun match trouvé.")
         st.stop()
 
+    df = _mark_firefight(df)
+
     with st.sidebar:
         st.header("Filtres")
         dmin, dmax = _date_range(df)
@@ -686,6 +704,12 @@ def main() -> None:
 
         last_n_acc = st.slider("Précision: derniers matchs", 5, 50, 20, step=1)
 
+        include_firefight = st.toggle(
+            "Inclure Firefight (PvE)",
+            value=False,
+            help="Par défaut, les parties Firefight sont exclues des stats.",
+        )
+
         if filter_mode == "Période":
             start_d, end_d = st.date_input(
                 "Période",
@@ -705,6 +729,8 @@ def main() -> None:
 
     # Apply filters (map/playlist puis période ou sessions)
     base = df.copy()
+    if not include_firefight and "is_firefight" in base.columns:
+        base = base.loc[~base["is_firefight"]].copy()
     if playlist_id is not None:
         base = base.loc[base["playlist_id"].fillna("") == playlist_id]
     if map_id is not None:
@@ -1063,17 +1089,17 @@ def main() -> None:
             )
 
         if scope == "Moi (toutes les parties)":
-            base_scope = df
+            base_scope = base
         elif scope == "Avec Madina972":
             rows = query_matches_with_friend(db_path, xuid.strip(), "2533274858283686")
             rows = [r for r in rows if r.get("same_team")]
             match_ids = {r["match_id"] for r in rows}
-            base_scope = df.loc[df["match_id"].isin(match_ids)].copy()
+            base_scope = base.loc[base["match_id"].isin(match_ids)].copy()
         elif scope == "Avec Chocoboflor":
             rows = query_matches_with_friend(db_path, xuid.strip(), "2535469190789936")
             rows = [r for r in rows if r.get("same_team")]
             match_ids = {r["match_id"] for r in rows}
-            base_scope = df.loc[df["match_id"].isin(match_ids)].copy()
+            base_scope = base.loc[base["match_id"].isin(match_ids)].copy()
         else:
             base_scope = dff
 
