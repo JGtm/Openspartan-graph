@@ -402,12 +402,8 @@ def plot_timeseries(df: pd.DataFrame, title: str) -> go.Figure:
     fig = make_subplots(rows=1, cols=1, specs=[[{"secondary_y": True}]])
 
     common_hover = (
-        "%{x|%Y-%m-%d %H:%M}<br>"
-        "kills=%{customdata[0]} deaths=%{customdata[1]} assists=%{customdata[2]}<br>"
-        "précision=%{customdata[3]}% ratio=%{customdata[4]:.3f}<br>"
-        "map=%{customdata[5]}<br>"
-        "playlist=%{customdata[6]}<br>"
-        "match=%{customdata[7]}<extra></extra>"
+        "frags=%{customdata[0]} morts=%{customdata[1]} assistances=%{customdata[2]}<br>"
+        "précision=%{customdata[3]}% ratio=%{customdata[4]:.3f}<extra></extra>"
     )
 
     customdata = list(
@@ -417,9 +413,6 @@ def plot_timeseries(df: pd.DataFrame, title: str) -> go.Figure:
             df["assists"],
             df["accuracy"].round(2).astype(object),
             df["ratio"],
-            df["map_name"].fillna(""),
-            df["playlist_name"].fillna(""),
-            df["match_id"],
         )
     )
 
