@@ -11,7 +11,25 @@ from plotly.subplots import make_subplots
 from openspartan_graph import _guess_xuid_from_db_path, load_matches, query_matches_with_friend
 
 
-DEFAULT_DB = r"C:\Users\Guillaume\AppData\Local\OpenSpartan.Workshop\data\2533274823110022.db"
+def _default_db_path() -> str:
+    local = os.environ.get("LOCALAPPDATA")
+    if not local:
+        return ""
+    base = os.path.join(local, "OpenSpartan.Workshop", "data")
+    if not os.path.isdir(base):
+        return ""
+    try:
+        dbs = [os.path.join(base, f) for f in os.listdir(base) if f.lower().endswith(".db")]
+    except Exception:
+        return ""
+    if not dbs:
+        return ""
+    # Si plusieurs DB, prend la plus récente (modification).
+    dbs.sort(key=lambda p: os.path.getmtime(p), reverse=True)
+    return dbs[0]
+
+
+DEFAULT_DB = _default_db_path()
 DEFAULT_WAYPOINT_PLAYER = "JGtm"
 
 # Alias (local) pour un affichage plus lisible dans la GUI.
@@ -408,6 +426,52 @@ def plot_average_life(df: pd.DataFrame) -> go.Figure:
     return fig
 
 
+def plot_trio_metric(
+    d_self: pd.DataFrame,
+    d_f1: pd.DataFrame,
+    d_f2: pd.DataFrame,
+    *,
+    metric: str,
+    names: tuple[str, str, str],
+    title: str,
+    y_title: str,
+    y_suffix: str = "",
+    y_format: str = "",
+) -> go.Figure:
+    # Suppose que les 3 DF sont déjà alignées sur les mêmes match_id (inner join côté appelant).
+    fig = go.Figure()
+    colors = ["#2E86AB", "#D1495B", "#3A7D44"]
+    for d, name, color in zip((d_self, d_f1, d_f2), names, colors):
+        fig.add_trace(
+            go.Scatter(
+                x=d["start_time"],
+                y=d[metric],
+                mode="lines+markers",
+                name=name,
+                line=dict(width=2, color=color),
+                marker=dict(size=6, color=color),
+                hovertemplate=(
+                    "%{x|%Y-%m-%d %H:%M}<br>"
+                    + f"{metric}=%{{y{':' + y_format if y_format else ''}}}{y_suffix}"
+                    + "<extra></extra>"
+                ),
+            )
+        )
+
+    fig.update_layout(
+        template="plotly_white",
+        height=360,
+        title=title,
+        margin=dict(l=40, r=20, t=60, b=40),
+        hovermode="x unified",
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
+    )
+    fig.update_yaxes(title_text=y_title)
+    if y_suffix and not y_format:
+        fig.update_yaxes(ticksuffix=y_suffix)
+    return fig
+
+
 def plot_outcomes_mom(df: pd.DataFrame) -> go.Figure:
     # Outcome codes per OpenSpartan docs:
     # 2=Wins, 3=Losses, 1=Ties, 4=NoFinishes
@@ -529,6 +593,12 @@ def main() -> None:
             help="Ex: JGtm (sert à construire l'URL de match).",
         )
 
+        if not db_path.strip():
+            st.error(
+                "Aucun .db détecté automatiquement. "
+                "Vérifie que OpenSpartan Workshop est installé et que la DB existe dans LOCALAPPDATA."
+            )
+            st.stop()
         if not os.path.exists(db_path):
             st.error("Le fichier .db n'existe pas à ce chemin.")
             st.stop()
@@ -774,6 +844,118 @@ def main() -> None:
         if not picked_names:
             st.info("Sélectionne au moins un ami.")
         else:
+            # Vue trio (moi + les 2 amis) : uniquement si les 2 sont sélectionnés.
+            if set(picked_names) >= {"Madina972", "Chocoboflor"}:
+                st.subheader("Tous les trois (même équipe)")
+                rows_m = query_matches_with_friend(db_path, xuid.strip(), friends["Madina972"])
+                rows_c = query_matches_with_friend(db_path, xuid.strip(), friends["Chocoboflor"])
+                rows_m = [r for r in rows_m if r.get("same_team")]
+                rows_c = [r for r in rows_c if r.get("same_team")]
+                ids_m = {r["match_id"] for r in rows_m}
+                ids_c = {r["match_id"] for r in rows_c}
+                trio_ids = ids_m & ids_c
+
+                base_for_trio = dff if apply_current_filters else df
+                trio_ids = trio_ids & set(base_for_trio["match_id"].astype(str))
+
+                if not trio_ids:
+                    st.warning("Aucun match trouvé où vous êtes tous les trois dans la même équipe (avec les filtres actuels).")
+                else:
+                    # Charge les stats de chacun et aligne par match_id.
+                    me_df = base_for_trio.loc[base_for_trio["match_id"].isin(trio_ids)].copy()
+                    f1_name, f2_name = "Madina972", "Chocoboflor"
+                    f1_df = load_df(db_path, friends[f1_name])
+                    f2_df = load_df(db_path, friends[f2_name])
+                    f1_df = f1_df.loc[f1_df["match_id"].isin(trio_ids)].copy()
+                    f2_df = f2_df.loc[f2_df["match_id"].isin(trio_ids)].copy()
+
+                    # Aligne sur les mêmes match_id et utilise le start_time de moi comme référence d'axe.
+                    me_df = me_df.sort_values("start_time")
+                    f1_df = f1_df[["match_id", "kills", "deaths", "assists", "accuracy", "ratio"]].copy()
+                    f2_df = f2_df[["match_id", "kills", "deaths", "assists", "accuracy", "ratio"]].copy()
+                    merged = me_df[["match_id", "start_time", "kills", "deaths", "assists", "accuracy", "ratio"]].merge(
+                        f1_df.add_prefix("f1_"), left_on="match_id", right_on="f1_match_id", how="inner"
+                    ).merge(
+                        f2_df.add_prefix("f2_"), left_on="match_id", right_on="f2_match_id", how="inner"
+                    )
+                    if merged.empty:
+                        st.warning("Impossible d'aligner les stats des 3 joueurs sur ces matchs.")
+                    else:
+                        merged = merged.sort_values("start_time")
+                        # Reconstitue 3 DF alignées pour le plot.
+                        d_self = merged[["start_time", "kills", "deaths", "ratio", "accuracy"]].rename(
+                            columns={"accuracy": "accuracy"}
+                        )
+                        d_f1 = merged[["start_time", "f1_kills", "f1_deaths", "f1_ratio", "f1_accuracy"]].rename(
+                            columns={
+                                "f1_kills": "kills",
+                                "f1_deaths": "deaths",
+                                "f1_ratio": "ratio",
+                                "f1_accuracy": "accuracy",
+                            }
+                        )
+                        d_f2 = merged[["start_time", "f2_kills", "f2_deaths", "f2_ratio", "f2_accuracy"]].rename(
+                            columns={
+                                "f2_kills": "kills",
+                                "f2_deaths": "deaths",
+                                "f2_ratio": "ratio",
+                                "f2_accuracy": "accuracy",
+                            }
+                        )
+
+                        names = (me_name, f1_name, f2_name)
+                        st.plotly_chart(
+                            plot_trio_metric(
+                                d_self,
+                                d_f1,
+                                d_f2,
+                                metric="kills",
+                                names=names,
+                                title="Kills (tous les trois)",
+                                y_title="Kills",
+                            ),
+                            width="stretch",
+                        )
+                        st.plotly_chart(
+                            plot_trio_metric(
+                                d_self,
+                                d_f1,
+                                d_f2,
+                                metric="deaths",
+                                names=names,
+                                title="Morts / Deaths (tous les trois)",
+                                y_title="Deaths",
+                            ),
+                            width="stretch",
+                        )
+                        st.plotly_chart(
+                            plot_trio_metric(
+                                d_self,
+                                d_f1,
+                                d_f2,
+                                metric="ratio",
+                                names=names,
+                                title="Ratio (tous les trois)",
+                                y_title="Ratio",
+                                y_format=".3f",
+                            ),
+                            width="stretch",
+                        )
+                        st.plotly_chart(
+                            plot_trio_metric(
+                                d_self,
+                                d_f1,
+                                d_f2,
+                                metric="accuracy",
+                                names=names,
+                                title="Accuracy (tous les trois)",
+                                y_title="%",
+                                y_suffix="%",
+                                y_format=".2f",
+                            ),
+                            width="stretch",
+                        )
+
             for name in picked_names:
                 fx = friends[name]
                 rows = query_matches_with_friend(db_path, xuid.strip(), fx)
