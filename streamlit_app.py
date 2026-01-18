@@ -1,3 +1,4 @@
+import json
 import os
 import re
 from datetime import date
@@ -75,6 +76,36 @@ DEFAULT_DB = _default_db_path()
 DEFAULT_WAYPOINT_PLAYER = "JGtm"
 
 
+def _aliases_file_path() -> str:
+    # Fichier d'alias à côté du script (simple à versionner/sauvegarder).
+    return os.path.join(os.path.dirname(__file__), "xuid_aliases.json")
+
+
+def _load_aliases_file(path: str) -> dict[str, str]:
+    try:
+        if not os.path.exists(path):
+            return {}
+        with open(path, "r", encoding="utf-8") as f:
+            raw = json.load(f)
+        if not isinstance(raw, dict):
+            return {}
+        cleaned: dict[str, str] = {}
+        for k, v in raw.items():
+            kk = str(k).strip()
+            vv = str(v).strip()
+            if kk and vv:
+                cleaned[kk] = vv
+        return cleaned
+    except Exception:
+        return {}
+
+
+def _save_aliases_file(path: str, aliases: dict[str, str]) -> None:
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(dict(sorted(aliases.items())), f, ensure_ascii=False, indent=2)
+
+
 def _default_workshop_exe_path() -> str:
     # Chemin par défaut fourni par l'utilisateur, avec adaptation via variables d'env.
     pf86 = os.environ.get("ProgramFiles(x86)")
@@ -83,16 +114,22 @@ def _default_workshop_exe_path() -> str:
     return os.path.join(pf86, "Den.Dev", "OpenSpartan Workshop", "OpenSpartan.Workshop.exe")
 
 # Alias (local) pour un affichage plus lisible dans la GUI.
-XUID_ALIASES: dict[str, str] = {
+XUID_ALIASES_DEFAULT: dict[str, str] = {
     "2533274823110022": "JGtm",
     "2533274858283686": "Madina972",
     "2535469190789936": "Chocoboflor",
 }
 
 
+def _get_xuid_aliases() -> dict[str, str]:
+    merged = dict(XUID_ALIASES_DEFAULT)
+    merged.update(_load_aliases_file(_aliases_file_path()))
+    return merged
+
+
 def display_name_from_xuid(xuid: str) -> str:
     xuid = (xuid or "").strip()
-    return XUID_ALIASES.get(xuid, xuid)
+    return _get_xuid_aliases().get(xuid, xuid)
 
 
 @st.cache_data(show_spinner=False)
@@ -407,16 +444,36 @@ def _date_range(df: pd.DataFrame) -> Tuple[date, date]:
 
 
 def _build_option_map(series_name: pd.Series, series_id: pd.Series) -> dict:
-    out = {}
+    def clean_label(s: str) -> str:
+        # Certaines sources ajoutent un suffixe type " - <hash/uuid>".
+        # On ne garde que le libellé lisible.
+        s = (s or "").strip()
+        m = re.match(r"^(.*?)(?:\s*[\-–—]\s*[0-9A-Za-z]{8,})$", s)
+        if m:
+            s = (m.group(1) or "").strip()
+        return s
+
+    out: dict[str, str] = {}
+    collisions: dict[str, int] = {}
+
     for name, _id in zip(series_name.fillna(""), series_id.fillna("")):
         if not _id:
             continue
-        # N'affiche pas les entrées sans libellé.
         if not (isinstance(name, str) and name.strip()):
             continue
-        label = name.strip()
-        out[f"{label} — {_id}"] = _id
-    # stable order
+
+        label = clean_label(name)
+        if not label:
+            continue
+
+        # Si plusieurs IDs partagent le même libellé, on suffixe (v2), (v3), ...
+        key = label
+        if key in out and out[key] != _id:
+            collisions[label] = collisions.get(label, 1) + 1
+            key = f"{label} (v{collisions[label]})"
+
+        out[key] = _id
+
     return dict(sorted(out.items(), key=lambda kv: kv[0].lower()))
 
 
@@ -993,7 +1050,7 @@ def main() -> None:
         <style>
                     :root {
                         /* Palette inspirée Halo Waypoint (export CSS) */
-                        --bg: #141414;
+                        --bg: #0f1518;
                         --panel: #20272c;
                         --panel-2: #242c2f;
                         --border: rgba(255,255,255,0.14);
@@ -1002,40 +1059,44 @@ def main() -> None:
                         --accent: #70cddf;
                     }
 
-                    .block-container {padding-top: 1.2rem; padding-bottom: 2.2rem; max-width: 1400px;}
+                    .block-container {
+                        padding-top: 1.2rem;
+                        padding-bottom: 2.2rem;
+                        max-width: 1400px;
+                        position: relative;
+                        z-index: 2;
+                    }
                     section.main {
                         background:
+                            /* brume centrale douce (captures) */
+                            radial-gradient(1200px 820px at 50% 12%, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.00) 58%),
                             /* signature Waypoint: glow radial bleu-gris côté bas/droite */
-                            radial-gradient(116.5% 168.84% at 115.37% 167.93%, rgba(107,155,183,0.30) 0%, rgba(0,52,82,0) 55%),
+                            radial-gradient(116.5% 168.84% at 115.37% 167.93%, rgba(107,155,183,0.22) 0%, rgba(0,52,82,0) 62%),
                             /* léger accent cyan côté haut/gauche */
-                            radial-gradient(900px 520px at 10% -12%, rgba(112,205,223,0.18) 0%, transparent 55%),
-                            linear-gradient(180deg, #141414 0%, #101214 55%, #0b0c0e 100%);
+                            radial-gradient(900px 520px at 10% -12%, rgba(112,205,223,0.14) 0%, transparent 60%),
+                            linear-gradient(180deg, var(--bg) 0%, #0c1012 70%, #090c0e 100%);
                         color: var(--text);
                         position: relative;
+                        z-index: 1;
                     }
 
-                    /* Overlay style "Halo Waypoint" (inspiré): grille fine + scanlines + vignette + grain */
+                    /* Overlay style Waypoint (captures): hatch diagonal + vignette + grain */
                     section.main:before {
                         content: "";
                         position: fixed;
                         inset: 0;
                         pointer-events: none;
+                        z-index: 0;
                         background:
+                            /* hatch diagonal */
                             repeating-linear-gradient(
-                                0deg,
-                                rgba(255,255,255,0.030) 0px,
-                                rgba(255,255,255,0.030) 1px,
-                                transparent 1px,
-                                transparent 30px
-                            ),
-                            repeating-linear-gradient(
-                                90deg,
-                                rgba(255,255,255,0.018) 0px,
-                                rgba(255,255,255,0.018) 1px,
-                                transparent 1px,
-                                transparent 30px
+                                135deg,
+                                rgba(255,255,255,0.060) 0px,
+                                rgba(255,255,255,0.060) 2px,
+                                transparent 2px,
+                                transparent 8px
                             );
-                        opacity: 0.28;
+                        opacity: 0.14;
                         mix-blend-mode: overlay;
                     }
 
@@ -1044,29 +1105,61 @@ def main() -> None:
                         position: fixed;
                         inset: 0;
                         pointer-events: none;
+                        z-index: 0;
                         background:
                             /* vignette */
-                            radial-gradient(1200px 820px at 50% 12%, rgba(0,0,0,0.00) 45%, rgba(0,0,0,0.62) 100%),
-                            /* scanlines */
-                            repeating-linear-gradient(
-                                180deg,
-                                rgba(255,255,255,0.020) 0px,
-                                rgba(255,255,255,0.020) 1px,
-                                transparent 1px,
-                                transparent 6px
-                            ),
+                            radial-gradient(1400px 900px at 50% 10%, rgba(0,0,0,0.00) 40%, rgba(0,0,0,0.72) 100%),
                             /* grain (points) */
-                            radial-gradient(rgba(255,255,255,0.050) 1px, transparent 1.3px);
-                        background-size: auto, auto, 22px 22px;
-                        opacity: 0.16;
+                            radial-gradient(rgba(255,255,255,0.060) 1px, transparent 1.35px);
+                        background-size: auto, 24px 24px;
+                        opacity: 0.14;
                         mix-blend-mode: overlay;
+                    }
+
+                    /* Découpes haut/bas façon Waypoint (captures) */
+                    .wp-notch-top,
+                    .wp-notch-bottom {
+                        position: fixed;
+                        left: 0;
+                        right: 0;
+                        height: 64px;
+                        pointer-events: none;
+                        z-index: 1;
+                        background: linear-gradient(180deg, rgba(0,0,0,0.55), rgba(0,0,0,0.00));
+                    }
+                    .wp-notch-top {
+                        top: 0;
+                        clip-path: polygon(
+                            0 0,
+                            100% 0,
+                            100% 70%,
+                            70% 70%,
+                            calc(70% - 72px) 100%,
+                            calc(30% + 72px) 100%,
+                            30% 70%,
+                            0 70%
+                        );
+                    }
+                    .wp-notch-bottom {
+                        bottom: 0;
+                        transform: rotate(180deg);
+                        clip-path: polygon(
+                            0 0,
+                            100% 0,
+                            100% 70%,
+                            70% 70%,
+                            calc(70% - 72px) 100%,
+                            calc(30% + 72px) 100%,
+                            30% 70%,
+                            0 70%
+                        );
                     }
 
                     [data-testid="stSidebar"] {
                         border-right: 1px solid rgba(255,255,255,0.10);
                         background:
                             radial-gradient(800px 380px at 0% 0%, rgba(112,205,223,0.10) 0%, transparent 55%),
-                            linear-gradient(180deg, rgba(36,44,47,0.90), rgba(32,39,44,0.75));
+                            linear-gradient(180deg, rgba(36,44,47,0.92), rgba(32,39,44,0.78));
                     }
 
                     .hero {
@@ -1126,6 +1219,8 @@ def main() -> None:
 
     st.markdown(
         """
+        <div class="wp-notch-top"></div>
+        <div class="wp-notch-bottom"></div>
         <div class="hero">
             <div class="title">OpenSpartan Graphs (local)</div>
             <div class="subtitle">Analyse tes parties Halo Infinite depuis la DB OpenSpartan Workshop — filtres, séries temporelles, amis, maps.</div>
@@ -1141,16 +1236,66 @@ def main() -> None:
     )
 
     with st.sidebar:
-        st.header("Source")
-        db_path = st.text_input("Chemin du .db", value=DEFAULT_DB)
-        xuid_default = _guess_xuid_from_db_path(db_path) or ""
-        xuid = st.text_input("XUID", value=xuid_default)
-        me_name = display_name_from_xuid(xuid.strip())
-        waypoint_player = st.text_input(
-            "HaloWaypoint player (slug)",
-            value=DEFAULT_WAYPOINT_PLAYER,
-            help="Ex: JGtm (sert à construire l'URL de match).",
-        )
+        with st.expander("Source", expanded=False):
+            db_path = st.text_input("Chemin du .db", value=DEFAULT_DB)
+            xuid_default = _guess_xuid_from_db_path(db_path) or ""
+            xuid = st.text_input("XUID", value=xuid_default)
+            me_name = display_name_from_xuid(xuid.strip())
+            waypoint_player = st.text_input(
+                "HaloWaypoint player (slug)",
+                value=DEFAULT_WAYPOINT_PLAYER,
+                help="Ex: JGtm (sert à construire l'URL de match).",
+            )
+
+            with st.expander("Alias (XUID → gamertag)", expanded=False):
+                st.caption(
+                    "La DB OpenSpartan ne contient pas les gamertags. "
+                    "Ici tu peux définir des alias locaux (persistés dans un fichier JSON) pour rendre l'UI plus lisible."
+                )
+                aliases_path = _aliases_file_path()
+                current_aliases = _load_aliases_file(aliases_path)
+
+                ax = st.text_input("XUID à aliaser", value="")
+                an = st.text_input("Gamertag", value="")
+                cols = st.columns(2)
+                if cols[0].button("Enregistrer l'alias", use_container_width=True):
+                    axc = (ax or "").strip()
+                    anc = (an or "").strip()
+                    if not axc.isdigit():
+                        st.error("XUID invalide (doit être numérique).")
+                    elif not anc:
+                        st.error("Gamertag vide.")
+                    else:
+                        current_aliases[axc] = anc
+                        _save_aliases_file(aliases_path, current_aliases)
+                        st.success("Alias enregistré.")
+                        st.rerun()
+
+                if cols[1].button("Supprimer l'alias", use_container_width=True):
+                    axc = (ax or "").strip()
+                    if not axc:
+                        st.error("Renseigne un XUID à supprimer.")
+                    elif axc not in current_aliases:
+                        st.warning("Cet alias n'existe pas.")
+                    else:
+                        del current_aliases[axc]
+                        _save_aliases_file(aliases_path, current_aliases)
+                        st.success("Alias supprimé.")
+                        st.rerun()
+
+                if current_aliases:
+                    st.dataframe(
+                        (
+                            pd.DataFrame(
+                                sorted(current_aliases.items()),
+                                columns=["XUID", "Gamertag"],
+                            )
+                        ),
+                        width="stretch",
+                        hide_index=True,
+                    )
+                else:
+                    st.info("Aucun alias personnalisé pour l'instant.")
 
         st.divider()
         st.header("OpenSpartan")
@@ -1196,13 +1341,12 @@ def main() -> None:
 
     with st.sidebar:
         st.header("Filtres")
+        if "include_firefight" not in st.session_state:
+            st.session_state["include_firefight"] = False
+        if "restrict_playlists" not in st.session_state:
+            st.session_state["restrict_playlists"] = True
 
-        with st.expander("Paramètres avancés", expanded=False):
-            include_firefight = st.toggle(
-                "Inclure Firefight (PvE)",
-                value=False,
-                help="Par défaut, Firefight est exclu des stats.",
-            )
+    include_firefight = bool(st.session_state.get("include_firefight", False))
 
     # Firefight est exclu par défaut (toggle caché dans Paramètres avancés).
     base_for_filters = df.copy()
@@ -1317,11 +1461,20 @@ def main() -> None:
 
         last_n_acc = st.slider("Précision: derniers matchs", 5, 50, 20, step=1)
 
-        restrict_playlists = st.toggle(
-            "Limiter aux playlists (Quick Play / Ranked Slayer / Ranked Arena)",
-            value=True,
-            help="Exclut par défaut tous les autres modes.",
-        )
+        with st.expander("Paramètres avancés", expanded=False):
+            st.toggle(
+                "Inclure Firefight (PvE)",
+                key="include_firefight",
+                value=False,
+                help="Par défaut, Firefight est exclu des stats.",
+            )
+
+            st.toggle(
+                "Limiter aux playlists (Quick Play / Ranked Slayer / Ranked Arena)",
+                key="restrict_playlists",
+                value=True,
+                help="Exclut par défaut tous les autres modes.",
+            )
 
         # (la sélection période/sessions est gérée plus haut)
 
@@ -1338,6 +1491,7 @@ def main() -> None:
     else:
         dff = base.copy()
 
+    restrict_playlists = bool(st.session_state.get("restrict_playlists", True))
     if restrict_playlists:
         pl = dff["playlist_name"].fillna("").astype(str)
         allowed_mask = pl.apply(_is_allowed_playlist_name)
@@ -1420,52 +1574,56 @@ def main() -> None:
     )
 
     with tab_series:
-        fig = plot_timeseries(dff, title=f"{me_name}")
-        st.plotly_chart(fig, width="stretch")
+        with st.spinner("Génération des graphes…"):
+            fig = plot_timeseries(dff, title=f"{me_name}")
+            st.plotly_chart(fig, width="stretch")
 
-        st.subheader("Assistances")
-        st.plotly_chart(plot_assists_timeseries(dff, title=f"{me_name} — Assistances"), width="stretch")
+            st.subheader("Assistances")
+            st.plotly_chart(plot_assists_timeseries(dff, title=f"{me_name} — Assistances"), width="stretch")
 
-        st.subheader("Stats par minute")
-        st.plotly_chart(
-            plot_per_minute_timeseries(dff, title=f"{me_name} — Frags/Morts/Assistances par minute"),
-            width="stretch",
-        )
+            st.subheader("Stats par minute")
+            st.plotly_chart(
+                plot_per_minute_timeseries(dff, title=f"{me_name} — Frags/Morts/Assistances par minute"),
+                width="stretch",
+            )
 
-        st.subheader("Durée de vie moyenne (Average Life)")
-        if dff.dropna(subset=["average_life_seconds"]).empty:
-            st.info("Average Life indisponible sur ce filtre.")
-        else:
-            st.plotly_chart(plot_average_life(dff), width="stretch")
+            st.subheader("Durée de vie moyenne (Average Life)")
+            if dff.dropna(subset=["average_life_seconds"]).empty:
+                st.info("Average Life indisponible sur ce filtre.")
+            else:
+                st.plotly_chart(plot_average_life(dff), width="stretch")
 
-        st.subheader("Spree / Headshots / Précision")
-        st.plotly_chart(plot_spree_headshots_accuracy(dff), width="stretch")
+            st.subheader("Spree / Headshots / Précision")
+            st.plotly_chart(plot_spree_headshots_accuracy(dff), width="stretch")
 
-        # Masqué sur demande (graph redondant avec les autres vues).
+            # Masqué sur demande (graph redondant avec les autres vues).
 
     with tab_mom:
-        fig_out, bucket_label = plot_outcomes_over_time(dff)
-        st.markdown(
-            f"Par **{bucket_label}** : on regroupe les parties par {bucket_label} et on compte le nombre de "
-            "victoires/défaites (et autres statuts) pour suivre l'évolution."
-        )
-        st.caption("Basé sur Players[].Outcome (2=victoire, 3=défaite, 1=égalité, 4=non terminé).")
-        st.plotly_chart(fig_out, width="stretch")
+        with st.spinner("Calcul des victoires/défaites…"):
+            fig_out, bucket_label = plot_outcomes_over_time(dff)
+            st.markdown(
+                f"Par **{bucket_label}** : on regroupe les parties par {bucket_label} et on compte le nombre de "
+                "victoires/défaites (et autres statuts) pour suivre l'évolution."
+            )
+            st.caption("Basé sur Players[].Outcome (2=victoire, 3=défaite, 1=égalité, 4=non terminé).")
+            st.plotly_chart(fig_out, width="stretch")
 
     with tab_kda:
-        valid = dff.dropna(subset=["kda"]) if "kda" in dff.columns else pd.DataFrame()
-        if valid.empty:
-            st.warning("FDA indisponible sur ce filtre.")
-        else:
-            st.metric("FDA médiane", f"{valid['kda'].median():.2f}")
-            st.metric("FDA moyenne", f"{valid['kda'].mean():.2f}")
-            st.caption("Densité (KDE) + rug : forme de la distribution + position des matchs.")
-            st.plotly_chart(plot_kda_distribution(dff), width="stretch")
+        with st.spinner("Calcul de la répartition FDA…"):
+            valid = dff.dropna(subset=["kda"]) if "kda" in dff.columns else pd.DataFrame()
+            if valid.empty:
+                st.warning("FDA indisponible sur ce filtre.")
+            else:
+                st.metric("FDA médiane", f"{valid['kda'].median():.2f}")
+                st.metric("FDA moyenne", f"{valid['kda'].mean():.2f}")
+                st.caption("Densité (KDE) + rug : forme de la distribution + position des matchs.")
+                st.plotly_chart(plot_kda_distribution(dff), width="stretch")
 
     with tab_friend:
         st.caption(
             "La DB locale ne contient pas les gamertags, uniquement des PlayerId de type xuid(...). "
-            "Tu peux soit coller un XUID, soit sélectionner un XUID rencontré dans tes matchs."
+            "Tu peux soit coller un XUID, soit sélectionner un XUID rencontré dans tes matchs. "
+            "Astuce: tu peux définir des alias (XUID → gamertag) dans la section Source."
         )
         cols = st.columns([2, 2, 1])
         with cols[0]:
@@ -1484,49 +1642,50 @@ def main() -> None:
             opts_map.get(friend_pick_label) if friend_pick_label != "(aucun)" else None
         )
 
-        if friend_xuid is None:
-            st.info("Renseigne un XUID (numérique) ou choisis-en un.")
-        else:
-            rows = query_matches_with_friend(db_path, xuid.strip(), friend_xuid)
-            if same_team_only:
-                rows = [r for r in rows if r.get("same_team")]
-
-            if not rows:
-                st.warning("Aucun match trouvé avec ce joueur (selon le filtre).")
+        with st.spinner("Chargement des matchs avec ce joueur…"):
+            if friend_xuid is None:
+                st.info("Renseigne un XUID (numérique) ou choisis-en un.")
             else:
-                dfr = pd.DataFrame(rows)
-                dfr["start_time"] = pd.to_datetime(dfr["start_time"], utc=True).dt.tz_convert(None)
-                dfr = dfr.sort_values("start_time", ascending=False)
+                rows = query_matches_with_friend(db_path, xuid.strip(), friend_xuid)
+                if same_team_only:
+                    rows = [r for r in rows if r.get("same_team")]
 
-                # outcome counts
-                outcome_map = {2: "Victoire", 3: "Défaite", 1: "Égalité", 4: "Non terminé"}
-                dfr["my_outcome_label"] = dfr["my_outcome"].map(outcome_map).fillna("?")
-                counts = dfr["my_outcome_label"].value_counts().reindex(
-                    ["Victoire", "Défaite", "Égalité", "Non terminé", "?"], fill_value=0
-                )
-                fig = go.Figure(
-                    data=[go.Bar(x=counts.index, y=counts.values, marker_color="#2E86AB")]
-                )
-                fig.update_layout(height=300, margin=dict(l=40, r=20, t=30, b=40))
-                st.plotly_chart(fig, width="stretch")
+                if not rows:
+                    st.warning("Aucun match trouvé avec ce joueur (selon le filtre).")
+                else:
+                    dfr = pd.DataFrame(rows)
+                    dfr["start_time"] = pd.to_datetime(dfr["start_time"], utc=True).dt.tz_convert(None)
+                    dfr = dfr.sort_values("start_time", ascending=False)
 
-                st.dataframe(
-                    dfr[
-                        [
-                            "start_time",
-                            "playlist_name",
-                            "pair_name",
-                            "same_team",
-                            "my_team_id",
-                            "my_outcome",
-                            "friend_team_id",
-                            "friend_outcome",
-                            "match_id",
-                        ]
-                    ].reset_index(drop=True),
-                    width="stretch",
-                    hide_index=True,
-                )
+                    # outcome counts
+                    outcome_map = {2: "Victoire", 3: "Défaite", 1: "Égalité", 4: "Non terminé"}
+                    dfr["my_outcome_label"] = dfr["my_outcome"].map(outcome_map).fillna("?")
+                    counts = dfr["my_outcome_label"].value_counts().reindex(
+                        ["Victoire", "Défaite", "Égalité", "Non terminé", "?"], fill_value=0
+                    )
+                    fig = go.Figure(
+                        data=[go.Bar(x=counts.index, y=counts.values, marker_color="#2E86AB")]
+                    )
+                    fig.update_layout(height=300, margin=dict(l=40, r=20, t=30, b=40))
+                    st.plotly_chart(fig, width="stretch")
+
+                    st.dataframe(
+                        dfr[
+                            [
+                                "start_time",
+                                "playlist_name",
+                                "pair_name",
+                                "same_team",
+                                "my_team_id",
+                                "my_outcome",
+                                "friend_team_id",
+                                "friend_outcome",
+                                "match_id",
+                            ]
+                        ].reset_index(drop=True),
+                        width="stretch",
+                        hide_index=True,
+                    )
 
     with tab_friends:
         st.caption("Vue dédiée aux matchs joués avec tes amis (définis via alias XUID).")
@@ -1566,6 +1725,45 @@ def main() -> None:
         if len(picked_xuids) < 1:
             st.info("Sélectionne au moins un coéquipier.")
         else:
+            # Agrégation sur tous les coéquipiers sélectionnés: Win/Loss par carte.
+            st.subheader("Par carte — avec mes amis (agrégé)")
+            with st.spinner("Calcul du ratio par carte (amis)…"):
+                min_matches_maps_friends = st.slider(
+                    "Minimum de matchs par carte (amis)",
+                    1,
+                    30,
+                    5,
+                    step=1,
+                    help=(
+                        "Filtre les cartes avec trop peu d'échantillons (sur les matchs joués avec au moins un ami sélectionné)."
+                    ),
+                )
+
+                base_for_friends_all = dff if apply_current_filters else df
+                all_match_ids: set[str] = set()
+                for fx in picked_xuids:
+                    rows = query_matches_with_friend(db_path, xuid.strip(), fx)
+                    if same_team_only:
+                        rows = [r for r in rows if r.get("same_team")]
+                    for r in rows:
+                        mid = r.get("match_id")
+                        if mid is not None:
+                            all_match_ids.add(str(mid))
+
+                sub_all = base_for_friends_all.loc[
+                    base_for_friends_all["match_id"].astype(str).isin(all_match_ids)
+                ].copy()
+                breakdown_all = compute_map_breakdown(sub_all)
+                breakdown_all = breakdown_all.loc[
+                    breakdown_all["matches"] >= int(min_matches_maps_friends)
+                ].copy()
+                if breakdown_all.empty:
+                    st.info("Pas assez de matchs avec tes amis (selon le filtre actuel).")
+                else:
+                    view_all = breakdown_all.head(20).iloc[::-1]
+                    title = f"Ratio global par carte — avec mes amis (min {min_matches_maps_friends} matchs)"
+                    st.plotly_chart(plot_map_ratio_with_winloss(view_all, title=title), width="stretch")
+
             # Vue trio (moi + 2 coéquipiers) : uniquement si on a au moins deux personnes.
             if len(picked_xuids) >= 2:
                 f1_xuid, f2_xuid = picked_xuids[0], picked_xuids[1]
@@ -1788,8 +1986,9 @@ def main() -> None:
         else:
             base_scope = dff
 
-        breakdown = compute_map_breakdown(base_scope)
-        breakdown = breakdown.loc[breakdown["matches"] >= int(min_matches)].copy()
+        with st.spinner("Calcul des stats par carte…"):
+            breakdown = compute_map_breakdown(base_scope)
+            breakdown = breakdown.loc[breakdown["matches"] >= int(min_matches)].copy()
 
         if breakdown.empty:
             st.warning("Pas assez de matchs par map avec ces filtres.")
