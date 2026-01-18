@@ -3,6 +3,7 @@ import re
 from datetime import date
 from typing import Optional, Tuple
 
+import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
@@ -776,23 +777,61 @@ def plot_outcomes_over_time(df: pd.DataFrame) -> tuple[go.Figure, str]:
 
 def plot_kda_distribution(df: pd.DataFrame) -> go.Figure:
     d = df.dropna(subset=["kda"]).copy()
-    fig = go.Figure(
-        data=[
-            go.Violin(
-                x=d["kda"],
-                name="FDA",
-                line_color=HALO_COLORS["cyan"],
-                fillcolor="rgba(53,208,255,0.20)",
-                box_visible=True,
-                meanline_visible=True,
-                points="outliers",
-                hovertemplate="FDA=%{x:.2f}<extra></extra>",
-            )
-        ]
+    x = pd.to_numeric(d["kda"], errors="coerce").dropna().astype(float).to_numpy()
+    if x.size == 0:
+        fig = go.Figure()
+        fig.update_layout(height=360, margin=dict(l=40, r=20, t=30, b=40))
+        fig.update_xaxes(title_text="FDA")
+        fig.update_yaxes(title_text="Densité")
+        return _apply_halo_plot_style(fig, height=360)
+
+    # KDE gaussien (Silverman) sans dépendance externe.
+    n = int(x.size)
+    std = float(np.std(x, ddof=1)) if n > 1 else 0.0
+    q25, q75 = (np.percentile(x, [25, 75]).tolist() if n > 1 else [0.0, 0.0])
+    iqr = float(q75 - q25)
+    sigma = min(std, iqr / 1.34) if (std > 0 and iqr > 0) else max(std, iqr / 1.34)
+    bw = (1.06 * sigma * (n ** (-1.0 / 5.0))) if sigma and sigma > 0 else 0.3
+    bw = float(max(bw, 0.05))
+
+    xmin = float(np.min(x))
+    xmax = float(np.max(x))
+    span = max(0.25, xmax - xmin)
+    pad = 0.15 * span
+    grid = np.linspace(xmin - pad, xmax + pad, 256)
+    z = (grid[:, None] - x[None, :]) / bw
+    dens = np.exp(-0.5 * (z ** 2)).sum(axis=1) / (n * bw * np.sqrt(2.0 * np.pi))
+
+    fig = go.Figure()
+    fig.add_trace(
+        go.Scatter(
+            x=grid,
+            y=dens,
+            mode="lines",
+            name="Densité (KDE)",
+            line=dict(width=2.2, color=HALO_COLORS["cyan"]),
+            fill="tozeroy",
+            fillcolor="rgba(53,208,255,0.18)",
+            hovertemplate="FDA=%{x:.2f}<br>densité=%{y:.3f}<extra></extra>",
+        )
     )
+
+    # Rug (petits traits) au niveau 0.
+    fig.add_trace(
+        go.Scatter(
+            x=x,
+            y=np.zeros_like(x),
+            mode="markers",
+            name="Matchs",
+            marker=dict(symbol="line-ns-open", size=10, color="rgba(255,255,255,0.45)"),
+            hovertemplate="FDA=%{x:.2f}<extra></extra>",
+        )
+    )
+
+    fig.add_vline(x=0, line_width=1, line_dash="dot", line_color="rgba(255,255,255,0.35)")
     fig.update_layout(height=360, margin=dict(l=40, r=20, t=30, b=40))
     fig.update_xaxes(title_text="FDA", zeroline=True)
-    fig.update_yaxes(visible=False)
+    fig.update_yaxes(title_text="Densité", rangemode="tozero")
     return _apply_halo_plot_style(fig, height=360)
 
 
@@ -1082,8 +1121,8 @@ def main() -> None:
             gap_minutes = st.slider(
                 "Écart max entre parties (minutes)",
                 min_value=15,
-                max_value=90,
-                value=35,
+                max_value=240,
+                value=120,
                 step=5,
                 help="Au-delà de cet écart, on considère que c'est une nouvelle session.",
             )
@@ -1153,23 +1192,40 @@ def main() -> None:
         )
         options = session_labels["session_label"].tolist()
 
+        compare_multi = st.sidebar.toggle(
+            "Comparer plusieurs sessions",
+            value=False,
+            help="Active pour sélectionner plusieurs sessions à la fois.",
+        )
+
         # Raccourcis UX: dernière session / session précédente.
-        if "picked_sessions" not in st.session_state:
-            st.session_state.picked_sessions = options[:1] if options else []
+        if "picked_session_label" not in st.session_state:
+            st.session_state.picked_session_label = options[0] if options else "(toutes)"
 
         cols = st.sidebar.columns(2)
         if cols[0].button("Dernière session", use_container_width=True):
-            st.session_state.picked_sessions = options[:1] if options else []
+            st.session_state.picked_session_label = options[0] if options else "(toutes)"
         if cols[1].button("Session précédente", use_container_width=True):
-            st.session_state.picked_sessions = options[1:2] if len(options) >= 2 else options[:1]
+            st.session_state.picked_session_label = options[1] if len(options) >= 2 else (options[0] if options else "(toutes)")
 
-        picked = st.sidebar.multiselect(
-            "Sessions",
-            options=options,
-            key="picked_sessions",
-            help="Tu peux en sélectionner plusieurs pour comparer.",
-        )
-        dff = base_s.loc[base_s["session_label"].isin(picked)].copy() if picked else base_s.copy()
+        if compare_multi:
+            if "picked_sessions" not in st.session_state:
+                st.session_state.picked_sessions = options[:1] if options else []
+            picked = st.sidebar.multiselect(
+                "Sessions",
+                options=options,
+                key="picked_sessions",
+                help="Tu peux en sélectionner plusieurs pour comparer.",
+            )
+            dff = base_s.loc[base_s["session_label"].isin(picked)].copy() if picked else base_s.copy()
+        else:
+            picked_one = st.sidebar.selectbox(
+                "Session",
+                options=["(toutes)"] + options,
+                index=1 if options else 0,
+                key="picked_session_label",
+            )
+            dff = base_s.copy() if picked_one == "(toutes)" else base_s.loc[base_s["session_label"] == picked_one].copy()
     else:
         mask = (base["date"] >= start_d) & (base["date"] <= end_d)
         dff = base.loc[mask].copy()
@@ -1276,7 +1332,7 @@ def main() -> None:
         else:
             st.metric("FDA médiane", f"{valid['kda'].median():.2f}")
             st.metric("FDA moyenne", f"{valid['kda'].mean():.2f}")
-            st.caption("Violin + boxplot : médiane, quartiles et dispersion (points = outliers).")
+            st.caption("Densité (KDE) + rug : forme de la distribution + position des matchs.")
             st.plotly_chart(plot_kda_distribution(dff), width="stretch")
 
     with tab_friend:
