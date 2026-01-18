@@ -2,6 +2,7 @@ import argparse
 import json
 import math
 import os
+import re
 import sqlite3
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -112,18 +113,50 @@ def _coerce_number(v: Any) -> Optional[float]:
     return None
 
 
+_ISO8601_DURATION_RE = re.compile(
+    r"^PT(?:(?P<h>\d+)H)?(?:(?P<m>\d+)M)?(?:(?P<s>\d+(?:\.\d+)?)S)?$"
+)
+
+
+def _coerce_duration_seconds(v: Any) -> Optional[float]:
+    # Durées vues dans la DB: 'PT31.5S'
+    if v is None or isinstance(v, bool):
+        return None
+    if isinstance(v, (int, float)):
+        return float(v)
+    if isinstance(v, dict):
+        # Parfois structuré, ex: {"Seconds": 31.5} ou {"Milliseconds": 31500}
+        if "Milliseconds" in v or "Ms" in v:
+            ms = _coerce_number(v.get("Milliseconds") if "Milliseconds" in v else v.get("Ms"))
+            return (ms / 1000.0) if ms is not None else None
+        if "Seconds" in v:
+            return _coerce_number(v.get("Seconds"))
+        # fallback
+        return _coerce_number(v)
+    if isinstance(v, str):
+        s = v.strip()
+        m = _ISO8601_DURATION_RE.match(s)
+        if not m:
+            return None
+        hours = float(m.group("h") or 0)
+        minutes = float(m.group("m") or 0)
+        seconds = float(m.group("s") or 0)
+        return (hours * 3600.0) + (minutes * 60.0) + seconds
+    return None
+
+
 def _extract_player_average_life_seconds(player_obj: Dict[str, Any]) -> Optional[float]:
     # AverageLifeDuration est généralement dans CoreStats, mais la structure varie.
     stats_dict = _find_player_core_stats_dict(player_obj)
     if stats_dict is not None:
-        v = _coerce_number(stats_dict.get("AverageLifeDuration"))
+        v = _coerce_duration_seconds(stats_dict.get("AverageLifeDuration"))
         if v is not None:
             return v
 
     def find_avg_life(x: Any) -> Optional[float]:
         if isinstance(x, dict):
             if "AverageLifeDuration" in x:
-                v = _coerce_number(x.get("AverageLifeDuration"))
+                v = _coerce_duration_seconds(x.get("AverageLifeDuration"))
                 if v is not None:
                     return v
             for v in x.values():
