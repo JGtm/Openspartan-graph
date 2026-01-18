@@ -25,6 +25,7 @@ class MatchRow:
     max_killing_spree: Optional[int]
     headshot_kills: Optional[int]
     average_life_seconds: Optional[float]
+    time_played_seconds: Optional[float]
     kills: int
     deaths: int
     assists: int
@@ -171,6 +172,13 @@ def _extract_player_average_life_seconds(player_obj: Dict[str, Any]) -> Optional
         return None
 
     return find_avg_life(player_obj.get("PlayerTeamStats"))
+
+
+def _extract_player_time_played_seconds(player_obj: Dict[str, Any]) -> Optional[float]:
+    pi = player_obj.get("ParticipationInfo")
+    if not isinstance(pi, dict):
+        return None
+    return _coerce_duration_seconds(pi.get("TimePlayed"))
 
 
 def _extract_player_stats(player_obj: Dict[str, Any]) -> Tuple[int, int, int, Optional[float]]:
@@ -336,6 +344,7 @@ def load_matches(
             kda = _extract_player_kda(me)
             max_spree, headshots = _extract_player_spree_headshots(me)
             avg_life = _extract_player_average_life_seconds(me)
+            time_played = _extract_player_time_played_seconds(me)
 
             playlist_name = playlist_names.get(playlist_id) if playlist_id else None
             pair_name = map_mode_pair_names.get(map_mode_pair_id) if map_mode_pair_id else None
@@ -357,6 +366,7 @@ def load_matches(
                     max_killing_spree=max_spree,
                     headshot_kills=headshots,
                     average_life_seconds=avg_life,
+                    time_played_seconds=time_played,
                     kills=kills,
                     deaths=deaths,
                     assists=assists,

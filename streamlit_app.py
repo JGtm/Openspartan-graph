@@ -71,6 +71,7 @@ def load_df(db_path: str, xuid: str) -> pd.DataFrame:
             "max_killing_spree": [m.max_killing_spree for m in matches],
             "headshot_kills": [m.headshot_kills for m in matches],
             "average_life_seconds": [m.average_life_seconds for m in matches],
+            "time_played_seconds": [m.time_played_seconds for m in matches],
             "kills": [m.kills for m in matches],
             "deaths": [m.deaths for m in matches],
             "assists": [m.assists for m in matches],
@@ -404,6 +405,21 @@ def plot_average_life(df: pd.DataFrame) -> go.Figure:
     d = df.dropna(subset=["average_life_seconds"]).copy()
     fig = go.Figure()
 
+    def fmt_mmss(s: float) -> str:
+        if s != s:
+            return "-"
+        s_i = int(round(float(s)))
+        m, sec = divmod(max(0, s_i), 60)
+        return f"{m:d}:{sec:02d}"
+
+    custom = list(
+        zip(
+            d["deaths"].astype(int),
+            d["time_played_seconds"].fillna(float("nan")).astype(float),
+            d["match_id"].astype(str),
+        )
+    )
+
     fig.add_trace(
         go.Scatter(
             x=d["start_time"],
@@ -412,7 +428,14 @@ def plot_average_life(df: pd.DataFrame) -> go.Figure:
             name="Average life (s)",
             line=dict(width=2, color="#00A389"),
             marker=dict(size=6, color="#00A389"),
-            hovertemplate="%{x|%Y-%m-%d %H:%M}<br>avg life=%{y:.1f}s<extra></extra>",
+            customdata=custom,
+            hovertemplate=(
+                "%{x|%Y-%m-%d %H:%M}<br>"
+                "avg life=%{y:.1f}s<br>"
+                "deaths=%{customdata[0]}<br>"
+                "time played=%{customdata[1]:.0f}s<br>"
+                "match=%{customdata[2]}<extra></extra>"
+            ),
         )
     )
 
@@ -422,7 +445,7 @@ def plot_average_life(df: pd.DataFrame) -> go.Figure:
         margin=dict(l=40, r=20, t=30, b=40),
         hovermode="x unified",
     )
-    fig.update_yaxes(title_text="Secondes", rangemode="tozero")
+    fig.update_yaxes(title_text="Secondes (voir hover pour mm:ss)", rangemode="tozero")
     return fig
 
 
@@ -727,12 +750,19 @@ def main() -> None:
     global_ratio = compute_global_ratio(dff)
     avg_life = dff["average_life_seconds"].dropna().mean() if not dff.empty else None
 
+    def _mmss(seconds: Optional[float]) -> str:
+        if seconds is None or seconds != seconds:
+            return "-"
+        s_i = int(round(float(seconds)))
+        m, sec = divmod(max(0, s_i), 60)
+        return f"{m:d}:{sec:02d}"
+
     kpi = st.columns(5)
     kpi[0].metric("Accuracy moyenne", f"{avg_acc:.2f}%" if avg_acc is not None else "-")
     kpi[1].metric("Win rate", f"{win_rate*100:.1f}%" if rates["total"] else "-")
     kpi[2].metric("Loss rate", f"{loss_rate*100:.1f}%" if rates["total"] else "-")
     kpi[3].metric("Ratio global", f"{global_ratio:.2f}" if global_ratio is not None else "-")
-    kpi[4].metric("Average life", f"{avg_life:.1f}s" if avg_life == avg_life else "-")
+    kpi[4].metric("Average life", _mmss(avg_life))
 
     st.caption(
         f"Matchs sélectionnés: {len(dff)} — wins={rates['wins']} losses={rates['losses']} ties={rates['ties']} noFinish={rates['nofinish']}"
