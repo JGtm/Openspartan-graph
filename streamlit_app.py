@@ -1682,9 +1682,7 @@ def main() -> None:
                 return "color: #B71C1C; font-weight: 700;"
             return "color: #424242;"
 
-        styled = table.style.applymap(_style_outcome, subset=["outcome_label"]).applymap(
-            _style_kda, subset=["kda"]
-        )
+        styled = table.style.map(_style_outcome, subset=["outcome_label"]).map(_style_kda, subset=["kda"])
 
         st.dataframe(
             styled,
