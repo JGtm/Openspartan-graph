@@ -107,6 +107,19 @@ def compute_outcome_rates(df: pd.DataFrame) -> dict:
         "total": total,
     }
 
+def format_selected_matches_summary(n: int, rates: dict) -> str:
+    # Mise en forme plus lisible pour l'UI.
+    if n <= 0:
+        return "Aucun match sélectionné"
+    wins = int(rates.get("wins", 0))
+    losses = int(rates.get("losses", 0))
+    ties = int(rates.get("ties", 0))
+    nofinish = int(rates.get("nofinish", 0))
+    return (
+        f"Matchs sélectionnés: {n} | "
+        f"Victoires: {wins} | Défaites: {losses} | Égalités: {ties} | Abandons: {nofinish}"
+    )
+
 
 def compute_sessions(df: pd.DataFrame, gap_minutes: int = 35) -> pd.DataFrame:
     # Regroupe les parties consécutives en sessions (gap > N minutes => nouvelle session).
@@ -245,9 +258,9 @@ def plot_spree_headshots_accuracy(df: pd.DataFrame) -> go.Figure:
             x=d["start_time"],
             y=d["accuracy"],
             mode="lines+markers",
-            name="Accuracy (%)",
+            name="Précision",
             yaxis="y2",
-            line=dict(width=2, color="#7B61FF"),
+            hovertemplate="%{x|%Y-%m-%d %H:%M}<br>précision=%{y:.2f}%<extra></extra>",
             marker=dict(size=6, color="#7B61FF"),
             hovertemplate="%{x|%Y-%m-%d %H:%M}<br>accuracy=%{y:.2f}%<extra></extra>",
         )
@@ -323,7 +336,7 @@ def plot_timeseries(df: pd.DataFrame, title: str) -> go.Figure:
     common_hover = (
         "%{x|%Y-%m-%d %H:%M}<br>"
         "kills=%{customdata[0]} deaths=%{customdata[1]} assists=%{customdata[2]}<br>"
-        "acc=%{customdata[3]} ratio=%{customdata[4]:.3f}<br>"
+        "précision=%{customdata[3]}% ratio=%{customdata[4]:.3f}<br>"
         "map=%{customdata[5]}<br>"
         "playlist=%{customdata[6]}<br>"
         "match=%{customdata[7]}<extra></extra>"
@@ -603,6 +616,52 @@ def _parse_xuid_input(s: str) -> Optional[str]:
         return m.group(1)
     return None
 
+@st.cache_data(show_spinner=False)
+def list_top_teammates(db_path: str, self_xuid: str, limit: int = 20) -> list[tuple[str, int]]:
+    # Retourne les XUID les plus fréquents dans la même équipe que moi.
+    import sqlite3
+
+    me_id = f"xuid({self_xuid})"
+    con = sqlite3.connect(db_path)
+    try:
+        cur = con.cursor()
+        sql = """
+        WITH p AS (
+            SELECT
+                json_extract(ResponseBody, '$.MatchId') AS MatchId,
+                json_extract(j.value, '$.PlayerId') AS PlayerId,
+                CAST(json_extract(j.value, '$.LastTeamId') AS INTEGER) AS TeamId
+            FROM MatchStats
+            JOIN json_each(json_extract(ResponseBody, '$.Players')) AS j
+        ),
+        me AS (
+            SELECT MatchId, TeamId
+            FROM p
+            WHERE PlayerId = ? AND TeamId IS NOT NULL
+        )
+        SELECT
+            p.PlayerId,
+            COUNT(DISTINCT p.MatchId) AS Matches
+        FROM p
+        JOIN me ON me.MatchId = p.MatchId AND me.TeamId = p.TeamId
+        WHERE p.PlayerId IS NOT NULL AND p.PlayerId <> ?
+        GROUP BY p.PlayerId
+        ORDER BY Matches DESC
+        LIMIT ?;
+        """
+        cur.execute(sql, (me_id, me_id, int(limit)))
+        out: list[tuple[str, int]] = []
+        for pid, matches in cur.fetchall():
+            if not isinstance(pid, str):
+                continue
+            m = re.fullmatch(r"xuid\((\d+)\)", pid)
+            if not m:
+                continue
+            out.append((m.group(1), int(matches)))
+        return out
+    finally:
+        con.close()
+
 
 def main() -> None:
     st.set_page_config(page_title="OpenSpartan Graphs", layout="wide")
@@ -784,15 +843,13 @@ def main() -> None:
         return f"{m:d}:{sec:02d}"
 
     kpi = st.columns(5)
-    kpi[0].metric("Accuracy moyenne", f"{avg_acc:.2f}%" if avg_acc is not None else "-")
+    kpi[0].metric("Précision moyenne", f"{avg_acc:.2f}%" if avg_acc is not None else "-")
     kpi[1].metric("Win rate", f"{win_rate*100:.1f}%" if rates["total"] else "-")
     kpi[2].metric("Loss rate", f"{loss_rate*100:.1f}%" if rates["total"] else "-")
     kpi[3].metric("Ratio global", f"{global_ratio:.2f}" if global_ratio is not None else "-")
     kpi[4].metric("Average life", _mmss(avg_life))
 
-    st.caption(
-        f"Matchs sélectionnés: {len(dff)} — wins={rates['wins']} losses={rates['losses']} ties={rates['ties']} noFinish={rates['nofinish']}"
-    )
+    st.caption(format_selected_matches_summary(len(dff), rates))
 
     tab_series, tab_mom, tab_kda, tab_friend, tab_friends, tab_maps, tab_table = st.tabs(
         [
@@ -816,10 +873,10 @@ def main() -> None:
         else:
             st.plotly_chart(plot_average_life(dff), width="stretch")
 
-        st.subheader("Spree / Headshots / Accuracy")
+        st.subheader("Spree / Headshots / Précision")
         st.plotly_chart(plot_spree_headshots_accuracy(dff), width="stretch")
 
-        st.subheader("Précision (accuracy) — derniers matchs")
+        st.subheader("Précision — derniers matchs")
         st.plotly_chart(plot_accuracy_last_n(dff, last_n_acc), width="stretch")
 
     with tab_mom:
@@ -907,26 +964,45 @@ def main() -> None:
             help="Quand activé, la vue amis se limite aux matchs visibles avec les filtres.",
         )
 
-        friends = {
-            "Madina972": "2533274858283686",
-            "Chocoboflor": "2535469190789936",
-        }
 
-        picked_names = st.multiselect(
-            "Amis",
-            options=list(friends.keys()),
-            default=list(friends.keys()),
+        top = list_top_teammates(db_path, xuid.strip(), limit=20)
+        default_two = [t[0] for t in top[:2]]
+        all_other = list_other_player_xuids(db_path, xuid.strip(), limit=500)
+        # Options: top teammates puis tous les autres xuids rencontrés.
+        ordered = []
+        seen: set[str] = set()
+        for xx, _cnt in top:
+            if xx not in seen:
+                ordered.append(xx)
+                seen.add(xx)
+        for xx in all_other:
+            if xx not in seen:
+                ordered.append(xx)
+                seen.add(xx)
+
+        opts_map = _build_xuid_option_map(ordered)
+        picked_labels = st.multiselect(
+            "Coéquipiers",
+            options=list(opts_map.keys()),
+            default=[k for k, v in opts_map.items() if v in default_two],
+            help="Sélectionne 1 ou plusieurs coéquipiers. Par défaut: les 2 plus fréquents.",
         )
+        picked_xuids = [opts_map[lbl] for lbl in picked_labels if lbl in opts_map]
         same_team_only = st.checkbox("Même équipe (recommandé)", value=True, key="friends_same_team")
 
-        if not picked_names:
-            st.info("Sélectionne au moins un ami.")
+
+        if len(picked_xuids) < 1:
+            st.info("Sélectionne au moins un coéquipier.")
         else:
-            # Vue trio (moi + les 2 amis) : uniquement si les 2 sont sélectionnés.
-            if set(picked_names) >= {"Madina972", "Chocoboflor"}:
-                st.subheader("Tous les trois (même équipe)")
-                rows_m = query_matches_with_friend(db_path, xuid.strip(), friends["Madina972"])
-                rows_c = query_matches_with_friend(db_path, xuid.strip(), friends["Chocoboflor"])
+            # Vue trio (moi + 2 coéquipiers) : uniquement si on a au moins deux personnes.
+            if len(picked_xuids) >= 2:
+                f1_xuid, f2_xuid = picked_xuids[0], picked_xuids[1]
+                f1_name = display_name_from_xuid(f1_xuid)
+                f2_name = display_name_from_xuid(f2_xuid)
+                st.subheader(f"Tous les trois (même équipe) — {f1_name} + {f2_name}")
+
+                rows_m = query_matches_with_friend(db_path, xuid.strip(), f1_xuid)
+                rows_c = query_matches_with_friend(db_path, xuid.strip(), f2_xuid)
                 rows_m = [r for r in rows_m if r.get("same_team")]
                 rows_c = [r for r in rows_c if r.get("same_team")]
                 ids_m = {r["match_id"] for r in rows_m}
@@ -941,9 +1017,8 @@ def main() -> None:
                 else:
                     # Charge les stats de chacun et aligne par match_id.
                     me_df = base_for_trio.loc[base_for_trio["match_id"].isin(trio_ids)].copy()
-                    f1_name, f2_name = "Madina972", "Chocoboflor"
-                    f1_df = load_df(db_path, friends[f1_name])
-                    f2_df = load_df(db_path, friends[f2_name])
+                    f1_df = load_df(db_path, f1_xuid)
+                    f2_df = load_df(db_path, f2_xuid)
                     f1_df = f1_df.loc[f1_df["match_id"].isin(trio_ids)].copy()
                     f2_df = f2_df.loc[f2_df["match_id"].isin(trio_ids)].copy()
 
@@ -1026,7 +1101,7 @@ def main() -> None:
                                 d_f2,
                                 metric="accuracy",
                                 names=names,
-                                title="Accuracy (tous les trois)",
+                                title="Précision (tous les trois)",
                                 y_title="%",
                                 y_suffix="%",
                                 y_format=".2f",
@@ -1034,8 +1109,9 @@ def main() -> None:
                             width="stretch",
                         )
 
-            for name in picked_names:
-                fx = friends[name]
+
+            for fx in picked_xuids:
+                name = display_name_from_xuid(fx)
                 rows = query_matches_with_friend(db_path, xuid.strip(), fx)
                 if same_team_only:
                     rows = [r for r in rows if r.get("same_team")]
@@ -1052,14 +1128,12 @@ def main() -> None:
                 total_out = max(1, rates_sub["total"])
                 win_rate_sub = rates_sub["wins"] / total_out
                 loss_rate_sub = rates_sub["losses"] / total_out
-                avg_acc_sub = sub["accuracy"].dropna().mean()
                 global_ratio_sub = compute_global_ratio(sub)
 
-                k = st.columns(4)
+                k = st.columns(3)
                 k[0].metric("Matchs", f"{len(sub)}")
-                k[1].metric("Accuracy moy.", f"{avg_acc_sub:.2f}%" if avg_acc_sub == avg_acc_sub else "-")
-                k[2].metric("Win/Loss", f"{win_rate_sub*100:.1f}% / {loss_rate_sub*100:.1f}%")
-                k[3].metric("Ratio global", f"{global_ratio_sub:.2f}" if global_ratio_sub is not None else "-")
+                k[1].metric("Win/Loss", f"{win_rate_sub*100:.1f}% / {loss_rate_sub*100:.1f}%")
+                k[2].metric("Ratio global", f"{global_ratio_sub:.2f}" if global_ratio_sub is not None else "-")
 
                 st.plotly_chart(plot_timeseries(sub, title=f"{me_name} avec {name}"), width="stretch")
 
@@ -1114,7 +1188,7 @@ def main() -> None:
                 options=[
                     ("ratio_global", "Ratio global"),
                     ("win_rate", "Win rate"),
-                    ("accuracy_avg", "Accuracy moyenne"),
+                    ("accuracy_avg", "Précision moyenne"),
                 ],
                 format_func=lambda x: x[1],
             )
