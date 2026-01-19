@@ -484,7 +484,7 @@ def main() -> None:
             st.session_state["picked_sessions"] = pending_sessions
 
         if "filter_mode" not in st.session_state:
-            st.session_state["filter_mode"] = "Période"
+            st.session_state["filter_mode"] = "Sessions"
         filter_mode = st.radio(
             "Sélection",
             options=["Période", "Sessions"],
