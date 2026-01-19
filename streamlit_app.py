@@ -84,7 +84,7 @@ from src.db.profiles import (
     save_profiles,
     list_local_dbs,
 )
-from src.config import get_aliases_file_path
+from src.config import DEFAULT_PLAYER_GAMERTAG, DEFAULT_PLAYER_XUID, get_aliases_file_path
 
 from src.ui.perf import perf_reset_run, perf_section, render_perf_panel
 from src.ui.sections import render_openspartan_tools, render_source_section
@@ -770,6 +770,9 @@ def main() -> None:
             xuid_resolved = parse_xuid_input(xraw) or ""
             if not xuid_resolved and xraw and not xraw.isdigit():
                 xuid_resolved = resolve_xuid_from_db(db_path, xraw) or ""
+            if not xuid_resolved and not xraw:
+                # Évite de bloquer l'UI quand l'entrée est vide (cas typique: DB SPNKr = spnkr.db).
+                xuid_resolved = resolve_xuid_from_db(db_path, DEFAULT_PLAYER_GAMERTAG) or DEFAULT_PLAYER_XUID
 
             if not xuid_resolved:
                 st.error(

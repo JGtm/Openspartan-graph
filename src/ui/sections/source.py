@@ -9,7 +9,7 @@ from typing import Callable
 import pandas as pd
 import streamlit as st
 
-from src.config import DEFAULT_WAYPOINT_PLAYER, get_aliases_file_path
+from src.config import DEFAULT_PLAYER_GAMERTAG, DEFAULT_WAYPOINT_PLAYER, get_aliases_file_path
 from src.db import guess_xuid_from_db_path, load_profiles, save_profiles, resolve_xuid_from_db
 from src.ui.aliases import load_aliases_file, save_aliases_file, display_name_from_xuid
 
@@ -36,7 +36,9 @@ def render_source_section(
     if "xuid_input" not in st.session_state:
         # migration douce depuis l'ancien key "xuid" s'il existe encore
         legacy = str(st.session_state.get("xuid", "") or "").strip()
-        st.session_state["xuid_input"] = legacy or (guess_xuid_from_db_path(st.session_state.get("db_path", "")) or "")
+        guessed = guess_xuid_from_db_path(st.session_state.get("db_path", "")) or ""
+        env_player = (os.environ.get("SPNKR_PLAYER") or "").strip()
+        st.session_state["xuid_input"] = legacy or guessed or env_player or DEFAULT_PLAYER_GAMERTAG
     if "waypoint_player" not in st.session_state:
         st.session_state["waypoint_player"] = DEFAULT_WAYPOINT_PLAYER
 
@@ -80,6 +82,9 @@ def render_source_section(
                     resolved = resolve_xuid_from_db(spnkr_db_path, spnkr_player)
                     if resolved:
                         st.session_state["xuid_input"] = resolved
+            else:
+                # Fallback local pour éviter un état "vide" qui bloque l'app.
+                st.session_state["xuid_input"] = DEFAULT_PLAYER_GAMERTAG
             st.rerun()
 
     with st.expander("Multi-DB (profils)", expanded=False):

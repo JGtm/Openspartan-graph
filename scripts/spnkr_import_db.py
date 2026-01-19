@@ -386,6 +386,10 @@ async def _request_with_retries(coro_factory, *, tries: int = 4, base_sleep: flo
                         "- SPNKR_CLEARANCE_TOKEN est la VALEUR du header clearance (souvent commence par `eyJ...`), sur une seule ligne\n"
                         "Astuce: tu peux coller la ligne entière `x-343-authorization-spartan: ...` / `343-clearance: ...`, le script enlève automatiquement le préfixe avant `:`."
                     ) from e
+
+                # Assets supprimés / non publics: inutile de retry.
+                if isinstance(e, ClientResponseError) and e.status in (400, 404, 410):
+                    raise
             except ModuleNotFoundError:
                 # aiohttp n'est pas importable => on laisse le retry standard.
                 pass
@@ -443,13 +447,22 @@ async def _import_assets_for_match_info(
     client: Any,
     con: sqlite3.Connection,
     asset_seen: set[tuple[str, str, str]],
+    asset_missing: set[tuple[str, str, str]],
 ) -> None:
     """Importe Maps/Playlists/PlaylistMapModePairs/GameVariants référencés par MatchInfo."""
     cur = con.cursor()
 
+    def _is_missing(exc: Exception) -> bool:
+        try:
+            from aiohttp.client_exceptions import ClientResponseError
+
+            return isinstance(exc, ClientResponseError) and exc.status in (400, 404, 410)
+        except ModuleNotFoundError:
+            return False
+
     # MapVariant (map)
     map_aid, map_vid = _asset_ref(mi, "MapVariant")
-    if map_aid and map_vid and ("Maps", map_aid, map_vid) not in asset_seen:
+    if map_aid and map_vid and ("Maps", map_aid, map_vid) not in asset_seen and ("Maps", map_aid, map_vid) not in asset_missing:
         async def _get_map():
             resp = await client.discovery_ugc.get_map(map_aid, map_vid)
             return await resp.json()
@@ -459,12 +472,14 @@ async def _import_assets_for_match_info(
             if isinstance(obj, dict):
                 cur.execute("INSERT INTO Maps(ResponseBody) VALUES (?)", (json.dumps(obj, ensure_ascii=False),))
                 asset_seen.add(("Maps", map_aid, map_vid))
-        except Exception:
+        except Exception as e:
+            if _is_missing(e):
+                asset_missing.add(("Maps", map_aid, map_vid))
             pass
 
     # Playlist
     pl_aid, pl_vid = _asset_ref(mi, "Playlist")
-    if pl_aid and pl_vid and ("Playlists", pl_aid, pl_vid) not in asset_seen:
+    if pl_aid and pl_vid and ("Playlists", pl_aid, pl_vid) not in asset_seen and ("Playlists", pl_aid, pl_vid) not in asset_missing:
         async def _get_playlist():
             resp = await client.discovery_ugc.get_playlist(pl_aid, pl_vid)
             return await resp.json()
@@ -474,12 +489,14 @@ async def _import_assets_for_match_info(
             if isinstance(obj, dict):
                 cur.execute("INSERT INTO Playlists(ResponseBody) VALUES (?)", (json.dumps(obj, ensure_ascii=False),))
                 asset_seen.add(("Playlists", pl_aid, pl_vid))
-        except Exception:
+        except Exception as e:
+            if _is_missing(e):
+                asset_missing.add(("Playlists", pl_aid, pl_vid))
             pass
 
     # Map-mode pair
     mp_aid, mp_vid = _asset_ref(mi, "PlaylistMapModePair")
-    if mp_aid and mp_vid and ("PlaylistMapModePairs", mp_aid, mp_vid) not in asset_seen:
+    if mp_aid and mp_vid and ("PlaylistMapModePairs", mp_aid, mp_vid) not in asset_seen and ("PlaylistMapModePairs", mp_aid, mp_vid) not in asset_missing:
         async def _get_pair():
             resp = await client.discovery_ugc.get_map_mode_pair(mp_aid, mp_vid)
             return await resp.json()
@@ -492,12 +509,14 @@ async def _import_assets_for_match_info(
                     (json.dumps(obj, ensure_ascii=False),),
                 )
                 asset_seen.add(("PlaylistMapModePairs", mp_aid, mp_vid))
-        except Exception:
+        except Exception as e:
+            if _is_missing(e):
+                asset_missing.add(("PlaylistMapModePairs", mp_aid, mp_vid))
             pass
 
     # UGC GameVariant
     gv_aid, gv_vid = _asset_ref(mi, "UgcGameVariant")
-    if gv_aid and gv_vid and ("GameVariants", gv_aid, gv_vid) not in asset_seen:
+    if gv_aid and gv_vid and ("GameVariants", gv_aid, gv_vid) not in asset_seen and ("GameVariants", gv_aid, gv_vid) not in asset_missing:
         async def _get_gv():
             resp = await client.discovery_ugc.get_ugc_game_variant(gv_aid, gv_vid)
             return await resp.json()
@@ -507,7 +526,9 @@ async def _import_assets_for_match_info(
             if isinstance(obj, dict):
                 cur.execute("INSERT INTO GameVariants(ResponseBody) VALUES (?)", (json.dumps(obj, ensure_ascii=False),))
                 asset_seen.add(("GameVariants", gv_aid, gv_vid))
-        except Exception:
+        except Exception as e:
+            if _is_missing(e):
+                asset_missing.add(("GameVariants", gv_aid, gv_vid))
             pass
 
     con.commit()
@@ -586,6 +607,7 @@ async def main_async(argv: list[str]) -> int:
             inserted = 0
             asset_tables = ["Maps", "Playlists", "PlaylistMapModePairs", "GameVariants"]
             asset_seen: set[tuple[str, str, str]] = _seed_asset_seen_from_db(con, asset_tables)
+            asset_missing: set[tuple[str, str, str]] = set()
 
             start = int(args.start)
             remaining = int(args.max_matches)
@@ -612,7 +634,13 @@ async def main_async(argv: list[str]) -> int:
                             existing = _load_match_json_from_db(con, mid)
                             mi = existing.get("MatchInfo") if isinstance(existing, dict) else None
                             if isinstance(mi, dict):
-                                await _import_assets_for_match_info(mi, client=client, con=con, asset_seen=asset_seen)
+                                await _import_assets_for_match_info(
+                                    mi,
+                                    client=client,
+                                    con=con,
+                                    asset_seen=asset_seen,
+                                    asset_missing=asset_missing,
+                                )
                         start += 1
                         remaining -= 1
                         continue
@@ -664,7 +692,13 @@ async def main_async(argv: list[str]) -> int:
                     # --- Assets (optionnel mais utile pour les noms) ---
                     mi = match_json.get("MatchInfo")
                     if (not args.no_assets) and isinstance(mi, dict):
-                        await _import_assets_for_match_info(mi, client=client, con=con, asset_seen=asset_seen)
+                        await _import_assets_for_match_info(
+                            mi,
+                            client=client,
+                            con=con,
+                            asset_seen=asset_seen,
+                            asset_missing=asset_missing,
+                        )
 
                     inserted += 1
                     existing_match_ids.add(mid)
