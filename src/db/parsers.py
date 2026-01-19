@@ -15,6 +15,8 @@ def guess_xuid_from_db_path(db_path: str) -> Optional[str]:
     """Devine le XUID à partir du nom du fichier .db.
     
     La convention OpenSpartan Workshop nomme les fichiers <XUID>.db.
+    Mais on supporte aussi des noms "conviviaux" (ex: spnkr_gt_<Gamertag>.db)
+    ou des fichiers renommés à la main (ex: <Gamertag>.db).
     
     Args:
         db_path: Chemin vers le fichier .db.
@@ -22,9 +24,62 @@ def guess_xuid_from_db_path(db_path: str) -> Optional[str]:
     Returns:
         Le XUID si le nom de fichier est numérique, None sinon.
     """
-    base = os.path.basename(db_path)
+    base = os.path.basename(db_path or "")
     stem, _ = os.path.splitext(base)
-    return stem if stem.isdigit() else None
+    if stem.isdigit():
+        return stem
+
+    # Ex: spnkr_xuid_2533....db / name_2533....db
+    m = _XUID_DIGITS_RE.search(stem)
+    if m:
+        return m.group(1)
+
+    # Ex: spnkr_gt_Chocoboflor.db -> Chocoboflor
+    gt_guess = stem
+    if gt_guess.lower().startswith("spnkr_gt_"):
+        gt_guess = gt_guess[len("spnkr_gt_") :]
+    elif gt_guess.lower().startswith("spnkr_gt-"):
+        gt_guess = gt_guess[len("spnkr_gt-") :]
+    elif gt_guess.lower().startswith("spnkr_"):
+        # Au cas où: spnkr_<something>
+        gt_guess = gt_guess[len("spnkr_") :]
+
+    gt_guess = (gt_guess or "").strip().strip("_-")
+    if not gt_guess:
+        return None
+
+    # Si le nom de fichier a été "sanitisé" (espaces -> _) on tente aussi la variante.
+    gt_candidates = {gt_guess, gt_guess.replace("_", " "), gt_guess.replace("_", "")}
+    gt_candidates = {c.strip() for c in gt_candidates if c and c.strip()}
+    if not gt_candidates:
+        return None
+
+    # Tente de résoudre via alias hardcodés + fichier d'alias.
+    try:
+        aliases: dict[str, str] = dict(XUID_ALIASES_DEFAULT)
+        aliases_path = get_aliases_file_path()
+        if aliases_path and os.path.exists(aliases_path):
+            with open(aliases_path, "r", encoding="utf-8") as f:
+                obj = json.load(f)
+            if isinstance(obj, dict):
+                for x, gt in obj.items():
+                    if isinstance(x, str) and isinstance(gt, str):
+                        aliases[x.strip()] = gt.strip()
+
+        # Inversion (gamertag -> xuid)
+        inv: dict[str, str] = {}
+        for x, gt in aliases.items():
+            if isinstance(x, str) and x.strip().isdigit() and isinstance(gt, str) and gt.strip():
+                inv[gt.strip().casefold()] = x.strip()
+
+        for c in gt_candidates:
+            hit = inv.get(c.casefold())
+            if hit:
+                return hit
+    except Exception:
+        pass
+
+    return None
 
 
 def parse_iso_utc(s: str) -> datetime:
