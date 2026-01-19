@@ -4,6 +4,8 @@ from src.db.connection import get_connection, DatabaseConnection
 from src.db.loaders import (
     load_matches,
     load_asset_name_map,
+    load_player_match_result,
+    load_top_medals,
     query_matches_with_friend,
     list_other_player_xuids,
     list_top_teammates,
@@ -18,6 +20,8 @@ __all__ = [
     "DatabaseConnection",
     "load_matches",
     "load_asset_name_map",
+    "load_player_match_result",
+    "load_top_medals",
     "query_matches_with_friend",
     "list_other_player_xuids",
     "list_top_teammates",

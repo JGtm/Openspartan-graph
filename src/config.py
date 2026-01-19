@@ -11,6 +11,11 @@ from typing import Dict
 
 def get_default_db_path() -> str:
     """Retourne le chemin par défaut de la DB OpenSpartan Workshop."""
+    # Override explicite (utile en Docker/Linux)
+    override = os.environ.get("OPENSPARTAN_DB") or os.environ.get("OPENSPARTAN_DB_PATH")
+    if override and os.path.exists(override):
+        return override
+
     local = os.environ.get("LOCALAPPDATA")
     if not local:
         return ""

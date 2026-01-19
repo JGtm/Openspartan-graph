@@ -335,19 +335,25 @@ def plot_spree_headshots_accuracy(df: pd.DataFrame) -> go.Figure:
     d = df.sort_values("start_time").reset_index(drop=True).copy()
     x_idx = list(range(len(d)))
 
+    spree = (
+        pd.to_numeric(d.get("max_killing_spree"), errors="coerce")
+        if "max_killing_spree" in d.columns
+        else pd.Series([float("nan")] * len(d))
+    )
+
     fig = make_subplots(rows=1, cols=1, specs=[[{"secondary_y": True}]])
 
     fig.add_trace(
         go.Bar(
             x=x_idx,
-            y=d["Folie meurtrière"],
-            name="Spree (max)",
+            y=spree,
+            name="Folie meurtrière (max)",
             marker_color=colors["amber"],
             opacity=PLOT_CONFIG.bar_opacity,
             alignmentgroup="spree_hs",
             offsetgroup="spree",
             width=0.42,
-            hovertemplate="spree=%{y}<extra></extra>",
+            hovertemplate="folie meurtrière=%{y}<extra></extra>",
         ),
         secondary_y=False,
     )

@@ -26,6 +26,8 @@ from src.db import (
     list_other_player_xuids,
     list_top_teammates,
     guess_xuid_from_db_path,
+    load_player_match_result,
+    load_top_medals,
 )
 from src.db.parsers import parse_xuid_input
 from src.analysis import (
@@ -52,6 +54,7 @@ from src.visualization import (
     plot_map_ratio_with_winloss,
     plot_trio_metric,
 )
+from src.visualization.theme import apply_halo_plot_style, get_legend_horizontal_top
 from src.ui import (
     load_aliases_file,
     save_aliases_file,
@@ -82,6 +85,8 @@ def load_df(db_path: str, xuid: str) -> pd.DataFrame:
             "playlist_name": [m.playlist_name for m in matches],
             "pair_id": [m.map_mode_pair_id for m in matches],
             "pair_name": [m.map_mode_pair_name for m in matches],
+            "game_variant_id": [m.game_variant_id for m in matches],
+            "game_variant_name": [m.game_variant_name for m in matches],
             "outcome": [m.outcome for m in matches],
             "kda": [m.kda for m in matches],
             "max_killing_spree": [m.max_killing_spree for m in matches],
@@ -348,6 +353,12 @@ def main() -> None:
         if playlist_label != "(toutes)":
             playlist_id = playlist_opts[playlist_label]
 
+        mode_opts = build_option_map(base_for_filters["game_variant_name"], base_for_filters["game_variant_id"])
+        mode_label = st.selectbox("Mode", options=["(tous)"] + list(mode_opts.keys()), index=0)
+        mode_id: Optional[str] = None
+        if mode_label != "(tous)":
+            mode_id = mode_opts[mode_label]
+
         map_opts = build_option_map(base_for_filters["map_name"], base_for_filters["map_id"])
         map_label = st.selectbox("Carte", options=["(toutes)"] + list(map_opts.keys()), index=0)
         map_id: Optional[str] = None
@@ -394,6 +405,8 @@ def main() -> None:
             
     if playlist_id is not None:
         dff = dff.loc[dff["playlist_id"].fillna("") == playlist_id]
+    if mode_id is not None:
+        dff = dff.loc[dff["game_variant_id"].fillna("") == mode_id]
     if map_id is not None:
         dff = dff.loc[dff["map_id"].fillna("") == map_id]
 
@@ -444,17 +457,237 @@ def main() -> None:
     # Onglets
     # ==========================================================================
     
-    tab_series, tab_mom, tab_kda, tab_friend, tab_friends, tab_maps, tab_table = st.tabs(
+    tab_series, tab_last, tab_medals, tab_mom, tab_friend, tab_friends, tab_maps, tab_table = st.tabs(
         [
             "Séries temporelles",
+            "Dernier match",
+            "Médailles (Top 25)",
             "Victoires/Défaites (par période)",
-            "FDA (répartition)",
             "Avec un joueur",
             "Avec mes amis",
             "Ratio par cartes",
             "Historique des parties",
         ]
     )
+
+    # --------------------------------------------------------------------------
+    # Tab: Dernier match
+    # --------------------------------------------------------------------------
+    with tab_last:
+        st.caption("Dernière partie selon la sélection/filtres actuels.")
+
+        if dff.empty:
+            st.info("Aucun match disponible avec les filtres actuels.")
+        else:
+            last_row = dff.sort_values("start_time").iloc[-1]
+            last_match_id = str(last_row.get("match_id", ""))
+            last_time = last_row.get("start_time")
+            last_map = last_row.get("map_name")
+            last_playlist = last_row.get("playlist_name")
+            last_pair = last_row.get("pair_name")
+            last_mode = last_row.get("game_variant_name")
+            last_outcome = last_row.get("outcome")
+
+            meta_cols = st.columns(4)
+            meta_cols[0].metric("Date", str(last_time) if last_time is not None else "-")
+            meta_cols[1].metric("Carte", str(last_map) if last_map else "-")
+            meta_cols[2].metric("Playlist", str(last_playlist) if last_playlist else "-")
+            meta_cols[3].metric("Mode", str(last_mode or last_pair) if (last_mode or last_pair) else "-")
+
+            st.caption(f"MatchId: {last_match_id}")
+
+            with st.spinner("Lecture des stats détaillées (MMR, attendu vs réel)…"):
+                pm = load_player_match_result(db_path, last_match_id, xuid.strip())
+
+            # Rappel du résultat (même si PlayerMatchStats est indispo)
+            outcome_map = {2: "Victoire", 3: "Défaite", 1: "Égalité", 4: "Non terminé"}
+            st.metric(
+                "Résultat",
+                outcome_map.get(int(last_outcome), "?") if last_outcome == last_outcome else "-",
+            )
+
+            if not pm:
+                st.info(
+                    "Stats détaillées indisponibles pour ce match (PlayerMatchStats manquant ou format inattendu)."
+                )
+            else:
+                team_mmr = pm.get("team_mmr")
+                enemy_mmr = pm.get("enemy_mmr")
+                delta_mmr = (team_mmr - enemy_mmr) if (team_mmr is not None and enemy_mmr is not None) else None
+
+                mmr_cols = st.columns(3)
+                mmr_cols[0].metric("MMR d'équipe", f"{team_mmr:.1f}" if team_mmr is not None else "-")
+                mmr_cols[1].metric("MMR adverse", f"{enemy_mmr:.1f}" if enemy_mmr is not None else "-")
+                mmr_cols[2].metric(
+                    "Écart MMR (équipe - adverse)",
+                    f"{delta_mmr:+.1f}" if delta_mmr is not None else "-",
+                )
+
+                if team_mmr is not None or enemy_mmr is not None:
+                    mmr_fig = go.Figure()
+                    mmr_fig.add_bar(
+                        x=["Mon équipe", "Adverse"],
+                        y=[float(team_mmr or 0.0), float(enemy_mmr or 0.0)],
+                        marker_color=[HALO_COLORS.cyan, HALO_COLORS.red],
+                        hovertemplate="%{x}: %{y:.1f}<extra></extra>",
+                    )
+                    mmr_fig.update_layout(height=260, margin=dict(l=40, r=20, t=30, b=40))
+                    mmr_fig.update_yaxes(title_text="MMR", rangemode="tozero")
+                    st.plotly_chart(mmr_fig, width="stretch")
+
+                # Attendu vs réel (kills / deaths)
+                def _metric_expected_vs_actual(title: str, perf: dict) -> None:
+                    count = perf.get("count")
+                    expected = perf.get("expected")
+                    stddev = perf.get("stddev")
+                    if count is None or expected is None:
+                        st.metric(title, "-")
+                        return
+                    delta = float(count) - float(expected)
+                    suffix = f" (σ={stddev:.2f})" if stddev is not None else ""
+                    st.metric(title, f"{count:.0f} vs {expected:.1f}", f"{delta:+.1f}{suffix}")
+
+                av_cols = st.columns(2)
+                with av_cols[0]:
+                    st.subheader("Kills")
+                    _metric_expected_vs_actual(
+                        "Kills réels vs kills attendus",
+                        pm.get("kills") or {},
+                    )
+                with av_cols[1]:
+                    st.subheader("Morts")
+                    _metric_expected_vs_actual(
+                        "Morts réelles vs morts attendues",
+                        pm.get("deaths") or {},
+                    )
+
+                k = pm.get("kills") or {}
+                dth = pm.get("deaths") or {}
+                if (k.get("count") is not None and k.get("expected") is not None) or (
+                    dth.get("count") is not None and dth.get("expected") is not None
+                ):
+                    exp_fig = go.Figure()
+                    exp_fig.add_bar(
+                        x=["Kills", "Morts"],
+                        y=[float(k.get("expected") or 0.0), float(dth.get("expected") or 0.0)],
+                        name="Attendu",
+                        marker_color=HALO_COLORS.violet,
+                        opacity=0.75,
+                        hovertemplate="%{x} (attendu): %{y:.1f}<extra></extra>",
+                    )
+                    exp_fig.add_bar(
+                        x=["Kills", "Morts"],
+                        y=[float(k.get("count") or 0.0), float(dth.get("count") or 0.0)],
+                        name="Réel",
+                        marker_color=HALO_COLORS.green,
+                        opacity=0.85,
+                        hovertemplate="%{x} (réel): %{y:.0f}<extra></extra>",
+                    )
+                    exp_fig.update_layout(
+                        barmode="group",
+                        height=320,
+                        margin=dict(l=40, r=20, t=30, b=40),
+                        legend=get_legend_horizontal_top(),
+                    )
+                    exp_fig.update_yaxes(rangemode="tozero")
+                    st.plotly_chart(exp_fig, width="stretch")
+
+            st.subheader("Graphes de performance (contexte)")
+            recent_n = min(25, len(dff))
+            recent = dff.sort_values("start_time").tail(recent_n)
+            if len(recent) >= 2:
+                st.caption(f"Affichage des {recent_n} dernières parties (dans le filtre actuel).")
+                st.plotly_chart(
+                    plot_timeseries(recent, title=f"{me_name} — {recent_n} dernières"),
+                    width="stretch",
+                )
+            else:
+                st.info("Pas assez de parties pour afficher un contexte (minimum 2).")
+
+    # --------------------------------------------------------------------------
+    # Tab: Médailles (Top 25)
+    # --------------------------------------------------------------------------
+    with tab_medals:
+        st.caption("Top 25 des médailles sur la sélection/filtres actuels.")
+
+        if dff.empty:
+            st.info("Aucun match disponible avec les filtres actuels.")
+        else:
+            match_ids = [str(x) for x in dff["match_id"].dropna().astype(str).tolist()]
+
+            medals_path = os.path.join("static", "medals", "medals.json")
+            medal_meta: dict[str, dict] = {}
+            if os.path.exists(medals_path):
+                try:
+                    import json
+
+                    with open(medals_path, "r", encoding="utf-8") as f:
+                        medal_meta = json.load(f) or {}
+                except Exception:
+                    medal_meta = {}
+
+            with st.spinner("Agrégation des médailles…"):
+                top = load_top_medals(db_path, xuid.strip(), match_ids, top_n=25)
+
+            if not top:
+                st.info("Aucune médaille trouvée (ou payload médailles absent).")
+            else:
+                md = pd.DataFrame(top, columns=["name_id", "count"])
+
+                def _label(nid: int) -> str:
+                    m = medal_meta.get(str(nid)) if isinstance(medal_meta, dict) else None
+                    if isinstance(m, dict):
+                        name = m.get("name") or m.get("label")
+                        if isinstance(name, str) and name.strip():
+                            return name.strip()
+                    return f"Médaille #{nid}"
+
+                md["label"] = md["name_id"].apply(lambda x: _label(int(x)))
+                md = md.sort_values("count", ascending=True)
+
+                fig = go.Figure(
+                    data=[
+                        go.Bar(
+                            x=md["count"],
+                            y=md["label"],
+                            orientation="h",
+                            marker_color=HALO_COLORS.cyan,
+                            hovertemplate="%{y}: %{x}<extra></extra>",
+                        )
+                    ]
+                )
+                apply_halo_plot_style(fig, title="Top médailles", height=720)
+                fig.update_layout(margin=dict(l=140, r=20, t=50, b=30))
+                fig.update_xaxes(title_text="Total")
+                fig.update_yaxes(title_text="")
+                st.plotly_chart(fig, width="stretch")
+
+                st.dataframe(
+                    md.sort_values("count", ascending=False)[["name_id", "label", "count"]],
+                    width="stretch",
+                    hide_index=True,
+                )
+
+                tiles = []
+                for _, r in md.sort_values("count", ascending=False).iterrows():
+                    tiles.append(
+                        """
+                        <div class="os-card">
+                          <div class="os-card-title">{label}</div>
+                          <div class="os-card-kpi">{count}</div>
+                          <div class="os-card-sub">NameId #{name_id}</div>
+                        </div>
+                        """.format(
+                            label=str(r.get("label", "")),
+                            count=int(r.get("count", 0)),
+                            name_id=int(r.get("name_id", 0)),
+                        )
+                    )
+
+                st.markdown(
+                    "<div class=\"os-grid\">" + "".join(tiles) + "</div>",
+                    unsafe_allow_html=True,
+                )
 
     # --------------------------------------------------------------------------
     # Tab: Séries temporelles
@@ -473,14 +706,25 @@ def main() -> None:
                 width="stretch",
             )
 
-            st.subheader("Durée de vie moyenne (Average Life)")
+            st.subheader("Durée de vie moyenne")
             if dff.dropna(subset=["average_life_seconds"]).empty:
                 st.info("Average Life indisponible sur ce filtre.")
             else:
                 st.plotly_chart(plot_average_life(dff), width="stretch")
 
-            st.subheader("Spree / Headshots / Précision")
+            st.subheader("Folie meurtrière / Tirs à la tête / Précision")
             st.plotly_chart(plot_spree_headshots_accuracy(dff), width="stretch")
+
+            st.subheader("FDA")
+            valid = dff.dropna(subset=["kda"]) if "kda" in dff.columns else pd.DataFrame()
+            if valid.empty:
+                st.info("FDA indisponible sur ce filtre.")
+            else:
+                m = st.columns(2)
+                m[0].metric("FDA médiane", f"{valid['kda'].median():.2f}")
+                m[1].metric("Moyenne FDA", f"{valid['kda'].mean():.2f}")
+                st.caption("Densité (KDE) + rug : forme de la distribution + position des matchs.")
+                st.plotly_chart(plot_kda_distribution(dff), width="stretch")
 
     # --------------------------------------------------------------------------
     # Tab: Victoires/Défaites
@@ -494,20 +738,6 @@ def main() -> None:
             )
             st.caption("Basé sur Players[].Outcome (2=victoire, 3=défaite, 1=égalité, 4=non terminé).")
             st.plotly_chart(fig_out, width="stretch")
-
-    # --------------------------------------------------------------------------
-    # Tab: FDA (distribution)
-    # --------------------------------------------------------------------------
-    with tab_kda:
-        with st.spinner("Calcul de la répartition FDA…"):
-            valid = dff.dropna(subset=["kda"]) if "kda" in dff.columns else pd.DataFrame()
-            if valid.empty:
-                st.warning("FDA indisponible sur ce filtre.")
-            else:
-                st.metric("FDA médiane", f"{valid['kda'].median():.2f}")
-                st.metric("FDA moyenne", f"{valid['kda'].mean():.2f}")
-                st.caption("Densité (KDE) + rug : forme de la distribution + position des matchs.")
-                st.plotly_chart(plot_kda_distribution(dff), width="stretch")
 
     # --------------------------------------------------------------------------
     # Tab: Avec un joueur

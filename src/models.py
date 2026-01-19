@@ -50,6 +50,10 @@ class MatchRow:
     assists: int
     accuracy: Optional[float]
 
+    # Champs optionnels ajoutés (avec defaults) — placés en fin pour compat dataclass
+    game_variant_id: Optional[str] = None
+    game_variant_name: Optional[str] = None
+
     @property
     def ratio(self) -> float:
         """Calcule le ratio (Frags + assists/2) / morts.

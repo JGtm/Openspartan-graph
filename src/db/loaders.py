@@ -15,6 +15,176 @@ from src.db import queries
 from src.models import MatchRow, FriendMatch
 
 
+def load_top_medals(
+    db_path: str,
+    xuid: str,
+    match_ids: List[str],
+    *,
+    top_n: int = 25,
+) -> List[tuple[int, int]]:
+    """Retourne les médailles les plus fréquentes (NameId -> total).
+
+    Agrège uniquement sur la liste de MatchIds fournie (utile pour respecter
+    exactement les filtres UI déjà appliqués).
+
+    Notes:
+        - SQLite a une limite sur le nombre de paramètres, on exécute par chunks.
+        - Le mapping NameId -> libellé/icône est optionnel côté UI.
+    """
+    if not xuid or not match_ids:
+        return []
+
+    if top_n <= 0:
+        return []
+
+    # Normalise et déduplique en gardant l'ordre
+    norm: List[str] = []
+    seen: set[str] = set()
+    for mid in match_ids:
+        if not isinstance(mid, str):
+            continue
+        s = mid.strip()
+        if not s or s in seen:
+            continue
+        seen.add(s)
+        norm.append(s)
+
+    if not norm:
+        return []
+
+    me_id = f"xuid({xuid})"
+    totals: Dict[int, int] = {}
+    chunk_size = 800
+
+    with get_connection(db_path) as con:
+        cur = con.cursor()
+        for i in range(0, len(norm), chunk_size):
+            chunk = norm[i : i + chunk_size]
+            placeholders = ",".join(["?"] * len(chunk))
+            sql = queries.LOAD_TOP_MEDALS_FOR_MATCH_IDS.format(match_ids=placeholders)
+            cur.execute(sql, (*chunk, me_id))
+            for name_id, total in cur.fetchall():
+                if name_id is None or total is None:
+                    continue
+                try:
+                    nid = int(name_id)
+                    cnt = int(total)
+                except Exception:
+                    continue
+                totals[nid] = totals.get(nid, 0) + cnt
+
+    return sorted(totals.items(), key=lambda kv: kv[1], reverse=True)[: int(top_n)]
+
+
+def _xuid_id_matches(pid: Any, xuid: str) -> bool:
+    """Retourne True si un identifiant joueur correspond au XUID.
+
+    Dans les payloads OpenSpartan, l'Id est souvent de la forme "xuid(123...)".
+    On reste tolérant en comparant via json.dumps comme ailleurs dans ce fichier.
+    """
+    if pid is None:
+        return False
+    try:
+        return xuid in json.dumps(pid)
+    except Exception:
+        return False
+
+
+def load_player_match_result(
+    db_path: str,
+    match_id: str,
+    xuid: str,
+) -> Optional[Dict[str, Any]]:
+    """Charge le résultat PlayerMatchStats pour un match et un joueur.
+
+    On s'appuie sur la table PlayerMatchStats (join via colonne MatchId).
+
+    Returns:
+        Un dict avec des champs normalisés utiles à l'UI, ou None si indisponible.
+    """
+    if not match_id or not xuid:
+        return None
+
+    with get_connection(db_path) as con:
+        cur = con.cursor()
+        cur.execute(queries.LOAD_PLAYER_MATCH_STATS_BY_MATCH_ID, (match_id,))
+        row = cur.fetchone()
+        if not row or not isinstance(row[0], str):
+            return None
+
+        try:
+            payload = json.loads(row[0])
+        except Exception:
+            return None
+
+        values = payload.get("Value")
+        if not isinstance(values, list) or not values:
+            return None
+
+        entry: Optional[Dict[str, Any]] = None
+        for v in values:
+            if not isinstance(v, dict):
+                continue
+            if _xuid_id_matches(v.get("Id"), xuid):
+                entry = v
+                break
+
+        if entry is None:
+            return None
+
+        result = entry.get("Result")
+        if not isinstance(result, dict):
+            return None
+
+        team_id = result.get("TeamId")
+        team_id_i = int(team_id) if isinstance(team_id, int) else None
+        team_mmr = coerce_number(result.get("TeamMmr"))
+
+        # MMRs par équipe (dict {"0": float, "1": float})
+        team_mmrs_raw = result.get("TeamMmrs")
+        team_mmrs: Dict[str, float] = {}
+        if isinstance(team_mmrs_raw, dict):
+            for k, v in team_mmrs_raw.items():
+                fv = coerce_number(v)
+                if fv is not None and isinstance(k, str):
+                    team_mmrs[k] = float(fv)
+
+        enemy_mmr: Optional[float] = None
+        if team_id_i is not None and team_mmrs:
+            my_key = str(team_id_i)
+            for k, v in team_mmrs.items():
+                if k != my_key:
+                    enemy_mmr = float(v)
+                    break
+
+        statp = result.get("StatPerformances")
+        kills = deaths = None
+        if isinstance(statp, dict):
+            kills = statp.get("Kills") if isinstance(statp.get("Kills"), dict) else None
+            deaths = statp.get("Deaths") if isinstance(statp.get("Deaths"), dict) else None
+
+        def _perf(d: Optional[Dict[str, Any]]) -> Dict[str, Optional[float]]:
+            if not isinstance(d, dict):
+                return {"count": None, "expected": None, "stddev": None}
+            return {
+                "count": coerce_number(d.get("Count")),
+                "expected": coerce_number(d.get("Expected")),
+                "stddev": coerce_number(d.get("StdDev")),
+            }
+
+        kills_p = _perf(kills)
+        deaths_p = _perf(deaths)
+
+        return {
+            "team_id": team_id_i,
+            "team_mmr": float(team_mmr) if team_mmr is not None else None,
+            "enemy_mmr": enemy_mmr,
+            "team_mmrs": team_mmrs if team_mmrs else None,
+            "kills": kills_p,
+            "deaths": deaths_p,
+        }
+
+
 def load_asset_name_map(con: sqlite3.Connection, table: str) -> Dict[str, str]:
     """Charge la table de correspondance AssetId -> Nom.
     
@@ -26,7 +196,10 @@ def load_asset_name_map(con: sqlite3.Connection, table: str) -> Dict[str, str]:
         Dictionnaire {asset_id: nom}.
     """
     cur = con.cursor()
-    cur.execute(f"SELECT ResponseBody FROM {table}")
+    try:
+        cur.execute(f"SELECT ResponseBody FROM {table}")
+    except sqlite3.OperationalError:
+        return {}
     out: Dict[str, str] = {}
     for (body,) in cur.fetchall():
         try:
@@ -180,6 +353,7 @@ def load_matches(
     playlist_filter: Optional[str] = None,
     map_mode_pair_filter: Optional[str] = None,
     map_filter: Optional[str] = None,
+    game_variant_filter: Optional[str] = None,
 ) -> List[MatchRow]:
     """Charge tous les matchs d'un joueur depuis la DB.
     
@@ -197,6 +371,7 @@ def load_matches(
         map_names = load_asset_name_map(con, "Maps")
         playlist_names = load_asset_name_map(con, "Playlists")
         map_mode_pair_names = load_asset_name_map(con, "PlaylistMapModePairs")
+        game_variant_names = load_asset_name_map(con, "GameVariants")
 
         cur = con.cursor()
         cur.execute(queries.LOAD_MATCH_STATS)
@@ -241,12 +416,21 @@ def load_matches(
             if not isinstance(map_mode_pair_id, str):
                 map_mode_pair_id = None
 
+            game_variant_id = None
+            ugc_variant = match_info.get("UgcGameVariant")
+            if isinstance(ugc_variant, dict):
+                game_variant_id = ugc_variant.get("AssetId")
+            if not isinstance(game_variant_id, str):
+                game_variant_id = None
+
             # Applique les filtres
             if playlist_filter is not None and (playlist_id or "") != playlist_filter:
                 continue
             if map_mode_pair_filter is not None and (map_mode_pair_id or "") != map_mode_pair_filter:
                 continue
             if map_filter is not None and (map_id or "") != map_filter:
+                continue
+            if game_variant_filter is not None and (game_variant_id or "") != game_variant_filter:
                 continue
 
             players = obj.get("Players")
@@ -267,6 +451,7 @@ def load_matches(
             playlist_name = playlist_names.get(playlist_id) if playlist_id else None
             pair_name = map_mode_pair_names.get(map_mode_pair_id) if map_mode_pair_id else None
             map_name = map_names.get(map_id) if map_id else None
+            game_variant_name = game_variant_names.get(game_variant_id) if game_variant_id else None
 
             rows.append(
                 MatchRow(
@@ -278,6 +463,8 @@ def load_matches(
                     playlist_name=playlist_name,
                     map_mode_pair_id=map_mode_pair_id,
                     map_mode_pair_name=pair_name,
+                    game_variant_id=game_variant_id,
+                    game_variant_name=game_variant_name,
                     outcome=outcome,
                     last_team_id=last_team_id,
                     kda=kda,

@@ -1,0 +1,11 @@
+services:
+  openspartan-graph:
+    build: .
+    ports:
+      - "8501:8501"
+    environment:
+      # Exemple: monte ta DB dans ./data puis pointe dessus
+      - OPENSPARTAN_DB=/data/openspartan.db
+    volumes:
+      # Place un fichier .db dans ./data/openspartan.db (ou adapte le chemin)
+      - ./data:/data:ro

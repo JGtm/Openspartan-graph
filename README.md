@@ -109,6 +109,34 @@ pytest --cov=src --cov-report=html
 pytest tests/test_models.py -v
 ```
 
+## 🐳 Docker
+
+Le container ne peut pas « découvrir » automatiquement la DB Windows (pas de `LOCALAPPDATA`).
+Monte donc ton fichier `.db` en volume et fournis son chemin via `OPENSPARTAN_DB`.
+
+### Docker Compose (recommandé)
+
+1) Place ta DB dans `./data/openspartan.db` (ou adapte le chemin)
+
+2) Lance :
+
+```bash
+docker compose up --build
+```
+
+Puis ouvre `http://localhost:8501`.
+
+### Docker (sans compose)
+
+```bash
+docker build -t openspartan-graph .
+
+docker run --rm -p 8501:8501 \
+	-e OPENSPARTAN_DB=/data/openspartan.db \
+	-v "%CD%\data:/data:ro" \
+	openspartan-graph
+```
+
 ## 📁 Structure du projet
 
 ```

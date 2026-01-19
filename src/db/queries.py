@@ -16,6 +16,61 @@ LOAD_MATCH_STATS = """
 SELECT ResponseBody FROM MatchStats
 """
 
+
+# =============================================================================
+# Requêtes pour l'agrégation des médailles
+# =============================================================================
+
+# NOTE: la liste des MatchIds est injectée via .format(match_ids="?, ?, ...")
+LOAD_TOP_MEDALS_FOR_MATCH_IDS = """
+WITH base AS (
+    SELECT
+        ResponseBody AS Body,
+        json_extract(ResponseBody, '$.MatchId') AS MatchId
+    FROM MatchStats
+    WHERE json_extract(ResponseBody, '$.MatchId') IN ({match_ids})
+),
+p AS (
+    SELECT
+        b.MatchId AS MatchId,
+        j.value AS PlayerObj
+    FROM base b
+    JOIN json_each(json_extract(b.Body, '$.Players')) AS j
+    WHERE json_extract(j.value, '$.PlayerId') = ?
+),
+pts AS (
+    SELECT
+        p.MatchId AS MatchId,
+        t.value AS TeamStats
+    FROM p
+    JOIN json_each(json_extract(p.PlayerObj, '$.PlayerTeamStats')) AS t
+),
+medals AS (
+    SELECT
+        CAST(json_extract(m.value, '$.NameId') AS INTEGER) AS NameId,
+        CAST(json_extract(m.value, '$.Count') AS INTEGER) AS Cnt
+    FROM pts
+    JOIN json_each(json_extract(pts.TeamStats, '$.Stats.CoreStats.Medals')) AS m
+)
+SELECT NameId, SUM(Cnt) AS Total
+FROM medals
+WHERE NameId IS NOT NULL AND Cnt IS NOT NULL
+GROUP BY NameId
+ORDER BY Total DESC;
+"""
+
+
+# =============================================================================
+# Requêtes pour les statistiques détaillées (PlayerMatchStats)
+# =============================================================================
+
+LOAD_PLAYER_MATCH_STATS_BY_MATCH_ID = """
+SELECT ResponseBody
+FROM PlayerMatchStats
+WHERE MatchId = ?
+LIMIT 1;
+"""
+
 # =============================================================================
 # Requêtes pour les joueurs
 # =============================================================================

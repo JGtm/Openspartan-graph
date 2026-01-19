@@ -20,13 +20,16 @@ def mark_firefight(df: pd.DataFrame) -> pd.DataFrame:
     d = df.copy()
     pl = d.get("playlist_name")
     pair = d.get("pair_name")
+    gv = d.get("game_variant_name")
     pl_s = pl.fillna("").astype(str) if pl is not None else pd.Series([""] * len(d))
     pair_s = pair.fillna("").astype(str) if pair is not None else pd.Series([""] * len(d))
+    gv_s = gv.fillna("").astype(str) if gv is not None else pd.Series([""] * len(d))
 
     pat = r"\bfirefight\b"
     d["is_firefight"] = (
         pl_s.str.contains(pat, case=False, regex=True) |
-        pair_s.str.contains(pat, case=False, regex=True)
+        pair_s.str.contains(pat, case=False, regex=True) |
+        gv_s.str.contains(pat, case=False, regex=True)
     )
     return d
 

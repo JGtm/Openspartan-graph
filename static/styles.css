@@ -249,3 +249,60 @@ div[data-testid="stAlert"] {
     overflow: hidden;
     border: 1px solid rgba(255,255,255,0.10);
 }
+
+/* =============================================================================
+   Cards / Grid (Waypoint-like)
+   ============================================================================= */
+
+.os-grid {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 10px;
+    margin-top: 10px;
+}
+
+@media (max-width: 1200px) {
+    .os-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+@media (max-width: 900px) {
+    .os-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 650px) {
+    .os-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+.os-card {
+    border: 1px solid rgba(255,255,255,0.12);
+    background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(0,0,0,0.20));
+    border-radius: 14px;
+    padding: 12px 12px;
+    box-shadow: 0 10px 22px rgba(0,0,0,0.18);
+    backdrop-filter: blur(6px);
+}
+
+.os-card:hover {
+    border-color: rgba(112,205,223,0.38);
+    transform: translateY(-1px);
+    transition: transform 120ms ease, border-color 120ms ease;
+}
+
+.os-card-title {
+    font-weight: 700;
+    font-size: 13px;
+    line-height: 1.2;
+    color: rgba(255,255,255,0.92);
+    margin-bottom: 8px;
+}
+
+.os-card-kpi {
+    font-weight: 800;
+    font-size: 22px;
+    letter-spacing: -0.02em;
+    color: rgba(255,255,255,0.96);
+}
+
+.os-card-sub {
+    margin-top: 2px;
+    font-size: 12px;
+    color: rgba(180,180,180,0.90);
+}
