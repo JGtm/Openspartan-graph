@@ -87,3 +87,14 @@ def get_legend_horizontal_top() -> dict:
         xanchor="left",
         x=0,
     )
+
+
+def get_legend_horizontal_bottom() -> dict:
+    """Retourne la configuration pour une légende horizontale en bas."""
+    return dict(
+        orientation="h",
+        yanchor="top",
+        y=-0.22,
+        xanchor="left",
+        x=0,
+    )

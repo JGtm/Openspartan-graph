@@ -7,6 +7,7 @@ from src.ui.aliases import (
     display_name_from_xuid,
 )
 from src.ui.styles import load_css, get_hero_html
+from src.ui.translations import translate_playlist_name, translate_pair_name
 
 __all__ = [
     "load_aliases_file",
@@ -15,4 +16,6 @@ __all__ = [
     "display_name_from_xuid",
     "load_css",
     "get_hero_html",
+    "translate_playlist_name",
+    "translate_pair_name",
 ]

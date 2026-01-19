@@ -158,10 +158,11 @@ def load_player_match_result(
                     break
 
         statp = result.get("StatPerformances")
-        kills = deaths = None
+        kills = deaths = assists = None
         if isinstance(statp, dict):
             kills = statp.get("Kills") if isinstance(statp.get("Kills"), dict) else None
             deaths = statp.get("Deaths") if isinstance(statp.get("Deaths"), dict) else None
+            assists = statp.get("Assists") if isinstance(statp.get("Assists"), dict) else None
 
         def _perf(d: Optional[Dict[str, Any]]) -> Dict[str, Optional[float]]:
             if not isinstance(d, dict):
@@ -174,6 +175,7 @@ def load_player_match_result(
 
         kills_p = _perf(kills)
         deaths_p = _perf(deaths)
+        assists_p = _perf(assists)
 
         return {
             "team_id": team_id_i,
@@ -182,7 +184,80 @@ def load_player_match_result(
             "team_mmrs": team_mmrs if team_mmrs else None,
             "kills": kills_p,
             "deaths": deaths_p,
+            "assists": assists_p,
         }
+
+
+def load_match_medals_for_player(
+    db_path: str,
+    match_id: str,
+    xuid: str,
+) -> list[dict[str, int]]:
+    """Retourne la liste des médailles (NameId/Count) du joueur sur un match.
+
+    Source: table MatchStats (Players[].PlayerTeamStats[].Stats.CoreStats.Medals[])
+
+    Returns:
+        Liste de dicts: {"name_id": int, "count": int}
+    """
+    if not match_id or not xuid:
+        return []
+
+    with get_connection(db_path) as con:
+        cur = con.cursor()
+        cur.execute(queries.LOAD_MATCH_STATS_BY_MATCH_ID, (match_id,))
+        row = cur.fetchone()
+        if not row or not isinstance(row[0], str):
+            return []
+
+        try:
+            payload = json.loads(row[0])
+        except Exception:
+            return []
+
+    players = payload.get("Players")
+    if not isinstance(players, list) or not players:
+        return []
+
+    me: Optional[Dict[str, Any]] = None
+    for p in players:
+        if not isinstance(p, dict):
+            continue
+        if _xuid_id_matches(p.get("PlayerId"), xuid):
+            me = p
+            break
+
+    if me is None:
+        return []
+
+    pts = me.get("PlayerTeamStats")
+    if not isinstance(pts, list) or not pts:
+        return []
+
+    totals: dict[int, int] = {}
+    for ts in pts:
+        if not isinstance(ts, dict):
+            continue
+        medals = (
+            ts.get("Stats", {})
+            .get("CoreStats", {})
+            .get("Medals")
+        )
+        if not isinstance(medals, list):
+            continue
+        for m in medals:
+            if not isinstance(m, dict):
+                continue
+            try:
+                nid = int(m.get("NameId"))
+                cnt = int(m.get("Count"))
+            except Exception:
+                continue
+            totals[nid] = totals.get(nid, 0) + cnt
+
+    out = [{"name_id": nid, "count": cnt} for nid, cnt in totals.items() if cnt]
+    out.sort(key=lambda d: d["count"], reverse=True)
+    return out
 
 
 def load_asset_name_map(con: sqlite3.Connection, table: str) -> Dict[str, str]:

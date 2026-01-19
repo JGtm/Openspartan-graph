@@ -4,7 +4,7 @@ import pandas as pd
 import plotly.graph_objects as go
 
 from src.config import HALO_COLORS, PLOT_CONFIG
-from src.visualization.theme import apply_halo_plot_style
+from src.visualization.theme import apply_halo_plot_style, get_legend_horizontal_bottom
 
 
 def plot_map_comparison(df_breakdown: pd.DataFrame, metric: str, title: str) -> go.Figure:
@@ -44,7 +44,8 @@ def plot_map_comparison(df_breakdown: pd.DataFrame, metric: str, title: str) -> 
     fig.update_layout(
         height=PLOT_CONFIG.tall_height,
         title=title,
-        margin=dict(l=40, r=20, t=60, b=40),
+        margin=dict(l=40, r=20, t=60, b=90),
+        legend=get_legend_horizontal_bottom(),
     )
     
     return apply_halo_plot_style(fig, title=title, height=PLOT_CONFIG.tall_height)
@@ -96,11 +97,11 @@ def plot_map_ratio_with_winloss(df_breakdown: pd.DataFrame, title: str) -> go.Fi
     fig.update_layout(
         height=PLOT_CONFIG.tall_height,
         title=title,
-        margin=dict(l=40, r=20, t=60, b=40),
+        margin=dict(l=40, r=20, t=60, b=90),
         barmode="group",
         bargap=0.18,
         bargroupgap=0.06,
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
+        legend=get_legend_horizontal_bottom(),
     )
     fig.update_xaxes(title_text="Win / Loss", tickformat=".0%", range=[0, 1])
     

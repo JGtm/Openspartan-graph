@@ -16,6 +16,13 @@ LOAD_MATCH_STATS = """
 SELECT ResponseBody FROM MatchStats
 """
 
+LOAD_MATCH_STATS_BY_MATCH_ID = """
+SELECT ResponseBody
+FROM MatchStats
+WHERE json_extract(ResponseBody, '$.MatchId') = ?
+LIMIT 1;
+"""
+
 
 # =============================================================================
 # Requêtes pour l'agrégation des médailles

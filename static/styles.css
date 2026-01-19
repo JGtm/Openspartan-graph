@@ -306,3 +306,30 @@ div[data-testid="stAlert"] {
     font-size: 12px;
     color: rgba(180,180,180,0.90);
 }
+
+/* --- Medals grid (Streamlit columns) --- */
+.os-medal-caption {
+    text-align: center;
+    font-size: 0.85rem;
+    line-height: 1.15rem;
+    margin-top: 0.25rem;
+    opacity: 0.9;
+}
+
+.os-medal-count {
+    font-weight: 700;
+    font-size: 0.95rem;
+}
+
+.os-medal-missing {
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.03);
+    font-weight: 700;
+    opacity: 0.75;
+}

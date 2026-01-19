@@ -10,6 +10,7 @@ from typing import Optional
 
 import pandas as pd
 import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 import streamlit as st
 
 # Imports depuis la nouvelle architecture
@@ -27,6 +28,7 @@ from src.db import (
     list_top_teammates,
     guess_xuid_from_db_path,
     load_player_match_result,
+    load_match_medals_for_player,
     load_top_medals,
 )
 from src.db.parsers import parse_xuid_input
@@ -54,7 +56,7 @@ from src.visualization import (
     plot_map_ratio_with_winloss,
     plot_trio_metric,
 )
-from src.visualization.theme import apply_halo_plot_style, get_legend_horizontal_top
+from src.visualization.theme import apply_halo_plot_style, get_legend_horizontal_bottom
 from src.ui import (
     load_aliases_file,
     save_aliases_file,
@@ -62,6 +64,8 @@ from src.ui import (
     display_name_from_xuid,
     load_css,
     get_hero_html,
+    translate_playlist_name,
+    translate_pair_name,
 )
 from src.ui.aliases import get_xuid_aliases
 from src.config import get_aliases_file_path
@@ -134,6 +138,146 @@ def _date_range(df: pd.DataFrame) -> tuple[date, date]:
     dmin = df["date"].min()
     dmax = df["date"].max()
     return dmin, dmax
+
+
+def _format_date_fr(dt_value) -> str:
+    """Formate une date en français, ex: 'Lun. 4 décembre 2025'."""
+    if dt_value is None:
+        return "-"
+    try:
+        ts = pd.to_datetime(dt_value)
+        if pd.isna(ts):
+            return "-"
+        d = ts.to_pydatetime()
+    except Exception:
+        return str(dt_value)
+
+    jours = ["Lun.", "Mar.", "Mer.", "Jeu.", "Ven.", "Sam.", "Dim."]
+    mois = [
+        "janvier",
+        "février",
+        "mars",
+        "avril",
+        "mai",
+        "juin",
+        "juillet",
+        "août",
+        "septembre",
+        "octobre",
+        "novembre",
+        "décembre",
+    ]
+
+    return f"{jours[d.weekday()]} {d.day} {mois[d.month - 1]} {d.year}"
+
+
+@st.cache_data(show_spinner=False)
+def _load_medal_name_maps() -> tuple[dict[str, str], dict[str, str]]:
+    """Charge les labels de médailles.
+
+    - Priorité au fichier FR: static/medals/medals_fr.json
+    - Fallback: static/medals/medals.json
+
+    Formats acceptés:
+      {"<NameId>": "Nom"}
+      {"<NameId>": {"name": "...", "label": "...", "fr": "...", "name_fr": "..."}}
+    """
+    import json
+
+    def _load(path: str) -> dict[str, str]:
+        if not os.path.exists(path):
+            return {}
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                raw = json.load(f) or {}
+        except Exception:
+            return {}
+        if not isinstance(raw, dict):
+            return {}
+
+        out: dict[str, str] = {}
+        for k, v in raw.items():
+            kid = str(k)
+            if isinstance(v, str) and v.strip():
+                out[kid] = v.strip()
+                continue
+            if isinstance(v, dict):
+                for key in ("fr", "name_fr", "nameFr", "label_fr", "labelFr", "label", "name"):
+                    val = v.get(key)
+                    if isinstance(val, str) and val.strip():
+                        out[kid] = val.strip()
+                        break
+        return out
+
+    fr_map = _load(os.path.join("static", "medals", "medals_fr.json"))
+    en_map = _load(os.path.join("static", "medals", "medals.json"))
+    return fr_map, en_map
+
+
+def _get_medals_cache_dir() -> str:
+    """Dossier des icônes médailles (OpenSpartan.Workshop).
+
+    Override possible via env var OPENSPARTAN_MEDALS_CACHE.
+    """
+    override = os.environ.get("OPENSPARTAN_MEDALS_CACHE")
+    if override:
+        return override
+
+    localappdata = os.environ.get("LOCALAPPDATA")
+    if localappdata:
+        return os.path.join(localappdata, "OpenSpartan.Workshop", "imagecache", "medals")
+
+    # fallback (utile hors Windows, mais probablement vide)
+    return os.path.join(os.path.expanduser("~"), "AppData", "Local", "OpenSpartan.Workshop", "imagecache", "medals")
+
+
+def _medal_label(nid: int) -> str:
+    fr_map, en_map = _load_medal_name_maps()
+    key = str(int(nid))
+    return fr_map.get(key) or en_map.get(key) or f"Médaille #{nid}"
+
+
+def _medal_icon_path(nid: int) -> Optional[str]:
+    p = os.path.join(_get_medals_cache_dir(), f"{int(nid)}.png")
+    return p if os.path.exists(p) else None
+
+
+def _render_medals_grid(medals: list[dict[str, int]], cols_per_row: int = 8) -> None:
+    if not medals:
+        st.info("Aucune médaille.")
+        return
+
+    cache_dir = _get_medals_cache_dir()
+    has_cache = os.path.isdir(cache_dir)
+    if not has_cache:
+        st.caption(
+            "Cache d'images introuvable. "
+            "Définis OPENSPARTAN_MEDALS_CACHE ou vérifie l'installation OpenSpartan.Workshop."
+        )
+
+    cols_per_row = max(3, min(int(cols_per_row), 12))
+    cols = st.columns(cols_per_row)
+    for i, m in enumerate(medals):
+        col = cols[i % cols_per_row]
+        nid = int(m.get("name_id", 0))
+        cnt = int(m.get("count", 0))
+        name = _medal_label(nid)
+        icon = _medal_icon_path(nid) if has_cache else None
+
+        if icon:
+            col.image(icon, width="stretch")
+        else:
+            col.markdown(
+                f"<div class='os-medal-missing'>#{nid}</div>",
+                unsafe_allow_html=True,
+            )
+
+        col.markdown(
+            "<div class='os-medal-caption'>"
+            + f"{name}<br><span class='os-medal-count'>x{cnt}</span>"
+            + "</div>",
+            unsafe_allow_html=True,
+        )
 
 
 # =============================================================================
@@ -348,10 +492,12 @@ def main() -> None:
                 picked_session_labels = None if picked_one == "(toutes)" else [picked_one]
 
         playlist_opts = build_option_map(base_for_filters["playlist_name"], base_for_filters["playlist_id"])
-        playlist_label = st.selectbox("Playlist", options=["(toutes)"] + list(playlist_opts.keys()), index=0)
-        playlist_id: Optional[str] = None
-        if playlist_label != "(toutes)":
-            playlist_id = playlist_opts[playlist_label]
+        base_for_filters = base_for_filters.copy()
+        base_for_filters["playlist_fr"] = base_for_filters["playlist_name"].apply(translate_playlist_name)
+        playlist_fr_values = sorted(
+            {str(x).strip() for x in base_for_filters["playlist_fr"].dropna().tolist() if str(x).strip()}
+        )
+        playlist_fr = st.selectbox("Playlist", options=["(toutes)"] + playlist_fr_values, index=0)
 
         mode_opts = build_option_map(base_for_filters["game_variant_name"], base_for_filters["game_variant_id"])
         mode_label = st.selectbox("Mode", options=["(tous)"] + list(mode_opts.keys()), index=0)
@@ -380,6 +526,10 @@ def main() -> None:
     # ==========================================================================
     
     base = base_for_filters.copy()
+    if "playlist_fr" not in base.columns:
+        base["playlist_fr"] = base["playlist_name"].apply(translate_playlist_name)
+    if "pair_fr" not in base.columns:
+        base["pair_fr"] = base["pair_name"].apply(translate_pair_name)
 
     if filter_mode == "Sessions":
         base_s = compute_sessions(base, gap_minutes=gap_minutes)
@@ -403,8 +553,10 @@ def main() -> None:
                 "Désactive ce filtre si tes libellés sont différents."
             )
             
-    if playlist_id is not None:
-        dff = dff.loc[dff["playlist_id"].fillna("") == playlist_id]
+    if playlist_fr != "(toutes)":
+        if "playlist_fr" not in dff.columns:
+            dff["playlist_fr"] = dff["playlist_name"].apply(translate_playlist_name)
+        dff = dff.loc[dff["playlist_fr"].fillna("") == playlist_fr]
     if mode_id is not None:
         dff = dff.loc[dff["game_variant_id"].fillna("") == mode_id]
     if map_id is not None:
@@ -413,6 +565,7 @@ def main() -> None:
     if filter_mode == "Période":
         mask = (dff["date"] >= start_d) & (dff["date"] <= end_d)
         dff = dff.loc[mask].copy()
+
 
     # ==========================================================================
     # KPIs
@@ -488,16 +641,20 @@ def main() -> None:
             last_mode = last_row.get("game_variant_name")
             last_outcome = last_row.get("outcome")
 
+            last_playlist_fr = translate_playlist_name(str(last_playlist)) if last_playlist else None
+            last_pair_fr = translate_pair_name(str(last_pair)) if last_pair else None
+
             meta_cols = st.columns(4)
-            meta_cols[0].metric("Date", str(last_time) if last_time is not None else "-")
+            meta_cols[0].metric("Date", _format_date_fr(last_time))
             meta_cols[1].metric("Carte", str(last_map) if last_map else "-")
-            meta_cols[2].metric("Playlist", str(last_playlist) if last_playlist else "-")
-            meta_cols[3].metric("Mode", str(last_mode or last_pair) if (last_mode or last_pair) else "-")
+            meta_cols[2].metric("Playlist", str(last_playlist_fr or last_playlist) if (last_playlist_fr or last_playlist) else "-")
+            meta_cols[3].metric("Mode", str(last_mode or last_pair_fr or last_pair) if (last_mode or last_pair_fr or last_pair) else "-")
 
             st.caption(f"MatchId: {last_match_id}")
 
-            with st.spinner("Lecture des stats détaillées (MMR, attendu vs réel)…"):
+            with st.spinner("Lecture des stats détaillées (attendu vs réel, médailles)…"):
                 pm = load_player_match_result(db_path, last_match_id, xuid.strip())
+                medals_last = load_match_medals_for_player(db_path, last_match_id, xuid.strip())
 
             # Rappel du résultat (même si PlayerMatchStats est indispo)
             outcome_map = {2: "Victoire", 3: "Défaite", 1: "Égalité", 4: "Non terminé"}
@@ -523,86 +680,136 @@ def main() -> None:
                     f"{delta_mmr:+.1f}" if delta_mmr is not None else "-",
                 )
 
-                if team_mmr is not None or enemy_mmr is not None:
-                    mmr_fig = go.Figure()
-                    mmr_fig.add_bar(
-                        x=["Mon équipe", "Adverse"],
-                        y=[float(team_mmr or 0.0), float(enemy_mmr or 0.0)],
-                        marker_color=[HALO_COLORS.cyan, HALO_COLORS.red],
-                        hovertemplate="%{x}: %{y:.1f}<extra></extra>",
-                    )
-                    mmr_fig.update_layout(height=260, margin=dict(l=40, r=20, t=30, b=40))
-                    mmr_fig.update_yaxes(title_text="MMR", rangemode="tozero")
-                    st.plotly_chart(mmr_fig, width="stretch")
-
-                # Attendu vs réel (kills / deaths)
-                def _metric_expected_vs_actual(title: str, perf: dict) -> None:
+                # Attendu vs réel (K / D / A) + ratios (match uniquement)
+                def _metric_expected_vs_actual(title: str, perf: dict, delta_color: str) -> None:
                     count = perf.get("count")
                     expected = perf.get("expected")
-                    stddev = perf.get("stddev")
                     if count is None or expected is None:
                         st.metric(title, "-")
                         return
                     delta = float(count) - float(expected)
-                    suffix = f" (σ={stddev:.2f})" if stddev is not None else ""
-                    st.metric(title, f"{count:.0f} vs {expected:.1f}", f"{delta:+.1f}{suffix}")
+                    st.metric(title, f"{count:.0f} vs {expected:.1f}", f"{delta:+.1f}", delta_color=delta_color)
 
-                av_cols = st.columns(2)
+                perf_k = pm.get("kills") or {}
+                perf_d = pm.get("deaths") or {}
+                perf_a = pm.get("assists") or {}
+
+                st.subheader("Attendu vs réel")
+                av_cols = st.columns(4)
                 with av_cols[0]:
-                    st.subheader("Kills")
-                    _metric_expected_vs_actual(
-                        "Kills réels vs kills attendus",
-                        pm.get("kills") or {},
-                    )
+                    _metric_expected_vs_actual("Kills", perf_k, delta_color="normal")
                 with av_cols[1]:
-                    st.subheader("Morts")
-                    _metric_expected_vs_actual(
-                        "Morts réelles vs morts attendues",
-                        pm.get("deaths") or {},
-                    )
+                    _metric_expected_vs_actual("Morts", perf_d, delta_color="inverse")
+                with av_cols[2]:
+                    _metric_expected_vs_actual("Assistances", perf_a, delta_color="normal")
+                with av_cols[3]:
+                    avg_life_last = last_row.get("average_life_seconds")
+                    st.metric("Durée de vie moyenne", format_mmss(avg_life_last))
 
-                k = pm.get("kills") or {}
-                dth = pm.get("deaths") or {}
-                if (k.get("count") is not None and k.get("expected") is not None) or (
-                    dth.get("count") is not None and dth.get("expected") is not None
-                ):
-                    exp_fig = go.Figure()
-                    exp_fig.add_bar(
-                        x=["Kills", "Morts"],
-                        y=[float(k.get("expected") or 0.0), float(dth.get("expected") or 0.0)],
+                labels = ["F", "D", "A"]
+                actual_vals = [
+                    float(last_row.get("kills") or 0.0),
+                    float(last_row.get("deaths") or 0.0),
+                    float(last_row.get("assists") or 0.0),
+                ]
+                exp_vals = [
+                    perf_k.get("expected"),
+                    perf_d.get("expected"),
+                    perf_a.get("expected"),
+                ]
+
+                show_expected_ratio = all(v is not None for v in exp_vals)
+                real_ratio = last_row.get("ratio")
+                try:
+                    real_ratio_f = float(real_ratio) if real_ratio == real_ratio else None
+                except Exception:
+                    real_ratio_f = None
+                if real_ratio_f is None:
+                    denom = max(1.0, float(last_row.get("deaths") or 0.0))
+                    real_ratio_f = (float(last_row.get("kills") or 0.0) + float(last_row.get("assists") or 0.0)) / denom
+
+                exp_ratio_f = None
+                if show_expected_ratio:
+                    denom_e = max(1e-9, float(exp_vals[1] or 0.0))
+                    exp_ratio_f = (float(exp_vals[0] or 0.0) + float(exp_vals[2] or 0.0)) / denom_e
+
+                exp_fig = make_subplots(specs=[[{"secondary_y": True}]])
+
+                bar_colors = [HALO_COLORS.green, HALO_COLORS.red, HALO_COLORS.cyan]
+                exp_fig.add_trace(
+                    go.Bar(
+                        x=labels,
+                        y=exp_vals,
                         name="Attendu",
-                        marker_color=HALO_COLORS.violet,
-                        opacity=0.75,
+                        marker=dict(
+                            color=bar_colors,
+                            pattern=dict(shape="/", fgcolor="rgba(255,255,255,0.75)", solidity=0.22),
+                        ),
+                        opacity=0.50,
                         hovertemplate="%{x} (attendu): %{y:.1f}<extra></extra>",
-                    )
-                    exp_fig.add_bar(
-                        x=["Kills", "Morts"],
-                        y=[float(k.get("count") or 0.0), float(dth.get("count") or 0.0)],
-                        name="Réel",
-                        marker_color=HALO_COLORS.green,
-                        opacity=0.85,
-                        hovertemplate="%{x} (réel): %{y:.0f}<extra></extra>",
-                    )
-                    exp_fig.update_layout(
-                        barmode="group",
-                        height=320,
-                        margin=dict(l=40, r=20, t=30, b=40),
-                        legend=get_legend_horizontal_top(),
-                    )
-                    exp_fig.update_yaxes(rangemode="tozero")
-                    st.plotly_chart(exp_fig, width="stretch")
-
-            st.subheader("Graphes de performance (contexte)")
-            recent_n = min(25, len(dff))
-            recent = dff.sort_values("start_time").tail(recent_n)
-            if len(recent) >= 2:
-                st.caption(f"Affichage des {recent_n} dernières parties (dans le filtre actuel).")
-                st.plotly_chart(
-                    plot_timeseries(recent, title=f"{me_name} — {recent_n} dernières"),
-                    width="stretch",
+                    ),
+                    secondary_y=False,
                 )
+                exp_fig.add_trace(
+                    go.Bar(
+                        x=labels,
+                        y=actual_vals,
+                        name="Réel",
+                        marker_color=bar_colors,
+                        opacity=0.90,
+                        hovertemplate="%{x} (réel): %{y:.0f}<extra></extra>",
+                    ),
+                    secondary_y=False,
+                )
+                exp_fig.add_trace(
+                    go.Scatter(
+                        x=labels,
+                        y=[real_ratio_f] * len(labels),
+                        mode="lines+markers",
+                        name="Ratio réel",
+                        line=dict(color=HALO_COLORS.amber, width=4),
+                        marker=dict(size=7),
+                        hovertemplate="ratio (réel): %{y:.2f}<extra></extra>",
+                    ),
+                    secondary_y=True,
+                )
+                if exp_ratio_f is not None:
+                    exp_fig.add_trace(
+                        go.Scatter(
+                            x=labels,
+                            y=[exp_ratio_f] * len(labels),
+                            mode="lines+markers",
+                            name="Ratio attendu",
+                            line=dict(color=HALO_COLORS.violet, width=3, dash="dot"),
+                            marker=dict(size=6),
+                            hovertemplate="ratio (attendu): %{y:.2f}<extra></extra>",
+                        ),
+                        secondary_y=True,
+                    )
+                else:
+                    st.caption("Ratio attendu indisponible (Assists attendues manquantes dans PlayerMatchStats).")
+
+                exp_fig.update_layout(
+                    barmode="group",
+                    height=360,
+                    margin=dict(l=40, r=20, t=30, b=90),
+                    legend=get_legend_horizontal_bottom(),
+                )
+                exp_fig.update_yaxes(title_text="F / D / A", rangemode="tozero", secondary_y=False)
+                exp_fig.update_yaxes(title_text="Ratio", secondary_y=True)
+                st.plotly_chart(exp_fig, width="stretch")
+
+            # Médailles (match)
+            st.subheader("Médailles (match)")
+            if not medals_last:
+                st.info("Médailles indisponibles pour ce match (ou aucune médaille).")
             else:
-                st.info("Pas assez de parties pour afficher un contexte (minimum 2).")
+                md_df = pd.DataFrame(medals_last)
+                md_df["label"] = md_df["name_id"].apply(lambda x: _medal_label(int(x)))
+                md_df = md_df.sort_values(["count", "label"], ascending=[False, True])
+                _render_medals_grid(md_df[["name_id", "count"]].to_dict(orient="records"), cols_per_row=8)
+
+
 
     # --------------------------------------------------------------------------
     # Tab: Médailles (Top 25)
@@ -615,17 +822,6 @@ def main() -> None:
         else:
             match_ids = [str(x) for x in dff["match_id"].dropna().astype(str).tolist()]
 
-            medals_path = os.path.join("static", "medals", "medals.json")
-            medal_meta: dict[str, dict] = {}
-            if os.path.exists(medals_path):
-                try:
-                    import json
-
-                    with open(medals_path, "r", encoding="utf-8") as f:
-                        medal_meta = json.load(f) or {}
-                except Exception:
-                    medal_meta = {}
-
             with st.spinner("Agrégation des médailles…"):
                 top = load_top_medals(db_path, xuid.strip(), match_ids, top_n=25)
 
@@ -634,60 +830,9 @@ def main() -> None:
             else:
                 md = pd.DataFrame(top, columns=["name_id", "count"])
 
-                def _label(nid: int) -> str:
-                    m = medal_meta.get(str(nid)) if isinstance(medal_meta, dict) else None
-                    if isinstance(m, dict):
-                        name = m.get("name") or m.get("label")
-                        if isinstance(name, str) and name.strip():
-                            return name.strip()
-                    return f"Médaille #{nid}"
-
-                md["label"] = md["name_id"].apply(lambda x: _label(int(x)))
-                md = md.sort_values("count", ascending=True)
-
-                fig = go.Figure(
-                    data=[
-                        go.Bar(
-                            x=md["count"],
-                            y=md["label"],
-                            orientation="h",
-                            marker_color=HALO_COLORS.cyan,
-                            hovertemplate="%{y}: %{x}<extra></extra>",
-                        )
-                    ]
-                )
-                apply_halo_plot_style(fig, title="Top médailles", height=720)
-                fig.update_layout(margin=dict(l=140, r=20, t=50, b=30))
-                fig.update_xaxes(title_text="Total")
-                fig.update_yaxes(title_text="")
-                st.plotly_chart(fig, width="stretch")
-
-                st.dataframe(
-                    md.sort_values("count", ascending=False)[["name_id", "label", "count"]],
-                    width="stretch",
-                    hide_index=True,
-                )
-
-                tiles = []
-                for _, r in md.sort_values("count", ascending=False).iterrows():
-                    tiles.append(
-                        """
-                        <div class="os-card">
-                          <div class="os-card-title">{label}</div>
-                          <div class="os-card-kpi">{count}</div>
-                          <div class="os-card-sub">NameId #{name_id}</div>
-                        </div>
-                        """.format(
-                            label=str(r.get("label", "")),
-                            count=int(r.get("count", 0)),
-                            name_id=int(r.get("name_id", 0)),
-                        )
-                    )
-
-                st.markdown(
-                    "<div class=\"os-grid\">" + "".join(tiles) + "</div>",
-                    unsafe_allow_html=True,
-                )
+                md["label"] = md["name_id"].apply(lambda x: _medal_label(int(x)))
+                md_desc = md.sort_values("count", ascending=False)
+                _render_medals_grid(md_desc[["name_id", "count"]].to_dict(orient="records"), cols_per_row=8)
 
     # --------------------------------------------------------------------------
     # Tab: Séries temporelles
@@ -696,6 +841,16 @@ def main() -> None:
         with st.spinner("Génération des graphes…"):
             fig = plot_timeseries(dff, title=f"{me_name}")
             st.plotly_chart(fig, width="stretch")
+
+            st.subheader("FDA")
+            valid = dff.dropna(subset=["kda"]) if "kda" in dff.columns else pd.DataFrame()
+            if valid.empty:
+                st.info("FDA indisponible sur ce filtre.")
+            else:
+                m = st.columns(1)
+                m[0].metric("Moyenne FDA", f"{valid['kda'].mean():.2f}")
+                st.caption("Densité (KDE) + rug : forme de la distribution + position des matchs.")
+                st.plotly_chart(plot_kda_distribution(dff), width="stretch")
 
             st.subheader("Assistances")
             st.plotly_chart(plot_assists_timeseries(dff, title=f"{me_name} — Assistances"), width="stretch")
@@ -714,17 +869,6 @@ def main() -> None:
 
             st.subheader("Folie meurtrière / Tirs à la tête / Précision")
             st.plotly_chart(plot_spree_headshots_accuracy(dff), width="stretch")
-
-            st.subheader("FDA")
-            valid = dff.dropna(subset=["kda"]) if "kda" in dff.columns else pd.DataFrame()
-            if valid.empty:
-                st.info("FDA indisponible sur ce filtre.")
-            else:
-                m = st.columns(2)
-                m[0].metric("FDA médiane", f"{valid['kda'].median():.2f}")
-                m[1].metric("Moyenne FDA", f"{valid['kda'].mean():.2f}")
-                st.caption("Densité (KDE) + rug : forme de la distribution + position des matchs.")
-                st.plotly_chart(plot_kda_distribution(dff), width="stretch")
 
     # --------------------------------------------------------------------------
     # Tab: Victoires/Défaites
@@ -778,8 +922,8 @@ def main() -> None:
                         {
                             "match_id": r.match_id,
                             "start_time": r.start_time,
-                            "playlist_name": r.playlist_name,
-                            "pair_name": r.pair_name,
+                            "playlist_name": translate_playlist_name(r.playlist_name),
+                            "pair_name": translate_pair_name(r.pair_name),
                             "same_team": r.same_team,
                             "my_team_id": r.my_team_id,
                             "my_outcome": r.my_outcome,
@@ -842,7 +986,8 @@ def main() -> None:
             default=[k for k, v in opts_map.items() if v in default_two],
         )
         picked_xuids = [opts_map[lbl] for lbl in picked_labels if lbl in opts_map]
-        same_team_only_friends = st.checkbox("Même équipe (recommandé)", value=True, key="friends_same_team")
+        # Forcé: les stats "avec mes amis" n'ont de sens que si vous êtes dans la même équipe.
+        same_team_only_friends = True
 
         if len(picked_xuids) < 1:
             st.info("Sélectionne au moins un coéquipier.")
@@ -1041,6 +1186,30 @@ def main() -> None:
                             width="stretch",
                         )
 
+                # Médailles (simple) : top médailles sur les matchs partagés
+                st.subheader("Médailles (matchs partagés)")
+                shared_list = sorted({str(x) for x in shared_ids if str(x).strip()})
+                if not shared_list:
+                    st.info("Aucun match partagé pour calculer les médailles.")
+                else:
+                    with st.spinner("Agrégation des médailles (moi + ami)…"):
+                        my_top = load_top_medals(db_path, xuid.strip(), shared_list, top_n=12)
+                        fr_top = load_top_medals(db_path, fx, shared_list, top_n=12)
+
+                    m1, m2 = st.columns(2)
+                    with m1:
+                        st.caption(f"{me_name}")
+                        _render_medals_grid(
+                            [{"name_id": int(n), "count": int(c)} for n, c in (my_top or [])],
+                            cols_per_row=6,
+                        )
+                    with m2:
+                        st.caption(f"{name}")
+                        _render_medals_grid(
+                            [{"name_id": int(n), "count": int(c)} for n, c in (fr_top or [])],
+                            cols_per_row=6,
+                        )
+
     # --------------------------------------------------------------------------
     # Tab: Ratio par cartes
     # --------------------------------------------------------------------------
@@ -1128,6 +1297,8 @@ def main() -> None:
     with tab_table:
         st.subheader("Historique des parties")
         dff_table = dff.copy()
+        if "playlist_fr" not in dff_table.columns:
+            dff_table["playlist_fr"] = dff_table["playlist_name"].apply(translate_playlist_name)
         dff_table["match_url"] = (
             "https://www.halowaypoint.com/halo-infinite/players/"
             + waypoint_player.strip()
@@ -1139,7 +1310,7 @@ def main() -> None:
         dff_table["outcome_label"] = dff_table["outcome"].map(outcome_map).fillna("-")
 
         show_cols = [
-            "match_url", "start_time", "map_name", "playlist_name", "outcome_label",
+            "match_url", "start_time", "map_name", "playlist_fr", "outcome_label",
             "kda", "kills", "deaths", "max_killing_spree", "headshot_kills",
             "average_life_seconds", "assists", "accuracy", "ratio",
         ]
@@ -1178,7 +1349,7 @@ def main() -> None:
                     display_text="Ouvrir",
                 ),
                 "map_name": st.column_config.TextColumn("Carte"),
-                "playlist_name": st.column_config.TextColumn("Playlist"),
+                "playlist_fr": st.column_config.TextColumn("Playlist"),
                 "outcome_label": st.column_config.TextColumn("Résultat"),
                 "kda": st.column_config.NumberColumn("FDA", format="%.2f"),
                 "kills": st.column_config.NumberColumn("Frags"),

@@ -4,7 +4,7 @@ import pandas as pd
 import plotly.graph_objects as go
 
 from src.config import HALO_COLORS, PLOT_CONFIG
-from src.visualization.theme import apply_halo_plot_style, get_legend_horizontal_top
+from src.visualization.theme import apply_halo_plot_style, get_legend_horizontal_bottom
 
 
 def plot_trio_metric(
@@ -60,7 +60,7 @@ def plot_trio_metric(
         title=title,
         margin=dict(l=40, r=20, t=60, b=40),
         hovermode="x unified",
-        legend=get_legend_horizontal_top(),
+        legend=get_legend_horizontal_bottom(),
     )
     fig.update_yaxes(title_text=y_title)
     

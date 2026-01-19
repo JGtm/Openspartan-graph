@@ -5,7 +5,12 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
 from src.config import HALO_COLORS, PLOT_CONFIG
-from src.visualization.theme import apply_halo_plot_style, get_legend_horizontal_top
+from src.visualization.theme import apply_halo_plot_style, get_legend_horizontal_bottom
+
+
+def _rolling_mean(series: pd.Series, window: int = 10) -> pd.Series:
+    w = int(window) if window and window > 0 else 1
+    return series.rolling(window=w, min_periods=1).mean()
 
 
 def plot_timeseries(df: pd.DataFrame, title: str) -> go.Figure:
@@ -86,8 +91,8 @@ def plot_timeseries(df: pd.DataFrame, title: str) -> go.Figure:
 
     fig.update_layout(
         title=title,
-        legend=get_legend_horizontal_top(),
-        margin=dict(l=40, r=20, t=80, b=40),
+        legend=get_legend_horizontal_bottom(),
+        margin=dict(l=40, r=20, t=80, b=90),
         hovermode="x unified",
         barmode="group",
         bargap=0.15,
@@ -124,17 +129,21 @@ def plot_assists_timeseries(df: pd.DataFrame, title: str) -> go.Figure:
         Figure Plotly.
     """
     colors = HALO_COLORS.as_dict()
-    
+    d = df.sort_values("start_time").reset_index(drop=True)
+    x_idx = list(range(len(d)))
+    labels = d["start_time"].dt.strftime("%m-%d %H:%M").tolist()
+    step = max(1, len(labels) // 10) if len(labels) > 1 else 1
+
     customdata = list(
         zip(
-            df["kills"],
-            df["deaths"],
-            df["assists"],
-            df["accuracy"].round(2).astype(object),
-            df["ratio"],
-            df["map_name"].fillna(""),
-            df["playlist_name"].fillna(""),
-            df["match_id"],
+            d["kills"],
+            d["deaths"],
+            d["assists"],
+            d["accuracy"].round(2).astype(object),
+            d["ratio"],
+            d["map_name"].fillna(""),
+            d["playlist_name"].fillna(""),
+            d["match_id"],
         )
     )
     hover = (
@@ -145,24 +154,44 @@ def plot_assists_timeseries(df: pd.DataFrame, title: str) -> go.Figure:
 
     fig = go.Figure()
     fig.add_trace(
-        go.Scatter(
-            x=df["start_time"],
-            y=df["assists"],
-            mode="lines",
+        go.Bar(
+            x=x_idx,
+            y=d["assists"],
             name="Assistances",
-            line=dict(width=PLOT_CONFIG.line_width, color=colors["violet"]),
+            marker_color=colors["violet"],
+            opacity=PLOT_CONFIG.bar_opacity,
             customdata=customdata,
             hovertemplate=hover,
         )
     )
+
+    smooth = _rolling_mean(pd.to_numeric(d["assists"], errors="coerce"), window=10)
+    fig.add_trace(
+        go.Scatter(
+            x=x_idx,
+            y=smooth,
+            mode="lines",
+            name="Moyenne (lissée)",
+            line=dict(width=PLOT_CONFIG.line_width, color=colors["green"]),
+            hovertemplate="moyenne=%{y:.2f}<extra></extra>",
+        )
+    )
+
     fig.update_layout(
         title=title,
-        margin=dict(l=40, r=20, t=60, b=40),
+        margin=dict(l=40, r=20, t=60, b=90),
         hovermode="x unified",
-        legend=get_legend_horizontal_top(),
+        legend=get_legend_horizontal_bottom(),
     )
     fig.update_yaxes(title_text="Assistances", rangemode="tozero")
-    
+    fig.update_xaxes(
+        title_text="Match (chronologique)",
+        tickmode="array",
+        tickvals=x_idx[::step],
+        ticktext=labels[::step],
+        type="category",
+    )
+
     return apply_halo_plot_style(fig, title=title, height=PLOT_CONFIG.default_height)
 
 
@@ -177,25 +206,33 @@ def plot_per_minute_timeseries(df: pd.DataFrame, title: str) -> go.Figure:
         Figure Plotly.
     """
     colors = HALO_COLORS.as_dict()
-    fig = go.Figure()
+    d = df.sort_values("start_time").reset_index(drop=True)
+    x_idx = list(range(len(d)))
+    labels = d["start_time"].dt.strftime("%m-%d %H:%M").tolist()
+    step = max(1, len(labels) // 10) if len(labels) > 1 else 1
 
     customdata = list(
         zip(
-            df["time_played_seconds"].fillna(float("nan")).astype(float),
-            df["kills"],
-            df["deaths"],
-            df["assists"],
-            df["match_id"],
+            d["time_played_seconds"].fillna(float("nan")).astype(float),
+            d["kills"],
+            d["deaths"],
+            d["assists"],
+            d["match_id"],
         )
     )
 
+    kpm = pd.to_numeric(d["kills_per_min"], errors="coerce")
+    dpm = pd.to_numeric(d["deaths_per_min"], errors="coerce")
+    apm = pd.to_numeric(d["assists_per_min"], errors="coerce")
+
+    fig = go.Figure()
     fig.add_trace(
-        go.Scatter(
-            x=df["start_time"],
-            y=df["kills_per_min"],
-            mode="lines",
+        go.Bar(
+            x=x_idx,
+            y=kpm,
             name="Frags/min",
-            line=dict(width=PLOT_CONFIG.line_width, color=colors["cyan"]),
+            marker_color=colors["cyan"],
+            opacity=PLOT_CONFIG.bar_opacity,
             customdata=customdata,
             hovertemplate=(
                 "frags/min=%{y:.2f}<br>"
@@ -204,12 +241,12 @@ def plot_per_minute_timeseries(df: pd.DataFrame, title: str) -> go.Figure:
         )
     )
     fig.add_trace(
-        go.Scatter(
-            x=df["start_time"],
-            y=df["deaths_per_min"],
-            mode="lines",
+        go.Bar(
+            x=x_idx,
+            y=dpm,
             name="Morts/min",
-            line=dict(width=PLOT_CONFIG.line_width, color=colors["red"]),
+            marker_color=colors["red"],
+            opacity=PLOT_CONFIG.bar_opacity_secondary,
             customdata=customdata,
             hovertemplate=(
                 "morts/min=%{y:.2f}<br>"
@@ -218,12 +255,12 @@ def plot_per_minute_timeseries(df: pd.DataFrame, title: str) -> go.Figure:
         )
     )
     fig.add_trace(
-        go.Scatter(
-            x=df["start_time"],
-            y=df["assists_per_min"],
-            mode="lines",
+        go.Bar(
+            x=x_idx,
+            y=apm,
             name="Assist./min",
-            line=dict(width=PLOT_CONFIG.line_width, color=colors["violet"]),
+            marker_color=colors["violet"],
+            opacity=PLOT_CONFIG.bar_opacity_secondary,
             customdata=customdata,
             hovertemplate=(
                 "assist./min=%{y:.2f}<br>"
@@ -232,14 +269,55 @@ def plot_per_minute_timeseries(df: pd.DataFrame, title: str) -> go.Figure:
         )
     )
 
+    fig.add_trace(
+        go.Scatter(
+            x=x_idx,
+            y=_rolling_mean(kpm, window=10),
+            mode="lines",
+            name="Moy. frags/min",
+            line=dict(width=PLOT_CONFIG.line_width, color=colors["cyan"]),
+            hovertemplate="moy=%{y:.2f}<extra></extra>",
+        )
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=x_idx,
+            y=_rolling_mean(dpm, window=10),
+            mode="lines",
+            name="Moy. morts/min",
+            line=dict(width=PLOT_CONFIG.line_width, color=colors["red"], dash="dot"),
+            hovertemplate="moy=%{y:.2f}<extra></extra>",
+        )
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=x_idx,
+            y=_rolling_mean(apm, window=10),
+            mode="lines",
+            name="Moy. assist./min",
+            line=dict(width=PLOT_CONFIG.line_width, color=colors["violet"], dash="dot"),
+            hovertemplate="moy=%{y:.2f}<extra></extra>",
+        )
+    )
+
     fig.update_layout(
         title=title,
-        margin=dict(l=40, r=20, t=60, b=40),
+        margin=dict(l=40, r=20, t=60, b=90),
         hovermode="x unified",
-        legend=get_legend_horizontal_top(),
+        legend=get_legend_horizontal_bottom(),
+        barmode="group",
+        bargap=0.15,
+        bargroupgap=0.06,
     )
     fig.update_yaxes(title_text="Par minute", rangemode="tozero")
-    
+    fig.update_xaxes(
+        title_text="Match (chronologique)",
+        tickmode="array",
+        tickvals=x_idx[::step],
+        ticktext=labels[::step],
+        type="category",
+    )
+
     return apply_halo_plot_style(fig, title=title, height=PLOT_CONFIG.default_height)
 
 
@@ -285,24 +363,28 @@ def plot_average_life(df: pd.DataFrame, title: str = "Durée de vie moyenne") ->
         Figure Plotly.
     """
     colors = HALO_COLORS.as_dict()
-    d = df.dropna(subset=["average_life_seconds"]).copy()
-    fig = go.Figure()
+    d = df.dropna(subset=["average_life_seconds"]).sort_values("start_time").reset_index(drop=True).copy()
+    x_idx = list(range(len(d)))
+    labels = d["start_time"].dt.strftime("%m-%d %H:%M").tolist()
+    step = max(1, len(labels) // 10) if len(labels) > 1 else 1
 
+    y = pd.to_numeric(d["average_life_seconds"], errors="coerce")
     custom = list(
         zip(
-            d["deaths"].astype(int),
+            d["deaths"].fillna(0).astype(int),
             d["time_played_seconds"].fillna(float("nan")).astype(float),
             d["match_id"].astype(str),
         )
     )
 
+    fig = go.Figure()
     fig.add_trace(
-        go.Scatter(
-            x=d["start_time"],
-            y=d["average_life_seconds"],
-            mode="lines",
-            name="Average life (s)",
-            line=dict(width=PLOT_CONFIG.line_width, color=colors["green"]),
+        go.Bar(
+            x=x_idx,
+            y=y,
+            name="Durée de vie (s)",
+            marker_color=colors["green"],
+            opacity=PLOT_CONFIG.bar_opacity,
             customdata=custom,
             hovertemplate=(
                 "durée de vie moy.=%{y:.1f}s<br>"
@@ -312,13 +394,32 @@ def plot_average_life(df: pd.DataFrame, title: str = "Durée de vie moyenne") ->
         )
     )
 
+    fig.add_trace(
+        go.Scatter(
+            x=x_idx,
+            y=_rolling_mean(y, window=10),
+            mode="lines",
+            name="Moyenne (lissée)",
+            line=dict(width=PLOT_CONFIG.line_width, color=colors["cyan"]),
+            hovertemplate="moyenne=%{y:.2f}s<extra></extra>",
+        )
+    )
+
     fig.update_layout(
         title=title,
-        margin=dict(l=40, r=20, t=50, b=40),
+        margin=dict(l=40, r=20, t=50, b=90),
         hovermode="x unified",
+        legend=get_legend_horizontal_bottom(),
     )
-    fig.update_yaxes(title_text="Secondes (voir hover pour mm:ss)", rangemode="tozero")
-    
+    fig.update_yaxes(title_text="Secondes", rangemode="tozero")
+    fig.update_xaxes(
+        title_text="Match (chronologique)",
+        tickmode="array",
+        tickvals=x_idx[::step],
+        ticktext=labels[::step],
+        type="category",
+    )
+
     return apply_halo_plot_style(fig, height=PLOT_CONFIG.short_height)
 
 
@@ -396,8 +497,8 @@ def plot_spree_headshots_accuracy(df: pd.DataFrame) -> go.Figure:
 
     fig.update_layout(
         height=420,
-        margin=dict(l=40, r=50, t=30, b=40),
-        legend=get_legend_horizontal_top(),
+        margin=dict(l=40, r=50, t=30, b=90),
+        legend=get_legend_horizontal_bottom(),
         hovermode="x unified",
         barmode="group",
         bargap=0.15,
