@@ -85,6 +85,9 @@ from src.db.profiles import (
 )
 from src.config import get_aliases_file_path
 
+from src.ui.perf import perf_reset_run, perf_section, render_perf_panel
+from src.ui.sections import render_openspartan_tools, render_source_section
+
 
 _LABEL_SUFFIX_RE = re.compile(r"^(.*?)(?:\s*[\-–—]\s*[0-9A-Za-z]{8,})$", re.IGNORECASE)
 
@@ -221,12 +224,178 @@ def _clear_min_matches_maps_friends_auto() -> None:
     st.session_state["_min_matches_maps_friends_auto"] = False
 
 
+def _db_cache_key(db_path: str) -> tuple[int, int] | None:
+    """Retourne une signature stable de la DB pour invalider les caches.
+
+    On utilise (mtime_ns, size) : rapide et suffisamment fiable pour détecter
+    les mises à jour de la DB OpenSpartan.
+    """
+    try:
+        st_ = os.stat(db_path)
+    except OSError:
+        return None
+    return int(getattr(st_, "st_mtime_ns", int(st_.st_mtime * 1e9))), int(st_.st_size)
+
+
+@st.cache_data(show_spinner=False, ttl=30)
+def cached_list_local_dbs(_refresh_token: int = 0) -> list[str]:
+    """Liste des DB locales (TTL court pour éviter un scan disque trop fréquent)."""
+    return list_local_dbs()
+
+
+@st.cache_data(show_spinner=False)
+def cached_compute_sessions_db(
+    db_path: str,
+    xuid: str,
+    db_key: tuple[int, int] | None,
+    include_firefight: bool,
+    gap_minutes: int,
+) -> pd.DataFrame:
+    """Compute sessions sur la base (cache)."""
+    df0 = load_df(db_path, xuid, db_key=db_key)
+    df0 = mark_firefight(df0)
+    if (not include_firefight) and ("is_firefight" in df0.columns):
+        df0 = df0.loc[~df0["is_firefight"]].copy()
+    return compute_sessions(df0, gap_minutes=int(gap_minutes))
+
+
+@st.cache_data(show_spinner=False)
+def cached_same_team_match_ids_with_friend(
+    db_path: str,
+    self_xuid: str,
+    friend_xuid: str,
+    db_key: tuple[int, int] | None,
+) -> tuple[str, ...]:
+    """Retourne les match_id (str) joués dans la même équipe avec un ami (cache)."""
+    rows = query_matches_with_friend(db_path, self_xuid, friend_xuid)
+    ids = {str(r.match_id) for r in rows if getattr(r, "same_team", False)}
+    return tuple(sorted(ids))
+
+
+@st.cache_data(show_spinner=False)
+def cached_query_matches_with_friend(
+    db_path: str,
+    self_xuid: str,
+    friend_xuid: str,
+    db_key: tuple[int, int] | None,
+):
+    return query_matches_with_friend(db_path, self_xuid, friend_xuid)
+
+
+@st.cache_data(show_spinner=False)
+def cached_load_player_match_result(
+    db_path: str,
+    match_id: str,
+    xuid: str,
+    db_key: tuple[int, int] | None,
+):
+    return load_player_match_result(db_path, match_id, xuid)
+
+
+@st.cache_data(show_spinner=False)
+def cached_load_match_medals_for_player(
+    db_path: str,
+    match_id: str,
+    xuid: str,
+    db_key: tuple[int, int] | None,
+):
+    return load_match_medals_for_player(db_path, match_id, xuid)
+
+
+@st.cache_data(show_spinner=False)
+def cached_load_top_medals(
+    db_path: str,
+    xuid: str,
+    match_ids: tuple[str, ...],
+    top_n: int,
+    db_key: tuple[int, int] | None,
+):
+    return load_top_medals(db_path, xuid, list(match_ids), top_n=int(top_n))
+
+
+def _top_medals(
+    db_path: str,
+    xuid: str,
+    match_ids: list[str],
+    *,
+    top_n: int,
+    db_key: tuple[int, int] | None,
+):
+    # Évite de stocker d'immenses tuples en cache.
+    if len(match_ids) > 1500:
+        return load_top_medals(db_path, xuid, match_ids, top_n=top_n)
+    return cached_load_top_medals(db_path, xuid, tuple(match_ids), top_n, db_key=db_key)
+
+
+@st.cache_data(show_spinner=False)
+def cached_friend_matches_df(
+    db_path: str,
+    self_xuid: str,
+    friend_xuid: str,
+    same_team_only: bool,
+    db_key: tuple[int, int] | None,
+) -> pd.DataFrame:
+    rows = cached_query_matches_with_friend(db_path, self_xuid, friend_xuid, db_key=db_key)
+    if same_team_only:
+        rows = [r for r in rows if r.same_team]
+    if not rows:
+        return pd.DataFrame(
+            columns=[
+                "match_id",
+                "start_time",
+                "playlist_name",
+                "pair_name",
+                "same_team",
+                "my_team_id",
+                "my_outcome",
+                "friend_team_id",
+                "friend_outcome",
+            ]
+        )
+
+    dfr = pd.DataFrame(
+        [
+            {
+                "match_id": r.match_id,
+                "start_time": r.start_time,
+                "playlist_name": translate_playlist_name(r.playlist_name),
+                "pair_name": translate_pair_name(r.pair_name),
+                "same_team": r.same_team,
+                "my_team_id": r.my_team_id,
+                "my_outcome": r.my_outcome,
+                "friend_team_id": r.friend_team_id,
+                "friend_outcome": r.friend_outcome,
+            }
+            for r in rows
+        ]
+    )
+    dfr["start_time"] = pd.to_datetime(dfr["start_time"], utc=True).dt.tz_convert(None)
+    return dfr.sort_values("start_time", ascending=False)
+
+
+def _clear_app_caches() -> None:
+    """Vide les caches Streamlit (utile si DB/alias/csv changent en dehors de l'app)."""
+    try:
+        st.cache_data.clear()
+    except Exception:
+        pass
+
+
+def _aliases_cache_key() -> int | None:
+    try:
+        p = get_aliases_file_path()
+        st_ = os.stat(p)
+        return int(getattr(st_, "st_mtime_ns", int(st_.st_mtime * 1e9)))
+    except OSError:
+        return None
+
+
 # =============================================================================
 # Chargement des données (avec cache)
 # =============================================================================
 
 @st.cache_data(show_spinner=False)
-def load_df(db_path: str, xuid: str) -> pd.DataFrame:
+def load_df(db_path: str, xuid: str, db_key: tuple[int, int] | None = None) -> pd.DataFrame:
     """Charge les matchs et les convertit en DataFrame."""
     matches = load_matches(db_path, xuid)
     df = pd.DataFrame(
@@ -268,13 +437,17 @@ def load_df(db_path: str, xuid: str) -> pd.DataFrame:
 
 
 @st.cache_data(show_spinner=False)
-def cached_list_other_xuids(db_path: str, self_xuid: str, limit: int = 500) -> list[str]:
+def cached_list_other_xuids(
+    db_path: str, self_xuid: str, db_key: tuple[int, int] | None = None, limit: int = 500
+) -> list[str]:
     """Version cachée de list_other_player_xuids."""
     return list_other_player_xuids(db_path, self_xuid, limit)
 
 
 @st.cache_data(show_spinner=False)
-def cached_list_top_teammates(db_path: str, self_xuid: str, limit: int = 20) -> list[tuple[str, int]]:
+def cached_list_top_teammates(
+    db_path: str, self_xuid: str, db_key: tuple[int, int] | None = None, limit: int = 20
+) -> list[tuple[str, int]]:
     """Version cachée de list_top_teammates."""
     return list_top_teammates(db_path, self_xuid, limit)
 
@@ -290,10 +463,16 @@ def _date_range(df: pd.DataFrame) -> tuple[date, date]:
     return dmin, dmax
 
 
-def _build_friends_opts_map(db_path: str, self_xuid: str) -> tuple[dict[str, str], list[str]]:
-    top = cached_list_top_teammates(db_path, self_xuid, limit=20)
+@st.cache_data(show_spinner=False)
+def _build_friends_opts_map(
+    db_path: str,
+    self_xuid: str,
+    db_key: tuple[int, int] | None,
+    aliases_key: int | None,
+) -> tuple[dict[str, str], list[str]]:
+    top = cached_list_top_teammates(db_path, self_xuid, db_key=db_key, limit=20)
     default_two = [t[0] for t in top[:2]]
-    all_other = cached_list_other_xuids(db_path, self_xuid, limit=500)
+    all_other = cached_list_other_xuids(db_path, self_xuid, db_key=db_key, limit=500)
 
     ordered: list[str] = []
     seen: set[str] = set()
@@ -319,223 +498,63 @@ def main() -> None:
     """Point d'entrée principal de l'application Streamlit."""
     st.set_page_config(page_title="OpenSpartan Graphs", layout="wide")
 
-    # Charge et applique le CSS
-    st.markdown(load_css(), unsafe_allow_html=True)
+    perf_reset_run()
+
+    with perf_section("css"):
+        st.markdown(load_css(), unsafe_allow_html=True)
 
     # ==========================================================================
     # Sidebar - Configuration
     # ==========================================================================
     
     DEFAULT_DB = get_default_db_path()
-    
+
     with st.sidebar:
+        render_perf_panel(location="sidebar")
         st.markdown("<div class='os-sidebar-brand'>OpenSpartan Graphs</div>", unsafe_allow_html=True)
         st.markdown("<div class='os-sidebar-divider'></div>", unsafe_allow_html=True)
-        with st.expander("Source", expanded=False):
-            # --- Multi-DB / Profils ---
-            profiles = load_profiles()
 
-            if "db_path" not in st.session_state:
-                st.session_state["db_path"] = DEFAULT_DB
-            if "xuid" not in st.session_state:
-                st.session_state["xuid"] = guess_xuid_from_db_path(st.session_state.get("db_path", "")) or ""
-            if "waypoint_player" not in st.session_state:
-                st.session_state["waypoint_player"] = DEFAULT_WAYPOINT_PLAYER
-
-            with st.expander("Multi-DB (profils)", expanded=False):
-                prof_names = ["(aucun)"] + sorted(profiles.keys())
-                st.selectbox("Profil", options=prof_names, key="db_profile_selected")
-
-                cols_p = st.columns(2)
-                if cols_p[0].button("Appliquer", width="stretch"):
-                    sel = st.session_state.get("db_profile_selected")
-                    if isinstance(sel, str) and sel in profiles:
-                        p = profiles[sel]
-                        if p.get("db_path"):
-                            st.session_state["db_path"] = p["db_path"]
-                        if p.get("xuid"):
-                            st.session_state["xuid"] = p["xuid"]
-                        if p.get("waypoint_player"):
-                            st.session_state["waypoint_player"] = p["waypoint_player"]
-                        st.rerun()
-
-                if cols_p[1].button("Enregistrer profil", width="stretch"):
-                    name = st.session_state.get("db_profile_selected")
-                    if not isinstance(name, str) or not name.strip() or name == "(aucun)":
-                        st.warning("Choisis d'abord un nom de profil (via la liste), ou crée-en un ci-dessous.")
-                    else:
-                        profiles[name] = {
-                            "db_path": str(st.session_state.get("db_path", "")).strip(),
-                            "xuid": str(st.session_state.get("xuid", "")).strip(),
-                            "waypoint_player": str(st.session_state.get("waypoint_player", "")).strip(),
-                        }
-                        ok, err = save_profiles(profiles)
-                        if ok:
-                            st.success("Profil enregistré.")
-                        else:
-                            st.error(err)
-
-                with st.expander("Créer / supprimer", expanded=False):
-                    new_name = st.text_input("Nom", value="")
-                    c = st.columns(2)
-                    if c[0].button("Créer/mettre à jour", width="stretch"):
-                        nn = (new_name or "").strip()
-                        if not nn:
-                            st.error("Nom vide.")
-                        else:
-                            profiles[nn] = {
-                                "db_path": str(st.session_state.get("db_path", "")).strip(),
-                                "xuid": str(st.session_state.get("xuid", "")).strip(),
-                                "waypoint_player": str(st.session_state.get("waypoint_player", "")).strip(),
-                            }
-                            ok, err = save_profiles(profiles)
-                            if ok:
-                                st.success("Profil sauvegardé.")
-                                st.rerun()
-                            else:
-                                st.error(err)
-                    if c[1].button("Supprimer", width="stretch"):
-                        nn = (new_name or "").strip()
-                        if not nn:
-                            st.error("Renseigne un nom.")
-                        elif nn not in profiles:
-                            st.warning("Profil introuvable.")
-                        else:
-                            del profiles[nn]
-                            ok, err = save_profiles(profiles)
-                            if ok:
-                                st.success("Profil supprimé.")
-                                st.rerun()
-                            else:
-                                st.error(err)
-
-                local_dbs = list_local_dbs()
-                if local_dbs:
-                    opts = ["(garder actuelle)"] + [os.path.basename(p) for p in local_dbs]
-                    pick = st.selectbox("DB détectées (OpenSpartan)", options=opts, index=0)
-                    if st.button("Utiliser cette DB", width="stretch") and pick != "(garder actuelle)":
-                        sel_path = next((p for p in local_dbs if os.path.basename(p) == pick), None)
-                        if sel_path:
-                            st.session_state["db_path"] = sel_path
-                            guessed = guess_xuid_from_db_path(sel_path) or ""
-                            if guessed:
-                                st.session_state["xuid"] = guessed
-                            st.rerun()
-
-            db_path = st.text_input("Chemin du .db", key="db_path")
-            cols_x = st.columns([2, 1])
-            with cols_x[0]:
-                xuid = st.text_input("XUID", key="xuid")
-            with cols_x[1]:
-                if st.button("Deviner XUID", width="stretch"):
-                    guessed = guess_xuid_from_db_path(str(db_path)) or ""
-                    if guessed:
-                        st.session_state["xuid"] = guessed
-                        st.rerun()
-                    else:
-                        st.warning("Impossible de deviner le XUID depuis ce chemin.")
-
-            me_name = display_name_from_xuid(xuid.strip())
-            waypoint_player = st.text_input(
-                "HaloWaypoint player (slug)",
-                key="waypoint_player",
-                help="Ex: JGtm (sert à construire l'URL de match).",
-            )
-
-            # Section alias
-            with st.expander("Alias (XUID → gamertag)", expanded=False):
-                st.caption(
-                    "La DB OpenSpartan ne contient pas les gamertags. "
-                    "Ici tu peux définir des alias locaux (persistés dans un fichier JSON)."
+        with perf_section("sidebar/source"):
+            with st.expander("Source", expanded=False):
+                db_path, xuid, waypoint_player = render_source_section(
+                    DEFAULT_DB,
+                    get_local_dbs=cached_list_local_dbs,
+                    on_clear_caches=_clear_app_caches,
                 )
-                aliases_path = get_aliases_file_path()
-                current_aliases = load_aliases_file(aliases_path)
 
-                ax = st.text_input("XUID à aliaser", value="")
-                an = st.text_input("Gamertag", value="")
-                cols = st.columns(2)
-                if cols[0].button("Enregistrer l'alias", width="stretch"):
-                    axc = (ax or "").strip()
-                    anc = (an or "").strip()
-                    if not axc.isdigit():
-                        st.error("XUID invalide (doit être numérique).")
-                    elif not anc:
-                        st.error("Gamertag vide.")
-                    else:
-                        current_aliases[axc] = anc
-                        save_aliases_file(current_aliases, aliases_path)
-                        st.success("Alias enregistré.")
-                        st.rerun()
+        with perf_section("sidebar/openspartan"):
+            render_openspartan_tools()
 
-                if cols[1].button("Supprimer l'alias", width="stretch"):
-                    axc = (ax or "").strip()
-                    if not axc:
-                        st.error("Renseigne un XUID à supprimer.")
-                    elif axc not in current_aliases:
-                        st.warning("Cet alias n'existe pas.")
-                    else:
-                        del current_aliases[axc]
-                        save_aliases_file(current_aliases, aliases_path)
-                        st.success("Alias supprimé.")
-                        st.rerun()
+        with perf_section("sidebar/validate"):
+            if not db_path.strip():
+                st.error(
+                    "Aucun .db détecté automatiquement. "
+                    "Vérifie que OpenSpartan Workshop est installé."
+                )
+                st.stop()
+            if not os.path.exists(db_path):
+                st.error("Le fichier .db n'existe pas à ce chemin.")
+                st.stop()
+            if not xuid.strip().isdigit():
+                st.error("XUID invalide (doit être numérique).")
+                st.stop()
 
-                if current_aliases:
-                    st.dataframe(
-                        pd.DataFrame(
-                            sorted(current_aliases.items()),
-                            columns=["XUID", "Gamertag"],
-                        ),
-                        width="stretch",
-                        hide_index=True,
-                    )
-                else:
-                    st.info("Aucun alias personnalisé pour l'instant.")
-
-        st.divider()
-        st.header("OpenSpartan")
-        workshop_exe = st.text_input(
-            "Chemin de OpenSpartan.Workshop.exe",
-            value=get_default_workshop_exe_path(),
-            help="Bouton pratique pour lancer l'app OpenSpartan Workshop.",
-        )
-        if st.button("Lancer OpenSpartan Workshop", width="stretch"):
-            if not os.path.exists(workshop_exe):
-                st.error("Executable introuvable à ce chemin.")
-            else:
-                try:
-                    if hasattr(os, "startfile"):
-                        os.startfile(workshop_exe)  # type: ignore[attr-defined]
-                    else:
-                        import subprocess
-                        subprocess.Popen([workshop_exe], close_fds=True)
-                    st.success("OpenSpartan Workshop lancé.")
-                except Exception as e:
-                    st.error(f"Impossible de lancer OpenSpartan Workshop: {e}")
-
-        # Validation des entrées
-        if not db_path.strip():
-            st.error(
-                "Aucun .db détecté automatiquement. "
-                "Vérifie que OpenSpartan Workshop est installé."
-            )
-            st.stop()
-        if not os.path.exists(db_path):
-            st.error("Le fichier .db n'existe pas à ce chemin.")
-            st.stop()
-        if not xuid.strip().isdigit():
-            st.error("XUID invalide (doit être numérique).")
-            st.stop()
+    me_name = display_name_from_xuid(xuid.strip())
+    aliases_key = _aliases_cache_key()
 
     # ==========================================================================
     # Chargement des données
     # ==========================================================================
     
-    df = load_df(db_path, xuid.strip())
+    db_key = _db_cache_key(db_path)
+    with perf_section("db/load_df"):
+        df = load_df(db_path, xuid.strip(), db_key=db_key)
     if df.empty:
         st.warning("Aucun match trouvé.")
         st.stop()
 
-    df = mark_firefight(df)
+    with perf_section("analysis/mark_firefight"):
+        df = mark_firefight(df)
 
     # ==========================================================================
     # Sidebar - Filtres
@@ -554,6 +573,9 @@ def main() -> None:
     base_for_filters = df.copy()
     if (not include_firefight) and ("is_firefight" in base_for_filters.columns):
         base_for_filters = base_for_filters.loc[~base_for_filters["is_firefight"]].copy()
+
+    # Base "globale" : toutes les parties (après inclusion/exclusion Firefight)
+    base = base_for_filters
 
     with st.sidebar:
         dmin, dmax = _date_range(base_for_filters)
@@ -613,7 +635,13 @@ def main() -> None:
                 key="gap_minutes",
             )
 
-            base_s_ui = compute_sessions(base_for_filters, gap_minutes=gap_minutes)
+            base_s_ui = cached_compute_sessions_db(
+                db_path,
+                xuid.strip(),
+                db_key,
+                include_firefight,
+                gap_minutes,
+            )
             session_labels_ui = (
                 base_s_ui[["session_id", "session_label"]]
                 .drop_duplicates()
@@ -659,24 +687,27 @@ def main() -> None:
             # d'amis, afin que le bouton soit activable sans devoir visiter l'onglet.
             trio_label = None
             try:
-                friends_opts_map, friends_default_labels = _build_friends_opts_map(db_path, xuid.strip())
+                friends_opts_map, friends_default_labels = _build_friends_opts_map(
+                    db_path, xuid.strip(), db_key, aliases_key
+                )
                 picked_friend_labels = st.session_state.get("friends_picked_labels")
                 if not isinstance(picked_friend_labels, list) or not picked_friend_labels:
                     picked_friend_labels = friends_default_labels
                 picked_xuids = [friends_opts_map[lbl] for lbl in picked_friend_labels if lbl in friends_opts_map]
                 if len(picked_xuids) >= 2:
                     f1_xuid, f2_xuid = picked_xuids[0], picked_xuids[1]
-                    rows_m = [r for r in query_matches_with_friend(db_path, xuid.strip(), f1_xuid) if r.same_team]
-                    rows_c = [r for r in query_matches_with_friend(db_path, xuid.strip(), f2_xuid) if r.same_team]
-                    ids_m = {str(r.match_id) for r in rows_m}
-                    ids_c = {str(r.match_id) for r in rows_c}
+                    ids_m = set(
+                        cached_same_team_match_ids_with_friend(db_path, xuid.strip(), f1_xuid, db_key=db_key)
+                    )
+                    ids_c = set(
+                        cached_same_team_match_ids_with_friend(db_path, xuid.strip(), f2_xuid, db_key=db_key)
+                    )
                     trio_ids = ids_m & ids_c
 
                     # Sécurité: ne garde que les matchs présents dans la base utilisée pour les sessions.
                     trio_ids = trio_ids & set(base_for_filters["match_id"].astype(str))
                     if trio_ids:
-                        base_s_trio = compute_sessions(base_for_filters, gap_minutes=gap_minutes)
-                        trio_rows = base_s_trio.loc[base_s_trio["match_id"].astype(str).isin(trio_ids)].copy()
+                        trio_rows = base_s_ui.loc[base_s_ui["match_id"].astype(str).isin(trio_ids)].copy()
                         if not trio_rows.empty:
                             latest_sid = int(trio_rows["session_id"].max())
                             latest_labels = (
@@ -731,11 +762,10 @@ def main() -> None:
             dropdown_base = dropdown_base.loc[(dropdown_base["date"] >= start_d) & (dropdown_base["date"] <= end_d)].copy()
         else:
             # Sessions: on utilise la sélection de sessions pour limiter les options.
-            base_s_dd = compute_sessions(dropdown_base, gap_minutes=gap_minutes)
             if picked_session_labels:
-                dropdown_base = base_s_dd.loc[base_s_dd["session_label"].isin(picked_session_labels)].copy()
+                dropdown_base = base_s_ui.loc[base_s_ui["session_label"].isin(picked_session_labels)].copy()
             else:
-                dropdown_base = base_s_dd.copy()
+                dropdown_base = base_s_ui.copy()
 
         dropdown_base["playlist_ui"] = dropdown_base["playlist_name"].apply(_clean_asset_label).apply(translate_playlist_name)
         dropdown_base["mode_ui"] = dropdown_base["pair_name"].apply(_normalize_mode_label)
@@ -774,21 +804,21 @@ def main() -> None:
     # Application des filtres
     # ==========================================================================
     
-    base = base_for_filters.copy()
-    if "playlist_fr" not in base.columns:
-        base["playlist_fr"] = base["playlist_name"].apply(translate_playlist_name)
-    if "pair_fr" not in base.columns:
-        base["pair_fr"] = base["pair_name"].apply(translate_pair_name)
+    with perf_section("filters/apply"):
+        if filter_mode == "Sessions":
+            base_s = cached_compute_sessions_db(db_path, xuid.strip(), db_key, include_firefight, gap_minutes)
+            dff = (
+                base_s.loc[base_s["session_label"].isin(picked_session_labels)].copy()
+                if picked_session_labels
+                else base_s.copy()
+            )
+        else:
+            dff = base_for_filters.copy()
 
-    if filter_mode == "Sessions":
-        base_s = compute_sessions(base, gap_minutes=gap_minutes)
-        dff = (
-            base_s.loc[base_s["session_label"].isin(picked_session_labels)].copy()
-            if picked_session_labels
-            else base_s.copy()
-        )
-    else:
-        dff = base.copy()
+        if "playlist_fr" not in dff.columns:
+            dff["playlist_fr"] = dff["playlist_name"].apply(translate_playlist_name)
+        if "pair_fr" not in dff.columns:
+            dff["pair_fr"] = dff["pair_name"].apply(translate_pair_name)
 
     restrict_playlists = bool(st.session_state.get("restrict_playlists", True))
     if restrict_playlists:
@@ -825,14 +855,15 @@ def main() -> None:
     # KPIs
     # ==========================================================================
     
-    rates = compute_outcome_rates(dff)
-    total_outcomes = max(1, rates.total)
-    win_rate = rates.wins / total_outcomes
-    loss_rate = rates.losses / total_outcomes
+    with perf_section("kpis"):
+        rates = compute_outcome_rates(dff)
+        total_outcomes = max(1, rates.total)
+        win_rate = rates.wins / total_outcomes
+        loss_rate = rates.losses / total_outcomes
 
-    avg_acc = dff["accuracy"].dropna().mean() if not dff.empty else None
-    global_ratio = compute_global_ratio(dff)
-    avg_life = dff["average_life_seconds"].dropna().mean() if not dff.empty else None
+        avg_acc = dff["accuracy"].dropna().mean() if not dff.empty else None
+        global_ratio = compute_global_ratio(dff)
+        avg_life = dff["average_life_seconds"].dropna().mean() if not dff.empty else None
 
     # ------------------------------------------------------------------
     # Bandeau résumé (en haut du site)
@@ -957,8 +988,10 @@ def main() -> None:
                     st.link_button("Ouvrir sur HaloWaypoint", match_url)
 
             with st.spinner("Lecture des stats détaillées (attendu vs réel, médailles)…"):
-                pm = load_player_match_result(db_path, last_match_id, xuid.strip())
-                medals_last = load_match_medals_for_player(db_path, last_match_id, xuid.strip())
+                pm = cached_load_player_match_result(db_path, last_match_id, xuid.strip(), db_key=db_key)
+                medals_last = cached_load_match_medals_for_player(
+                    db_path, last_match_id, xuid.strip(), db_key=db_key
+                )
 
             # Rappel du résultat (même si PlayerMatchStats est indispo)
             outcome_map = {2: "Victoire", 3: "Défaite", 1: "Égalité", 4: "Non terminé"}
@@ -1152,7 +1185,7 @@ def main() -> None:
             match_ids = [str(x) for x in dff["match_id"].dropna().astype(str).tolist()]
 
             with st.spinner("Agrégation des médailles…"):
-                top = load_top_medals(db_path, xuid.strip(), match_ids, top_n=25)
+                top = _top_medals(db_path, xuid.strip(), match_ids, top_n=25, db_key=db_key)
 
             if not top:
                 st.info("Aucune médaille trouvée (ou payload médailles absent).")
@@ -1276,30 +1309,16 @@ def main() -> None:
             if friend_xuid is None:
                 st.info("Renseigne un XUID (numérique) ou choisis-en un.")
             else:
-                rows = query_matches_with_friend(db_path, xuid.strip(), friend_xuid)
-                if same_team_only:
-                    rows = [r for r in rows if r.same_team]
-
-                if not rows:
+                dfr = cached_friend_matches_df(
+                    db_path,
+                    xuid.strip(),
+                    friend_xuid,
+                    same_team_only=same_team_only,
+                    db_key=db_key,
+                )
+                if dfr.empty:
                     st.warning("Aucun match trouvé avec ce joueur (selon le filtre).")
                 else:
-                    dfr = pd.DataFrame([
-                        {
-                            "match_id": r.match_id,
-                            "start_time": r.start_time,
-                            "playlist_name": translate_playlist_name(r.playlist_name),
-                            "pair_name": translate_pair_name(r.pair_name),
-                            "same_team": r.same_team,
-                            "my_team_id": r.my_team_id,
-                            "my_outcome": r.my_outcome,
-                            "friend_team_id": r.friend_team_id,
-                            "friend_outcome": r.friend_outcome,
-                        }
-                        for r in rows
-                    ])
-                    dfr["start_time"] = pd.to_datetime(dfr["start_time"], utc=True).dt.tz_convert(None)
-                    dfr = dfr.sort_values("start_time", ascending=False)
-
                     outcome_map = {2: "Victoire", 3: "Défaite", 1: "Égalité", 4: "Non terminé"}
                     dfr["my_outcome_label"] = dfr["my_outcome"].map(outcome_map).fillna("?")
                     counts = dfr["my_outcome_label"].value_counts().reindex(
@@ -1330,7 +1349,7 @@ def main() -> None:
                         )
 
                     base_for_friend = dff if apply_current_filters_friend else df
-                    shared_ids = {str(r.match_id) for r in rows}
+                    shared_ids = set(dfr["match_id"].astype(str))
                     sub = base_for_friend.loc[base_for_friend["match_id"].astype(str).isin(shared_ids)].copy()
 
                     if sub.empty:
@@ -1415,8 +1434,8 @@ def main() -> None:
                             st.info("Aucun match partagé pour calculer les médailles.")
                         else:
                             with st.spinner("Agrégation des médailles (moi + ami)…"):
-                                my_top = load_top_medals(db_path, xuid.strip(), shared_list, top_n=12)
-                                fr_top = load_top_medals(db_path, friend_xuid, shared_list, top_n=12)
+                                my_top = _top_medals(db_path, xuid.strip(), shared_list, top_n=12, db_key=db_key)
+                                fr_top = _top_medals(db_path, friend_xuid, shared_list, top_n=12, db_key=db_key)
 
                             m1, m2 = st.columns(2)
                             with m1:
@@ -1442,7 +1461,7 @@ def main() -> None:
             value=True,
             key="apply_current_filters_friends",
         )
-        opts_map, default_labels = _build_friends_opts_map(db_path, xuid.strip())
+        opts_map, default_labels = _build_friends_opts_map(db_path, xuid.strip(), db_key, aliases_key)
         picked_labels = st.multiselect(
             "Coéquipiers",
             options=list(opts_map.keys()),
@@ -1482,7 +1501,7 @@ def main() -> None:
                     "Minimum de matchs par carte",
                     1,
                     30,
-                    5,
+                    1,
                     step=1,
                     key="min_matches_maps_friends",
                     on_change=_clear_min_matches_maps_friends_auto,
@@ -1491,11 +1510,14 @@ def main() -> None:
                 base_for_friends_all = dff if apply_current_filters else df
                 all_match_ids: set[str] = set()
                 for fx in picked_xuids:
-                    rows = query_matches_with_friend(db_path, xuid.strip(), fx)
                     if same_team_only_friends:
-                        rows = [r for r in rows if r.same_team]
-                    for r in rows:
-                        all_match_ids.add(str(r.match_id))
+                        all_match_ids.update(
+                            cached_same_team_match_ids_with_friend(db_path, xuid.strip(), fx, db_key=db_key)
+                        )
+                    else:
+                        rows = cached_query_matches_with_friend(db_path, xuid.strip(), fx, db_key=db_key)
+                        for r in rows:
+                            all_match_ids.add(str(r.match_id))
 
                 sub_all = base_for_friends_all.loc[
                     base_for_friends_all["match_id"].astype(str).isin(all_match_ids)
@@ -1518,12 +1540,12 @@ def main() -> None:
                 f2_name = display_name_from_xuid(f2_xuid)
                 st.subheader(f"Tous les trois — {f1_name} + {f2_name}")
 
-                rows_m = query_matches_with_friend(db_path, xuid.strip(), f1_xuid)
-                rows_c = query_matches_with_friend(db_path, xuid.strip(), f2_xuid)
-                rows_m = [r for r in rows_m if r.same_team]
-                rows_c = [r for r in rows_c if r.same_team]
-                ids_m = {r.match_id for r in rows_m}
-                ids_c = {r.match_id for r in rows_c}
+                ids_m = set(
+                    cached_same_team_match_ids_with_friend(db_path, xuid.strip(), f1_xuid, db_key=db_key)
+                )
+                ids_c = set(
+                    cached_same_team_match_ids_with_friend(db_path, xuid.strip(), f2_xuid, db_key=db_key)
+                )
                 trio_ids = ids_m & ids_c
 
                 base_for_trio = dff if apply_current_filters else df
@@ -1541,7 +1563,13 @@ def main() -> None:
                         gm = int(st.session_state.get("gap_minutes", 120))
                     except Exception:
                         gm = 120
-                    base_s_trio = compute_sessions(base_for_session_pick, gap_minutes=gm)
+                    base_s_trio = cached_compute_sessions_db(
+                        db_path,
+                        xuid.strip(),
+                        db_key,
+                        include_firefight,
+                        gm,
+                    )
                     trio_rows = base_s_trio.loc[base_s_trio["match_id"].astype(str).isin(trio_ids_set)].copy()
                     latest_label = None
                     if not trio_rows.empty:
@@ -1557,8 +1585,8 @@ def main() -> None:
 
                     # Charge les stats de chacun et aligne par match_id.
                     me_df = base_for_trio.loc[base_for_trio["match_id"].isin(trio_ids)].copy()
-                    f1_df = load_df(db_path, f1_xuid)
-                    f2_df = load_df(db_path, f2_xuid)
+                    f1_df = load_df(db_path, f1_xuid, db_key=db_key)
+                    f2_df = load_df(db_path, f2_xuid, db_key=db_key)
                     f1_df = f1_df.loc[f1_df["match_id"].isin(trio_ids)].copy()
                     f2_df = f2_df.loc[f2_df["match_id"].isin(trio_ids)].copy()
 
@@ -1660,9 +1688,9 @@ def main() -> None:
                             st.info("Impossible de déterminer la liste des matchs pour l'agrégation des médailles.")
                         else:
                             with st.spinner("Agrégation des médailles…"):
-                                top_self = load_top_medals(db_path, xuid.strip(), trio_match_ids, top_n=12)
-                                top_f1 = load_top_medals(db_path, f1_xuid, trio_match_ids, top_n=12)
-                                top_f2 = load_top_medals(db_path, f2_xuid, trio_match_ids, top_n=12)
+                                top_self = _top_medals(db_path, xuid.strip(), trio_match_ids, top_n=12, db_key=db_key)
+                                top_f1 = _top_medals(db_path, f1_xuid, trio_match_ids, top_n=12, db_key=db_key)
+                                top_f2 = _top_medals(db_path, f2_xuid, trio_match_ids, top_n=12, db_key=db_key)
 
                             c1, c2, c3 = st.columns(3)
                             with c1:
@@ -1700,7 +1728,7 @@ def main() -> None:
             "Minimum de matchs par carte",
             1,
             30,
-            5,
+            1,
             step=1,
             key="min_matches_maps",
             on_change=_clear_min_matches_maps_auto,
@@ -1709,15 +1737,25 @@ def main() -> None:
         if scope == "Moi (toutes les parties)":
             base_scope = base
         elif scope == "Avec Madina972":
-            rows = query_matches_with_friend(db_path, xuid.strip(), "2533274858283686")
-            rows = [r for r in rows if r.same_team]
-            match_ids = {r.match_id for r in rows}
-            base_scope = base.loc[base["match_id"].isin(match_ids)].copy()
+            match_ids = set(
+                cached_same_team_match_ids_with_friend(
+                    db_path,
+                    xuid.strip(),
+                    "2533274858283686",
+                    db_key=db_key,
+                )
+            )
+            base_scope = base.loc[base["match_id"].astype(str).isin(match_ids)].copy()
         elif scope == "Avec Chocoboflor":
-            rows = query_matches_with_friend(db_path, xuid.strip(), "2535469190789936")
-            rows = [r for r in rows if r.same_team]
-            match_ids = {r.match_id for r in rows}
-            base_scope = base.loc[base["match_id"].isin(match_ids)].copy()
+            match_ids = set(
+                cached_same_team_match_ids_with_friend(
+                    db_path,
+                    xuid.strip(),
+                    "2535469190789936",
+                    db_key=db_key,
+                )
+            )
+            base_scope = base.loc[base["match_id"].astype(str).isin(match_ids)].copy()
         else:
             base_scope = dff
 

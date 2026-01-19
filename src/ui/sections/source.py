@@ -1,0 +1,197 @@
+"""Sections UI: configuration de la source (DB/XUID), profils et alias."""
+
+from __future__ import annotations
+
+import os
+from typing import Callable
+
+import pandas as pd
+import streamlit as st
+
+from src.config import DEFAULT_WAYPOINT_PLAYER, get_aliases_file_path
+from src.db import guess_xuid_from_db_path, load_profiles, save_profiles
+from src.ui.aliases import load_aliases_file, save_aliases_file, display_name_from_xuid
+
+
+def render_source_section(
+    default_db: str,
+    *,
+    get_local_dbs: Callable[[], list[str]],
+    on_clear_caches: Callable[[], None],
+) -> tuple[str, str, str]:
+    """Rend la section "Source" dans la sidebar.
+
+    Returns:
+        (db_path, xuid, waypoint_player)
+    """
+
+    # --- Multi-DB / Profils ---
+    profiles = load_profiles()
+
+    if "db_path" not in st.session_state:
+        st.session_state["db_path"] = default_db
+    if "xuid" not in st.session_state:
+        st.session_state["xuid"] = guess_xuid_from_db_path(st.session_state.get("db_path", "")) or ""
+    if "waypoint_player" not in st.session_state:
+        st.session_state["waypoint_player"] = DEFAULT_WAYPOINT_PLAYER
+
+    c_top = st.columns(2)
+    if c_top[0].button("Vider caches", width="stretch"):
+        on_clear_caches()
+        st.success("Caches vidés.")
+        st.rerun()
+    if c_top[1].button("Rafraîchir DB", width="stretch"):
+        # Le get_local_dbs est censé être caché côté app (ttl) ; on le force via clear/closure.
+        try:
+            getattr(get_local_dbs, "clear")()  # st.cache_data wrapper
+        except Exception:
+            pass
+        st.rerun()
+
+    with st.expander("Multi-DB (profils)", expanded=False):
+        prof_names = ["(aucun)"] + sorted(profiles.keys())
+        st.selectbox("Profil", options=prof_names, key="db_profile_selected")
+
+        cols_p = st.columns(2)
+        if cols_p[0].button("Appliquer", width="stretch"):
+            sel = st.session_state.get("db_profile_selected")
+            if isinstance(sel, str) and sel in profiles:
+                p = profiles[sel]
+                if p.get("db_path"):
+                    st.session_state["db_path"] = p["db_path"]
+                if p.get("xuid"):
+                    st.session_state["xuid"] = p["xuid"]
+                if p.get("waypoint_player"):
+                    st.session_state["waypoint_player"] = p["waypoint_player"]
+                st.rerun()
+
+        if cols_p[1].button("Enregistrer profil", width="stretch"):
+            name = st.session_state.get("db_profile_selected")
+            if not isinstance(name, str) or not name.strip() or name == "(aucun)":
+                st.warning("Choisis d'abord un nom de profil (via la liste), ou crée-en un ci-dessous.")
+            else:
+                profiles[name] = {
+                    "db_path": str(st.session_state.get("db_path", "")).strip(),
+                    "xuid": str(st.session_state.get("xuid", "")).strip(),
+                    "waypoint_player": str(st.session_state.get("waypoint_player", "")).strip(),
+                }
+                ok, err = save_profiles(profiles)
+                if ok:
+                    st.success("Profil enregistré.")
+                else:
+                    st.error(err)
+
+        with st.expander("Créer / supprimer", expanded=False):
+            new_name = st.text_input("Nom", value="")
+            c = st.columns(2)
+            if c[0].button("Créer/mettre à jour", width="stretch"):
+                nn = (new_name or "").strip()
+                if not nn:
+                    st.error("Nom vide.")
+                else:
+                    profiles[nn] = {
+                        "db_path": str(st.session_state.get("db_path", "")).strip(),
+                        "xuid": str(st.session_state.get("xuid", "")).strip(),
+                        "waypoint_player": str(st.session_state.get("waypoint_player", "")).strip(),
+                    }
+                    ok, err = save_profiles(profiles)
+                    if ok:
+                        st.success("Profil sauvegardé.")
+                        st.rerun()
+                    else:
+                        st.error(err)
+            if c[1].button("Supprimer", width="stretch"):
+                nn = (new_name or "").strip()
+                if not nn:
+                    st.error("Renseigne un nom.")
+                elif nn not in profiles:
+                    st.warning("Profil introuvable.")
+                else:
+                    del profiles[nn]
+                    ok, err = save_profiles(profiles)
+                    if ok:
+                        st.success("Profil supprimé.")
+                        st.rerun()
+                    else:
+                        st.error(err)
+
+        local_dbs = get_local_dbs()
+        if local_dbs:
+            opts = ["(garder actuelle)"] + [os.path.basename(p) for p in local_dbs]
+            pick = st.selectbox("DB détectées (OpenSpartan)", options=opts, index=0)
+            if st.button("Utiliser cette DB", width="stretch") and pick != "(garder actuelle)":
+                sel_path = next((p for p in local_dbs if os.path.basename(p) == pick), None)
+                if sel_path:
+                    st.session_state["db_path"] = sel_path
+                    guessed = guess_xuid_from_db_path(sel_path) or ""
+                    if guessed:
+                        st.session_state["xuid"] = guessed
+                    st.rerun()
+
+    db_path = st.text_input("Chemin du .db", key="db_path")
+    cols_x = st.columns([2, 1])
+    with cols_x[0]:
+        xuid = st.text_input("XUID", key="xuid")
+    with cols_x[1]:
+        if st.button("Deviner XUID", width="stretch"):
+            guessed = guess_xuid_from_db_path(str(db_path)) or ""
+            if guessed:
+                st.session_state["xuid"] = guessed
+                st.rerun()
+            else:
+                st.warning("Impossible de deviner le XUID depuis ce chemin.")
+
+    _ = display_name_from_xuid(xuid.strip())
+
+    waypoint_player = st.text_input(
+        "HaloWaypoint player (slug)",
+        key="waypoint_player",
+        help="Ex: JGtm (sert à construire l'URL de match).",
+    )
+
+    with st.expander("Alias (XUID → gamertag)", expanded=False):
+        st.caption(
+            "La DB OpenSpartan ne contient pas les gamertags. "
+            "Ici tu peux définir des alias locaux (persistés dans un fichier JSON)."
+        )
+        aliases_path = get_aliases_file_path()
+        current_aliases = load_aliases_file(aliases_path)
+
+        ax = st.text_input("XUID à aliaser", value="")
+        an = st.text_input("Gamertag", value="")
+        cols = st.columns(2)
+        if cols[0].button("Enregistrer l'alias", width="stretch"):
+            axc = (ax or "").strip()
+            anc = (an or "").strip()
+            if not axc.isdigit():
+                st.error("XUID invalide (doit être numérique).")
+            elif not anc:
+                st.error("Gamertag vide.")
+            else:
+                current_aliases[axc] = anc
+                save_aliases_file(current_aliases, aliases_path)
+                st.success("Alias enregistré.")
+                st.rerun()
+
+        if cols[1].button("Supprimer l'alias", width="stretch"):
+            axc = (ax or "").strip()
+            if not axc:
+                st.error("Renseigne un XUID à supprimer.")
+            elif axc not in current_aliases:
+                st.warning("Cet alias n'existe pas.")
+            else:
+                del current_aliases[axc]
+                save_aliases_file(current_aliases, aliases_path)
+                st.success("Alias supprimé.")
+                st.rerun()
+
+        if current_aliases:
+            st.dataframe(
+                pd.DataFrame(sorted(current_aliases.items()), columns=["XUID", "Gamertag"]),
+                width="stretch",
+                hide_index=True,
+            )
+        else:
+            st.info("Aucun alias personnalisé pour l'instant.")
+
+    return str(db_path), str(xuid), str(waypoint_player)

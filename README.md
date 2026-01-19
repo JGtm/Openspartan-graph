@@ -96,6 +96,14 @@ Par défaut, l'application détecte automatiquement la DB la plus récente dans 
 
 Vous pouvez aussi spécifier un chemin personnalisé dans la sidebar du dashboard.
 
+## ⚡ Performance (démarrage / rerun)
+
+Streamlit relance le script à chaque interaction (rerun). Pour diagnostiquer un démarrage un peu long :
+
+- Active **Mode perf** dans la sidebar pour afficher les timings par section (CSS, sidebar, chargement DB, etc.).
+- Utilise **Vider caches** si la DB a changé en dehors de l'app et que tu veux forcer un rechargement.
+- Le scan des DB locales est volontairement mis sous cache (TTL court) pour éviter des accès disque trop fréquents.
+
 ## 🧪 Tests
 
 ```bash

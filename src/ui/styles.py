@@ -1,6 +1,9 @@
 """Gestion des styles CSS."""
 
+from __future__ import annotations
+
 import os
+from functools import lru_cache
 
 
 def get_css_path() -> str:
@@ -19,6 +22,18 @@ def load_css() -> str:
         Contenu CSS avec balises <style>.
     """
     css_path = get_css_path()
+
+    mtime: float | None
+    try:
+        mtime = os.path.getmtime(css_path)
+    except OSError:
+        mtime = None
+
+    return _load_css_cached(css_path, mtime)
+
+
+@lru_cache(maxsize=8)
+def _load_css_cached(css_path: str, mtime: float | None) -> str:
     try:
         with open(css_path, "r", encoding="utf-8") as f:
             css_content = f.read()

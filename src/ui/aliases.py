@@ -1,10 +1,20 @@
 """Gestion des alias XUID -> Gamertag."""
 
+from __future__ import annotations
+
 import json
 import os
+from functools import lru_cache
 from typing import Dict
 
 from src.config import XUID_ALIASES_DEFAULT, get_aliases_file_path
+
+
+def _safe_mtime(path: str) -> float | None:
+    try:
+        return os.path.getmtime(path)
+    except OSError:
+        return None
 
 
 def load_aliases_file(path: str | None = None) -> Dict[str, str]:
@@ -18,7 +28,12 @@ def load_aliases_file(path: str | None = None) -> Dict[str, str]:
     """
     if path is None:
         path = get_aliases_file_path()
-        
+
+    return dict(_load_aliases_cached(path, _safe_mtime(path)))
+
+
+@lru_cache(maxsize=16)
+def _load_aliases_cached(path: str, mtime: float | None) -> Dict[str, str]:
     try:
         if not os.path.exists(path):
             return {}
@@ -50,6 +65,9 @@ def save_aliases_file(aliases: Dict[str, str], path: str | None = None) -> None:
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:
         json.dump(dict(sorted(aliases.items())), f, ensure_ascii=False, indent=2)
+
+    # Invalide le cache (le contenu a changé)
+    _load_aliases_cached.cache_clear()
 
 
 def get_xuid_aliases() -> Dict[str, str]:

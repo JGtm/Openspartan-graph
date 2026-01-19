@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import os
+from functools import lru_cache
 from typing import Any
 
 __all__ = [
@@ -26,6 +27,13 @@ _DEFAULT_PROFILES_PATH = os.path.join(
 PROFILES_PATH = os.environ.get("OPENSPARTAN_PROFILES_PATH") or _DEFAULT_PROFILES_PATH
 
 
+def _safe_mtime(path: str) -> float | None:
+    try:
+        return os.path.getmtime(path)
+    except OSError:
+        return None
+
+
 def load_profiles() -> dict[str, dict[str, str]]:
     """Charge les profils depuis le fichier JSON.
 
@@ -33,10 +41,15 @@ def load_profiles() -> dict[str, dict[str, str]]:
         Dictionnaire {nom_profil: {db_path, xuid, waypoint_player}}.
         Retourne un dict vide si le fichier n'existe pas ou est invalide.
     """
-    if not os.path.exists(PROFILES_PATH):
+    return dict(_load_profiles_cached(PROFILES_PATH, _safe_mtime(PROFILES_PATH)))
+
+
+@lru_cache(maxsize=8)
+def _load_profiles_cached(path: str, mtime: float | None) -> dict[str, dict[str, str]]:
+    if not os.path.exists(path):
         return {}
     try:
-        with open(PROFILES_PATH, "r", encoding="utf-8") as f:
+        with open(path, "r", encoding="utf-8") as f:
             obj: Any = json.load(f) or {}
     except Exception:
         return {}
@@ -73,6 +86,8 @@ def save_profiles(profiles: dict[str, dict[str, str]]) -> tuple[bool, str]:
     try:
         with open(PROFILES_PATH, "w", encoding="utf-8") as f:
             json.dump({"profiles": profiles}, f, ensure_ascii=False, indent=2)
+
+        _load_profiles_cached.cache_clear()
         return True, ""
     except Exception as e:
         return False, f"Impossible d'écrire {PROFILES_PATH}: {e}"

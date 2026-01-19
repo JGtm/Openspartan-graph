@@ -51,7 +51,7 @@ all = [
 ]
 
 [project.scripts]
-openspartan-graph = "openspartan_graph_new:main"
+openspartan-graph = "openspartan_graph:main"
 
 [project.urls]
 Homepage = "https://github.com/username/openspartan-graph"
