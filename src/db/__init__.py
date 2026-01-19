@@ -15,10 +15,18 @@ from src.db.parsers import (
     guess_xuid_from_db_path,
     parse_iso_utc,
 )
+from src.db.profiles import (
+    PROFILES_PATH,
+    load_profiles,
+    save_profiles,
+    list_local_dbs,
+)
 
 __all__ = [
+    # connection
     "get_connection",
     "DatabaseConnection",
+    # loaders
     "load_matches",
     "load_asset_name_map",
     "load_player_match_result",
@@ -27,6 +35,12 @@ __all__ = [
     "query_matches_with_friend",
     "list_other_player_xuids",
     "list_top_teammates",
+    # parsers
     "guess_xuid_from_db_path",
     "parse_iso_utc",
+    # profiles
+    "PROFILES_PATH",
+    "load_profiles",
+    "save_profiles",
+    "list_local_dbs",
 ]

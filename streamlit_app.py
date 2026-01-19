@@ -67,7 +67,21 @@ from src.ui import (
     translate_playlist_name,
     translate_pair_name,
 )
-from src.ui.aliases import get_xuid_aliases
+from src.ui.medals import (
+    load_medal_name_maps,
+    medal_has_known_label,
+    get_medals_cache_dir,
+    medal_label,
+    medal_icon_path,
+    render_medals_grid,
+)
+from src.ui.formatting import format_date_fr
+from src.db.profiles import (
+    PROFILES_PATH,
+    load_profiles,
+    save_profiles,
+    list_local_dbs,
+)
 from src.config import get_aliases_file_path
 
 
@@ -140,146 +154,6 @@ def _date_range(df: pd.DataFrame) -> tuple[date, date]:
     return dmin, dmax
 
 
-def _format_date_fr(dt_value) -> str:
-    """Formate une date en français, ex: 'Lun. 4 décembre 2025'."""
-    if dt_value is None:
-        return "-"
-    try:
-        ts = pd.to_datetime(dt_value)
-        if pd.isna(ts):
-            return "-"
-        d = ts.to_pydatetime()
-    except Exception:
-        return str(dt_value)
-
-    jours = ["Lun.", "Mar.", "Mer.", "Jeu.", "Ven.", "Sam.", "Dim."]
-    mois = [
-        "janvier",
-        "février",
-        "mars",
-        "avril",
-        "mai",
-        "juin",
-        "juillet",
-        "août",
-        "septembre",
-        "octobre",
-        "novembre",
-        "décembre",
-    ]
-
-    return f"{jours[d.weekday()]} {d.day} {mois[d.month - 1]} {d.year}"
-
-
-@st.cache_data(show_spinner=False)
-def _load_medal_name_maps() -> tuple[dict[str, str], dict[str, str]]:
-    """Charge les labels de médailles.
-
-    - Priorité au fichier FR: static/medals/medals_fr.json
-    - Fallback: static/medals/medals.json
-
-    Formats acceptés:
-      {"<NameId>": "Nom"}
-      {"<NameId>": {"name": "...", "label": "...", "fr": "...", "name_fr": "..."}}
-    """
-    import json
-
-    def _load(path: str) -> dict[str, str]:
-        if not os.path.exists(path):
-            return {}
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                raw = json.load(f) or {}
-        except Exception:
-            return {}
-        if not isinstance(raw, dict):
-            return {}
-
-        out: dict[str, str] = {}
-        for k, v in raw.items():
-            kid = str(k)
-            if isinstance(v, str) and v.strip():
-                out[kid] = v.strip()
-                continue
-            if isinstance(v, dict):
-                for key in ("fr", "name_fr", "nameFr", "label_fr", "labelFr", "label", "name"):
-                    val = v.get(key)
-                    if isinstance(val, str) and val.strip():
-                        out[kid] = val.strip()
-                        break
-        return out
-
-    fr_map = _load(os.path.join("static", "medals", "medals_fr.json"))
-    en_map = _load(os.path.join("static", "medals", "medals.json"))
-    return fr_map, en_map
-
-
-def _get_medals_cache_dir() -> str:
-    """Dossier des icônes médailles (OpenSpartan.Workshop).
-
-    Override possible via env var OPENSPARTAN_MEDALS_CACHE.
-    """
-    override = os.environ.get("OPENSPARTAN_MEDALS_CACHE")
-    if override:
-        return override
-
-    localappdata = os.environ.get("LOCALAPPDATA")
-    if localappdata:
-        return os.path.join(localappdata, "OpenSpartan.Workshop", "imagecache", "medals")
-
-    # fallback (utile hors Windows, mais probablement vide)
-    return os.path.join(os.path.expanduser("~"), "AppData", "Local", "OpenSpartan.Workshop", "imagecache", "medals")
-
-
-def _medal_label(nid: int) -> str:
-    fr_map, en_map = _load_medal_name_maps()
-    key = str(int(nid))
-    return fr_map.get(key) or en_map.get(key) or f"Médaille #{nid}"
-
-
-def _medal_icon_path(nid: int) -> Optional[str]:
-    p = os.path.join(_get_medals_cache_dir(), f"{int(nid)}.png")
-    return p if os.path.exists(p) else None
-
-
-def _render_medals_grid(medals: list[dict[str, int]], cols_per_row: int = 8) -> None:
-    if not medals:
-        st.info("Aucune médaille.")
-        return
-
-    cache_dir = _get_medals_cache_dir()
-    has_cache = os.path.isdir(cache_dir)
-    if not has_cache:
-        st.caption(
-            "Cache d'images introuvable. "
-            "Définis OPENSPARTAN_MEDALS_CACHE ou vérifie l'installation OpenSpartan.Workshop."
-        )
-
-    cols_per_row = max(3, min(int(cols_per_row), 12))
-    cols = st.columns(cols_per_row)
-    for i, m in enumerate(medals):
-        col = cols[i % cols_per_row]
-        nid = int(m.get("name_id", 0))
-        cnt = int(m.get("count", 0))
-        name = _medal_label(nid)
-        icon = _medal_icon_path(nid) if has_cache else None
-
-        if icon:
-            col.image(icon, width="stretch")
-        else:
-            col.markdown(
-                f"<div class='os-medal-missing'>#{nid}</div>",
-                unsafe_allow_html=True,
-            )
-
-        col.markdown(
-            "<div class='os-medal-caption'>"
-            + f"{name}<br><span class='os-medal-count'>x{cnt}</span>"
-            + "</div>",
-            unsafe_allow_html=True,
-        )
-
-
 # =============================================================================
 # Application principale
 # =============================================================================
@@ -300,13 +174,113 @@ def main() -> None:
     
     with st.sidebar:
         with st.expander("Source", expanded=False):
-            db_path = st.text_input("Chemin du .db", value=DEFAULT_DB)
-            xuid_default = guess_xuid_from_db_path(db_path) or ""
-            xuid = st.text_input("XUID", value=xuid_default)
+            # --- Multi-DB / Profils ---
+            profiles = load_profiles()
+
+            if "db_path" not in st.session_state:
+                st.session_state["db_path"] = DEFAULT_DB
+            if "xuid" not in st.session_state:
+                st.session_state["xuid"] = guess_xuid_from_db_path(st.session_state.get("db_path", "")) or ""
+            if "waypoint_player" not in st.session_state:
+                st.session_state["waypoint_player"] = DEFAULT_WAYPOINT_PLAYER
+
+            with st.expander("Multi-DB (profils)", expanded=False):
+                prof_names = ["(aucun)"] + sorted(profiles.keys())
+                st.selectbox("Profil", options=prof_names, key="db_profile_selected")
+
+                cols_p = st.columns(2)
+                if cols_p[0].button("Appliquer", width="stretch"):
+                    sel = st.session_state.get("db_profile_selected")
+                    if isinstance(sel, str) and sel in profiles:
+                        p = profiles[sel]
+                        if p.get("db_path"):
+                            st.session_state["db_path"] = p["db_path"]
+                        if p.get("xuid"):
+                            st.session_state["xuid"] = p["xuid"]
+                        if p.get("waypoint_player"):
+                            st.session_state["waypoint_player"] = p["waypoint_player"]
+                        st.rerun()
+
+                if cols_p[1].button("Enregistrer profil", width="stretch"):
+                    name = st.session_state.get("db_profile_selected")
+                    if not isinstance(name, str) or not name.strip() or name == "(aucun)":
+                        st.warning("Choisis d'abord un nom de profil (via la liste), ou crée-en un ci-dessous.")
+                    else:
+                        profiles[name] = {
+                            "db_path": str(st.session_state.get("db_path", "")).strip(),
+                            "xuid": str(st.session_state.get("xuid", "")).strip(),
+                            "waypoint_player": str(st.session_state.get("waypoint_player", "")).strip(),
+                        }
+                        ok, err = save_profiles(profiles)
+                        if ok:
+                            st.success("Profil enregistré.")
+                        else:
+                            st.error(err)
+
+                with st.expander("Créer / supprimer", expanded=False):
+                    new_name = st.text_input("Nom", value="")
+                    c = st.columns(2)
+                    if c[0].button("Créer/mettre à jour", width="stretch"):
+                        nn = (new_name or "").strip()
+                        if not nn:
+                            st.error("Nom vide.")
+                        else:
+                            profiles[nn] = {
+                                "db_path": str(st.session_state.get("db_path", "")).strip(),
+                                "xuid": str(st.session_state.get("xuid", "")).strip(),
+                                "waypoint_player": str(st.session_state.get("waypoint_player", "")).strip(),
+                            }
+                            ok, err = save_profiles(profiles)
+                            if ok:
+                                st.success("Profil sauvegardé.")
+                                st.rerun()
+                            else:
+                                st.error(err)
+                    if c[1].button("Supprimer", width="stretch"):
+                        nn = (new_name or "").strip()
+                        if not nn:
+                            st.error("Renseigne un nom.")
+                        elif nn not in profiles:
+                            st.warning("Profil introuvable.")
+                        else:
+                            del profiles[nn]
+                            ok, err = save_profiles(profiles)
+                            if ok:
+                                st.success("Profil supprimé.")
+                                st.rerun()
+                            else:
+                                st.error(err)
+
+                local_dbs = list_local_dbs()
+                if local_dbs:
+                    opts = ["(garder actuelle)"] + [os.path.basename(p) for p in local_dbs]
+                    pick = st.selectbox("DB détectées (OpenSpartan)", options=opts, index=0)
+                    if st.button("Utiliser cette DB", width="stretch") and pick != "(garder actuelle)":
+                        sel_path = next((p for p in local_dbs if os.path.basename(p) == pick), None)
+                        if sel_path:
+                            st.session_state["db_path"] = sel_path
+                            guessed = guess_xuid_from_db_path(sel_path) or ""
+                            if guessed:
+                                st.session_state["xuid"] = guessed
+                            st.rerun()
+
+            db_path = st.text_input("Chemin du .db", key="db_path")
+            cols_x = st.columns([2, 1])
+            with cols_x[0]:
+                xuid = st.text_input("XUID", key="xuid")
+            with cols_x[1]:
+                if st.button("Deviner XUID", width="stretch"):
+                    guessed = guess_xuid_from_db_path(str(db_path)) or ""
+                    if guessed:
+                        st.session_state["xuid"] = guessed
+                        st.rerun()
+                    else:
+                        st.warning("Impossible de deviner le XUID depuis ce chemin.")
+
             me_name = display_name_from_xuid(xuid.strip())
             waypoint_player = st.text_input(
                 "HaloWaypoint player (slug)",
-                value=DEFAULT_WAYPOINT_PLAYER,
+                key="waypoint_player",
                 help="Ex: JGtm (sert à construire l'URL de match).",
             )
 
@@ -425,7 +399,14 @@ def main() -> None:
 
     with st.sidebar:
         dmin, dmax = _date_range(base_for_filters)
-        filter_mode = st.radio("Sélection", options=["Période", "Sessions"], horizontal=True)
+        if "filter_mode" not in st.session_state:
+            st.session_state["filter_mode"] = "Période"
+        filter_mode = st.radio(
+            "Sélection",
+            options=["Période", "Sessions"],
+            horizontal=True,
+            key="filter_mode",
+        )
 
         start_d, end_d = dmin, dmax
         gap_minutes = 35
@@ -444,8 +425,9 @@ def main() -> None:
                 "Écart max entre parties (minutes)",
                 min_value=15,
                 max_value=240,
-                value=120,
+                value=int(st.session_state.get("gap_minutes", 120)),
                 step=5,
+                key="gap_minutes",
             )
 
             base_s_ui = compute_sessions(base_for_filters, gap_minutes=gap_minutes)
@@ -645,7 +627,7 @@ def main() -> None:
             last_pair_fr = translate_pair_name(str(last_pair)) if last_pair else None
 
             meta_cols = st.columns(4)
-            meta_cols[0].metric("Date", _format_date_fr(last_time))
+            meta_cols[0].metric("Date", format_date_fr(last_time))
             meta_cols[1].metric("Carte", str(last_map) if last_map else "-")
             meta_cols[2].metric("Playlist", str(last_playlist_fr or last_playlist) if (last_playlist_fr or last_playlist) else "-")
             meta_cols[3].metric("Mode", str(last_mode or last_pair_fr or last_pair) if (last_mode or last_pair_fr or last_pair) else "-")
@@ -805,9 +787,9 @@ def main() -> None:
                 st.info("Médailles indisponibles pour ce match (ou aucune médaille).")
             else:
                 md_df = pd.DataFrame(medals_last)
-                md_df["label"] = md_df["name_id"].apply(lambda x: _medal_label(int(x)))
+                md_df["label"] = md_df["name_id"].apply(lambda x: medal_label(int(x)))
                 md_df = md_df.sort_values(["count", "label"], ascending=[False, True])
-                _render_medals_grid(md_df[["name_id", "count"]].to_dict(orient="records"), cols_per_row=8)
+                render_medals_grid(md_df[["name_id", "count"]].to_dict(orient="records"), cols_per_row=8)
 
 
 
@@ -830,9 +812,9 @@ def main() -> None:
             else:
                 md = pd.DataFrame(top, columns=["name_id", "count"])
 
-                md["label"] = md["name_id"].apply(lambda x: _medal_label(int(x)))
+                md["label"] = md["name_id"].apply(lambda x: medal_label(int(x)))
                 md_desc = md.sort_values("count", ascending=False)
-                _render_medals_grid(md_desc[["name_id", "count"]].to_dict(orient="records"), cols_per_row=8)
+                render_medals_grid(md_desc[["name_id", "count"]].to_dict(orient="records"), cols_per_row=8)
 
     # --------------------------------------------------------------------------
     # Tab: Séries temporelles
@@ -1040,6 +1022,37 @@ def main() -> None:
                 if not trio_ids:
                     st.warning("Aucun match trouvé où vous êtes tous les trois dans la même équipe (avec les filtres actuels).")
                 else:
+                    # UX: bouton pour basculer les filtres globaux sur la dernière session où vous êtes tous les trois.
+                    # On utilise la logique de sessions globale (mêmes paramètres gap) pour que la session sélectionnée
+                    # corresponde bien aux options de la sidebar.
+                    trio_ids_set = {str(x) for x in trio_ids}
+                    base_for_session_pick = base  # même base que les filtres globaux (Firefight déjà exclu si besoin)
+                    try:
+                        gm = int(st.session_state.get("gap_minutes", 120))
+                    except Exception:
+                        gm = 120
+                    base_s_trio = compute_sessions(base_for_session_pick, gap_minutes=gm)
+                    trio_rows = base_s_trio.loc[base_s_trio["match_id"].astype(str).isin(trio_ids_set)].copy()
+                    latest_label = None
+                    if not trio_rows.empty:
+                        latest_sid = int(trio_rows["session_id"].max())
+                        latest_labels = trio_rows.loc[trio_rows["session_id"] == latest_sid, "session_label"].dropna().unique().tolist()
+                        latest_label = latest_labels[0] if latest_labels else None
+
+                    bcols = st.columns([2, 3])
+                    with bcols[0]:
+                        if st.button("Focus: dernière session (trio)", width="stretch", disabled=(latest_label is None)):
+                            st.session_state["filter_mode"] = "Sessions"
+                            if latest_label:
+                                st.session_state["picked_session_label"] = latest_label
+                                st.session_state["picked_sessions"] = [latest_label]
+                            st.rerun()
+                    with bcols[1]:
+                        if latest_label:
+                            st.caption(f"Cible: {latest_label} (gap {gm} min)")
+                        else:
+                            st.caption("Impossible de déterminer une session trio (données insuffisantes).")
+
                     # Charge les stats de chacun et aligne par match_id.
                     me_df = base_for_trio.loc[base_for_trio["match_id"].isin(trio_ids)].copy()
                     f1_df = load_df(db_path, f1_xuid)
@@ -1108,6 +1121,36 @@ def main() -> None:
                             plot_trio_metric(d_self, d_f1, d_f2, metric="average_life_seconds", names=names, title="Durée de vie moyenne (tous les trois)", y_title="Secondes", y_format=".1f"),
                             width="stretch",
                         )
+
+                        st.subheader("Médailles (tous les trois)")
+                        trio_match_ids = [str(x) for x in merged["match_id"].dropna().astype(str).tolist()]
+                        if not trio_match_ids:
+                            st.info("Impossible de déterminer la liste des matchs pour l'agrégation des médailles.")
+                        else:
+                            with st.spinner("Agrégation des médailles (tous les trois)…"):
+                                top_self = load_top_medals(db_path, xuid.strip(), trio_match_ids, top_n=12)
+                                top_f1 = load_top_medals(db_path, f1_xuid, trio_match_ids, top_n=12)
+                                top_f2 = load_top_medals(db_path, f2_xuid, trio_match_ids, top_n=12)
+
+                            c1, c2, c3 = st.columns(3)
+                            with c1:
+                                st.caption(f"{me_name}")
+                                render_medals_grid(
+                                    [{"name_id": int(n), "count": int(c)} for n, c in (top_self or [])],
+                                    cols_per_row=6,
+                                )
+                            with c2:
+                                st.caption(f"{f1_name}")
+                                render_medals_grid(
+                                    [{"name_id": int(n), "count": int(c)} for n, c in (top_f1 or [])],
+                                    cols_per_row=6,
+                                )
+                            with c3:
+                                st.caption(f"{f2_name}")
+                                render_medals_grid(
+                                    [{"name_id": int(n), "count": int(c)} for n, c in (top_f2 or [])],
+                                    cols_per_row=6,
+                                )
 
             # Stats individuelles par ami
             for fx in picked_xuids:
@@ -1199,13 +1242,13 @@ def main() -> None:
                     m1, m2 = st.columns(2)
                     with m1:
                         st.caption(f"{me_name}")
-                        _render_medals_grid(
+                        render_medals_grid(
                             [{"name_id": int(n), "count": int(c)} for n, c in (my_top or [])],
                             cols_per_row=6,
                         )
                     with m2:
                         st.caption(f"{name}")
-                        _render_medals_grid(
+                        render_medals_grid(
                             [{"name_id": int(n), "count": int(c)} for n, c in (fr_top or [])],
                             cols_per_row=6,
                         )
