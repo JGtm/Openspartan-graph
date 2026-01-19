@@ -629,6 +629,47 @@ async def main_async(argv: list[str]) -> int:
                     if remaining <= 0:
                         break
                     if mid in existing_match_ids:
+                        # Backfill: PlayerMatchStats (skill) manquant sur une DB existante.
+                        # Cas typique: première import avec --no-skill, puis refresh sans --no-skill.
+                        if not args.no_skill:
+                            try:
+                                cur = con.cursor()
+                                cur.execute(
+                                    "SELECT 1 FROM PlayerMatchStats WHERE MatchId = ? LIMIT 1",
+                                    (mid,),
+                                )
+                                has_skill = cur.fetchone() is not None
+                            except Exception:
+                                has_skill = False
+
+                            if not has_skill:
+                                try:
+                                    existing = _load_match_json_from_db(con, mid)
+                                    xuids = _extract_xuids_from_match_stats(existing)
+                                    if not xuids:
+                                        # fallback: si player est un xuid
+                                        m = XUID_RE.search(str(player))
+                                        if m:
+                                            xi = _coerce_int(m.group(1))
+                                            if xi is not None:
+                                                xuids = [xi]
+
+                                    if xuids:
+                                        async def _get_skill_existing():
+                                            resp = await client.skill.get_match_skill(mid, xuids)
+                                            return await resp.json()
+
+                                        skill_json = await _request_with_retries(_get_skill_existing)
+                                        if isinstance(skill_json, dict):
+                                            cur.execute(
+                                                "INSERT INTO PlayerMatchStats(ResponseBody, MatchId) VALUES (?, ?)",
+                                                (json.dumps(skill_json, ensure_ascii=False), mid),
+                                            )
+                                            con.commit()
+                                except Exception:
+                                    # Non bloquant: certains matchs n'ont pas de skill data.
+                                    pass
+
                         # Match déjà en DB: on peut quand même backfill les assets si demandé.
                         if not args.no_assets:
                             existing = _load_match_json_from_db(con, mid)
