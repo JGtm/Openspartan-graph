@@ -829,6 +829,10 @@ def main() -> None:
             )
 
             st.caption(f"MatchId: {last_match_id}")
+            wp = str(waypoint_player or "").strip()
+            if wp and last_match_id and last_match_id.strip() and last_match_id.strip() != "-":
+                match_url = f"https://www.halowaypoint.com/halo-infinite/players/{wp}/matches/{last_match_id.strip()}"
+                st.link_button("Ouvrir sur HaloWaypoint", match_url, width="stretch")
 
             with st.spinner("Lecture des stats détaillées (attendu vs réel, médailles)…"):
                 pm = load_player_match_result(db_path, last_match_id, xuid.strip())
@@ -1449,6 +1453,36 @@ def main() -> None:
 
                     # Aligne sur les mêmes match_id et utilise le start_time de moi comme référence d'axe.
                     me_df = me_df.sort_values("start_time")
+
+                    # Tableau récap: stats/min pour les 3 joueurs sur ces matchs.
+                    me_stats = compute_aggregated_stats(me_df)
+                    f1_stats = compute_aggregated_stats(f1_df)
+                    f2_stats = compute_aggregated_stats(f2_df)
+                    trio_per_min = pd.DataFrame(
+                        [
+                            {
+                                "Joueur": me_name,
+                                "Frags/min": round(float(me_stats.kills_per_minute), 2) if me_stats.kills_per_minute else None,
+                                "Morts/min": round(float(me_stats.deaths_per_minute), 2) if me_stats.deaths_per_minute else None,
+                                "Assists/min": round(float(me_stats.assists_per_minute), 2) if me_stats.assists_per_minute else None,
+                            },
+                            {
+                                "Joueur": f1_name,
+                                "Frags/min": round(float(f1_stats.kills_per_minute), 2) if f1_stats.kills_per_minute else None,
+                                "Morts/min": round(float(f1_stats.deaths_per_minute), 2) if f1_stats.deaths_per_minute else None,
+                                "Assists/min": round(float(f1_stats.assists_per_minute), 2) if f1_stats.assists_per_minute else None,
+                            },
+                            {
+                                "Joueur": f2_name,
+                                "Frags/min": round(float(f2_stats.kills_per_minute), 2) if f2_stats.kills_per_minute else None,
+                                "Morts/min": round(float(f2_stats.deaths_per_minute), 2) if f2_stats.deaths_per_minute else None,
+                                "Assists/min": round(float(f2_stats.assists_per_minute), 2) if f2_stats.assists_per_minute else None,
+                            },
+                        ]
+                    )
+                    st.subheader("Stats/min (tous les trois)")
+                    st.dataframe(trio_per_min, width="stretch", hide_index=True)
+
                     f1_df = f1_df[["match_id", "kills", "deaths", "assists", "accuracy", "ratio", "average_life_seconds"]].copy()
                     f2_df = f2_df[["match_id", "kills", "deaths", "assists", "accuracy", "ratio", "average_life_seconds"]].copy()
                     merged = me_df[["match_id", "start_time", "kills", "deaths", "assists", "accuracy", "ratio", "average_life_seconds"]].merge(
@@ -1497,7 +1531,7 @@ def main() -> None:
                             width="stretch",
                         )
                         st.plotly_chart(
-                            plot_trio_metric(d_self, d_f1, d_f2, metric="ratio", names=names, title="Ratio (tous les trois)", y_title="Ratio", y_format=".3f"),
+                            plot_trio_metric(d_self, d_f1, d_f2, metric="ratio", names=names, title="FDA (tous les trois)", y_title="FDA", y_format=".3f"),
                             width="stretch",
                         )
                         st.plotly_chart(
@@ -1539,44 +1573,6 @@ def main() -> None:
                                         cols_per_row=6,
                                     )
 
-            st.subheader("Résumé par ami")
-            base_for_friends = dff if apply_current_filters else df
-            summary_rows = []
-            for fx in picked_xuids:
-                name = display_name_from_xuid(fx)
-                rows = query_matches_with_friend(db_path, xuid.strip(), fx)
-                if same_team_only_friends:
-                    rows = [r for r in rows if r.same_team]
-                match_ids = {str(r.match_id) for r in rows}
-                sub = base_for_friends.loc[base_for_friends["match_id"].astype(str).isin(match_ids)].copy()
-                if sub.empty:
-                    continue
-
-                rates_sub = compute_outcome_rates(sub)
-                total_out = max(1, rates_sub.total)
-                win_rate_sub = rates_sub.wins / total_out
-                loss_rate_sub = rates_sub.losses / total_out
-                global_ratio_sub = compute_global_ratio(sub)
-                stats_sub = compute_aggregated_stats(sub)
-
-                summary_rows.append(
-                    {
-                        "Ami": name,
-                        "Matchs": int(len(sub)),
-                        "Matchs DB": int(len({str(r.match_id) for r in rows})),
-                        "Win%": round(win_rate_sub * 100, 1),
-                        "Loss%": round(loss_rate_sub * 100, 1),
-                        "Ratio": round(float(global_ratio_sub), 2) if global_ratio_sub is not None else None,
-                        "Frags/min": round(float(stats_sub.kills_per_minute), 2) if stats_sub.kills_per_minute else None,
-                        "Morts/min": round(float(stats_sub.deaths_per_minute), 2) if stats_sub.deaths_per_minute else None,
-                        "Assists/min": round(float(stats_sub.assists_per_minute), 2) if stats_sub.assists_per_minute else None,
-                    }
-                )
-
-            if not summary_rows:
-                st.info("Aucun match trouvé avec ces amis (selon le filtre actuel).")
-            else:
-                st.dataframe(pd.DataFrame(summary_rows).sort_values(["Matchs"], ascending=False), width="stretch", hide_index=True)
 
     # --------------------------------------------------------------------------
     # Tab: Ratio par cartes
