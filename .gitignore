@@ -9,3 +9,5 @@ Thumbs.db
 build/
 dist/
 *.spec
+.env.local
+data/spnkr.db
