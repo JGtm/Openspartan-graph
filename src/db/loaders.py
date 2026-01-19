@@ -421,6 +421,55 @@ def _extract_player_time_played_seconds(player_obj: Dict[str, Any]) -> Optional[
     return coerce_duration_seconds(pi.get("TimePlayed"))
 
 
+def _extract_team_scores(match_obj: Dict[str, Any], my_team_id: Optional[int]) -> tuple[Optional[int], Optional[int]]:
+    """Extrait les scores d'équipe depuis MatchStats.
+
+    Dans les payloads OpenSpartan/Halo, le score de chaque équipe est typiquement
+    présent dans: Teams[].Stats.CoreStats.Score.
+
+    Returns:
+        (my_team_score, enemy_team_score)
+    """
+    teams = match_obj.get("Teams")
+    if not isinstance(teams, list) or not teams:
+        return None, None
+
+    team_scores: dict[int, int] = {}
+    for t in teams:
+        if not isinstance(t, dict):
+            continue
+        tid = t.get("TeamId")
+        if not isinstance(tid, int):
+            continue
+        score_raw = (
+            t.get("Stats", {})
+            .get("CoreStats", {})
+            .get("Score")
+        )
+        score = coerce_number(score_raw)
+        if score is None:
+            continue
+        try:
+            team_scores[int(tid)] = int(score)
+        except Exception:
+            continue
+
+    if not team_scores:
+        return None, None
+
+    my_score: Optional[int] = None
+    enemy_score: Optional[int] = None
+
+    if my_team_id is not None:
+        my_score = team_scores.get(int(my_team_id))
+        for tid, sc in team_scores.items():
+            if int(tid) != int(my_team_id):
+                enemy_score = sc
+                break
+
+    return my_score, enemy_score
+
+
 def load_matches(
     db_path: str,
     xuid: str,
@@ -523,6 +572,8 @@ def load_matches(
             avg_life = _extract_player_average_life_seconds(me)
             time_played = _extract_player_time_played_seconds(me)
 
+            my_team_score, enemy_team_score = _extract_team_scores(obj, last_team_id)
+
             playlist_name = playlist_names.get(playlist_id) if playlist_id else None
             pair_name = map_mode_pair_names.get(map_mode_pair_id) if map_mode_pair_id else None
             map_name = map_names.get(map_id) if map_id else None
@@ -551,6 +602,9 @@ def load_matches(
                     deaths=deaths,
                     assists=assists,
                     accuracy=accuracy,
+
+                    my_team_score=my_team_score,
+                    enemy_team_score=enemy_team_score,
                 )
             )
 

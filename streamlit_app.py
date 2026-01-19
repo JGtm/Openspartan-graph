@@ -20,6 +20,7 @@ from src.config import (
     get_default_workshop_exe_path,
     DEFAULT_WAYPOINT_PLAYER,
     HALO_COLORS,
+    SESSION_CONFIG,
     OUTCOME_CODES,
 )
 from src.db import (
@@ -90,6 +91,7 @@ from src.ui.sections import render_openspartan_tools, render_source_section
 
 
 _LABEL_SUFFIX_RE = re.compile(r"^(.*?)(?:\s*[\-–—]\s*[0-9A-Za-z]{8,})$", re.IGNORECASE)
+_SCORE_LABEL_RE = re.compile(r"^\s*(-?\d+)\s*[-–—]\s*(-?\d+)\s*$")
 
 
 def _clean_asset_label(s: str | None) -> str | None:
@@ -131,9 +133,176 @@ def _format_duration_hms(seconds: float | int | None) -> str:
         return "-"
     h, rem = divmod(total, 3600)
     m, s = divmod(rem, 60)
+    if h >= 24:
+        d, hh = divmod(h, 24)
+        return f"{d}j {hh:02d}:{m:02d}:{s:02d}"
     if h > 0:
         return f"{h:d}:{m:02d}:{s:02d}"
     return f"{m:d}:{s:02d}"
+
+
+def _coerce_int(v) -> int | None:
+    if v is None:
+        return None
+    try:
+        if isinstance(v, str) and not v.strip():
+            return None
+        x = float(v)
+        if x != x:
+            return None
+        return int(round(x))
+    except Exception:
+        return None
+
+
+def _format_score_label(my_team_score, enemy_team_score) -> str:
+    my_s = _coerce_int(my_team_score)
+    en_s = _coerce_int(enemy_team_score)
+    if my_s is None or en_s is None:
+        return "-"
+    return f"{my_s} - {en_s}"
+
+
+def _score_css_color(my_team_score, enemy_team_score) -> str:
+    colors = HALO_COLORS.as_dict()
+    my_s = _coerce_int(my_team_score)
+    en_s = _coerce_int(enemy_team_score)
+    if my_s is None or en_s is None:
+        return colors["slate"]
+    if my_s > en_s:
+        return colors["green"]
+    if my_s < en_s:
+        return colors["red"]
+    return colors["violet"]
+
+
+def _style_outcome_text(v: str) -> str:
+    s = (v or "").strip().lower()
+    if s == "victoire":
+        return "color: #1B5E20; font-weight: 700;"
+    if s in ("défaite", "defaite"):
+        return "color: #B71C1C; font-weight: 700;"
+    if s in ("égalité", "egalite"):
+        return "color: #8E6CFF; font-weight: 700;"
+    if s in ("non terminé", "non termine"):
+        return "color: #616161; font-weight: 700;"
+    return ""
+
+
+def _style_signed_number(v) -> str:
+    try:
+        x = float(v)
+    except Exception:
+        return ""
+    if x > 0:
+        return "color: #1B5E20; font-weight: 700;"
+    if x < 0:
+        return "color: #B71C1C; font-weight: 700;"
+    return "color: #424242;"
+
+
+def _style_score_label(v: str) -> str:
+    if v is None:
+        return ""
+    s = str(v).strip()
+    if not s or s == "-":
+        return "color: #616161;"
+    m = _SCORE_LABEL_RE.match(s)
+    if not m:
+        return ""
+    try:
+        my_s = int(m.group(1))
+        en_s = int(m.group(2))
+    except Exception:
+        return ""
+    if my_s > en_s:
+        return "color: #1B5E20; font-weight: 800;"
+    if my_s < en_s:
+        return "color: #B71C1C; font-weight: 800;"
+    return "color: #8E6CFF; font-weight: 800;"
+
+
+def _format_datetime_fr_hm(dt_value) -> str:
+    if dt_value is None:
+        return "-"
+    try:
+        ts = pd.to_datetime(dt_value, errors="coerce")
+        if pd.isna(ts):
+            return "-"
+        d = ts.to_pydatetime()
+    except Exception:
+        return "-"
+    return f"{format_date_fr(d)} {d:%H:%M}"
+
+
+def _plot_metric_bars_by_match(
+    df_: pd.DataFrame,
+    *,
+    metric_col: str,
+    title: str,
+    y_axis_title: str,
+    hover_label: str,
+    bar_color: str,
+    smooth_color: str,
+    smooth_window: int = 10,
+) -> go.Figure | None:
+    if df_ is None or df_.empty:
+        return None
+    if metric_col not in df_.columns or "start_time" not in df_.columns:
+        return None
+
+    d = df_[["start_time", metric_col]].copy()
+    d["start_time"] = pd.to_datetime(d["start_time"], errors="coerce")
+    d = d.dropna(subset=["start_time"]).sort_values("start_time").reset_index(drop=True)
+    if d.empty:
+        return None
+
+    y = pd.to_numeric(d[metric_col], errors="coerce")
+    x_idx = list(range(len(d)))
+    labels = d["start_time"].dt.strftime("%m-%d %H:%M").tolist()
+    step = max(1, len(labels) // 10) if labels else 1
+
+    w = int(smooth_window) if smooth_window else 0
+    smooth = y.rolling(window=max(1, w), min_periods=1).mean() if w and w > 1 else y
+
+    fig = go.Figure()
+    fig.add_trace(
+        go.Bar(
+            x=x_idx,
+            y=y,
+            name=y_axis_title,
+            marker_color=bar_color,
+            opacity=0.70,
+            hovertemplate=f"{hover_label}=%{{y}}<extra></extra>",
+        )
+    )
+
+    fig.add_trace(
+        go.Scatter(
+            x=x_idx,
+            y=smooth,
+            mode="lines",
+            name="Moyenne (lissée)",
+            line=dict(width=3, color=smooth_color),
+            hovertemplate="moyenne=%{y:.2f}<extra></extra>",
+        )
+    )
+    fig.update_layout(
+        title=title,
+        margin=dict(l=40, r=20, t=40, b=90),
+        hovermode="x unified",
+        legend=get_legend_horizontal_bottom(),
+    )
+    fig.update_yaxes(title_text=y_axis_title, rangemode="tozero")
+    fig.update_xaxes(
+        title_text="Match (chronologique)",
+        tickmode="array",
+        tickvals=x_idx[::step],
+        ticktext=labels[::step],
+        type="category",
+    )
+
+    return apply_halo_plot_style(fig, height=320)
 
 
 def _compute_session_span_seconds(df_: pd.DataFrame) -> float | None:
@@ -412,6 +581,8 @@ def load_df(db_path: str, xuid: str, db_key: tuple[int, int] | None = None) -> p
             "game_variant_name": [m.game_variant_name for m in matches],
             "outcome": [m.outcome for m in matches],
             "kda": [m.kda for m in matches],
+            "my_team_score": [m.my_team_score for m in matches],
+            "enemy_team_score": [m.enemy_team_score for m in matches],
             "max_killing_spree": [m.max_killing_spree for m in matches],
             "headshot_kills": [m.headshot_kills for m in matches],
             "average_life_seconds": [m.average_life_seconds for m in matches],
@@ -595,7 +766,7 @@ def main() -> None:
             st.session_state["picked_sessions"] = pending_sessions
 
         if "filter_mode" not in st.session_state:
-            st.session_state["filter_mode"] = "Sessions"
+            st.session_state["filter_mode"] = "Période"
         filter_mode = st.radio(
             "Sélection",
             options=["Période", "Sessions"],
@@ -928,15 +1099,13 @@ def main() -> None:
     # Onglets
     # ==========================================================================
     
-    tab_series, tab_last, tab_medals, tab_mom, tab_friend, tab_friends, tab_maps, tab_table = st.tabs(
+    tab_series, tab_last, tab_medals, tab_mom, tab_teammates, tab_table = st.tabs(
         [
             "Séries temporelles",
             "Dernier match",
             "Médailles (Top 25)",
-            "Victoires/Défaites (par période)",
-            "Avec un joueur",
-            "Avec mes amis",
-            "Ratio par cartes",
+            "Victoires/Défaites",
+            "Mes coéquipiers",
             "Historique des parties",
         ]
     )
@@ -962,30 +1131,64 @@ def main() -> None:
             last_playlist_fr = translate_playlist_name(str(last_playlist)) if last_playlist else None
             last_pair_fr = translate_pair_name(str(last_pair)) if last_pair else None
 
-            meta_cols = st.columns(3)
-            meta_cols[0].metric("Date", format_date_fr(last_time))
-            meta_cols[1].metric("Carte", str(last_map) if last_map else "-")
-            meta_cols[2].metric(
-                "Playlist",
-                str(last_playlist_fr or last_playlist)
-                if (last_playlist_fr or last_playlist)
-                else "-",
-            )
+            # Résultat + score (pour affichage compact)
+            outcome_map = {2: "Victoire", 3: "Défaite", 1: "Égalité", 4: "Non terminé"}
+            try:
+                outcome_code = int(last_outcome) if last_outcome == last_outcome else None
+            except Exception:
+                outcome_code = None
+            outcome_label = outcome_map.get(outcome_code, "?") if outcome_code is not None else "-"
 
-            # Mode "propre" (dérivé du couple carte/mode) en priorité.
+            colors = HALO_COLORS.as_dict()
+            if outcome_code == OUTCOME_CODES.WIN:
+                outcome_color = colors["green"]
+            elif outcome_code == OUTCOME_CODES.LOSS:
+                outcome_color = colors["red"]
+            elif outcome_code == OUTCOME_CODES.TIE:
+                outcome_color = colors["violet"]
+            else:
+                outcome_color = colors["slate"]
+
+            last_my_score = last_row.get("my_team_score")
+            last_enemy_score = last_row.get("enemy_team_score")
+            score_label = _format_score_label(last_my_score, last_enemy_score)
+            score_color = _score_css_color(last_my_score, last_enemy_score)
+
+            wp = str(waypoint_player or "").strip()
+            match_url = None
+            if wp and last_match_id and last_match_id.strip() and last_match_id.strip() != "-":
+                match_url = f"https://www.halowaypoint.com/halo-infinite/players/{wp}/matches/{last_match_id.strip()}"
+
+            top_cols = st.columns([2, 3])
+            with top_cols[0]:
+                top_cols_0 = st.columns([2, 3])
+                with top_cols_0[0]:
+                    st.metric("Date", format_date_fr(last_time))
+                with top_cols_0[1]:
+                    st.markdown(
+                        "<div style='border:1px solid rgba(255,255,255,0.12); border-radius:12px; padding:10px 12px; background: rgba(255,255,255,0.03)'>"
+                        "<div style='display:flex; align-items:baseline; gap:10px; justify-content:space-between'>"
+                        f"<div style='font-weight:900; font-size:1.05rem; color:{outcome_color}'>{outcome_label}</div>"
+                        f"<div style='font-weight:900; font-size:1.05rem; color:{score_color}'>{score_label}</div>"
+                        "</div>"
+                        "</div>",
+                        unsafe_allow_html=True,
+                    )
+
+            # Carte + Playlist + Mode sur la même ligne
             last_mode_ui = last_row.get("mode_ui") or _normalize_mode_label(str(last_pair) if last_pair else None)
-            st.metric(
+            row_cols = st.columns(3)
+            row_cols[0].metric("Carte", str(last_map) if last_map else "-")
+            row_cols[1].metric(
+                "Playlist",
+                str(last_playlist_fr or last_playlist) if (last_playlist_fr or last_playlist) else "-",
+            )
+            row_cols[2].metric(
                 "Mode",
                 str(last_mode_ui or last_pair_fr or last_pair or last_mode)
                 if (last_mode_ui or last_pair_fr or last_pair or last_mode)
                 else "-",
             )
-            wp = str(waypoint_player or "").strip()
-            if wp and last_match_id and last_match_id.strip() and last_match_id.strip() != "-":
-                match_url = f"https://www.halowaypoint.com/halo-infinite/players/{wp}/matches/{last_match_id.strip()}"
-                b1, _ = st.columns([1, 5])
-                with b1:
-                    st.link_button("Ouvrir sur HaloWaypoint", match_url)
 
             with st.spinner("Lecture des stats détaillées (attendu vs réel, médailles)…"):
                 pm = cached_load_player_match_result(db_path, last_match_id, xuid.strip(), db_key=db_key)
@@ -993,33 +1196,7 @@ def main() -> None:
                     db_path, last_match_id, xuid.strip(), db_key=db_key
                 )
 
-            # Rappel du résultat (même si PlayerMatchStats est indispo)
-            outcome_map = {2: "Victoire", 3: "Défaite", 1: "Égalité", 4: "Non terminé"}
-            outcome_code = None
-            try:
-                outcome_code = int(last_outcome) if last_outcome == last_outcome else None
-            except Exception:
-                outcome_code = None
-
-            outcome_label = outcome_map.get(outcome_code, "?") if outcome_code is not None else "-"
-            colors = HALO_COLORS.as_dict()
-            if outcome_code == OUTCOME_CODES.WIN:
-                c = colors["green"]
-            elif outcome_code == OUTCOME_CODES.LOSS:
-                c = colors["red"]
-            elif outcome_code == OUTCOME_CODES.TIE:
-                c = colors["violet"]
-            else:
-                c = colors["slate"]
-
-            st.markdown(
-                "<div style='line-height:1.15'>"
-                f"<div style='font-size:2.2rem; font-weight:900; color:{c}'>"
-                f"{outcome_label}"
-                "</div>"
-                "</div>",
-                unsafe_allow_html=True,
-            )
+            # (Le résultat + score est affiché en haut, compact, près de la date.)
 
             if not pm:
                 st.info(
@@ -1034,7 +1211,7 @@ def main() -> None:
                 mmr_cols[0].metric("MMR d'équipe", f"{team_mmr:.1f}" if team_mmr is not None else "-")
                 mmr_cols[1].metric("MMR adverse", f"{enemy_mmr:.1f}" if enemy_mmr is not None else "-")
                 if delta_mmr is None:
-                    mmr_cols[2].metric("Écart MMR (équipe - adverse)", "-")
+                    mmr_cols[2].metric("Écart MMR", "-")
                 else:
                     mmr_cols[2].metric(
                         "Écart MMR (équipe - adverse)",
@@ -1042,6 +1219,10 @@ def main() -> None:
                         f"{float(delta_mmr):+.1f}",
                         delta_color="normal",
                     )
+
+                if match_url:
+                    with mmr_cols[2]:
+                        st.link_button("Ouvrir sur HaloWaypoint", match_url, width="stretch")
 
                 # Attendu vs réel (K / D) + ratios (match uniquement)
                 def _metric_expected_vs_actual(title: str, perf: dict, delta_color: str) -> None:
@@ -1060,7 +1241,7 @@ def main() -> None:
                 st.subheader("Réel vs attendu")
                 av_cols = st.columns(3)
                 with av_cols[0]:
-                    _metric_expected_vs_actual("Kills", perf_k, delta_color="normal")
+                    _metric_expected_vs_actual("Frags", perf_k, delta_color="normal")
                 with av_cols[1]:
                     _metric_expected_vs_actual("Morts", perf_d, delta_color="inverse")
                 with av_cols[2]:
@@ -1249,75 +1430,252 @@ def main() -> None:
             st.caption("Basé sur Players[].Outcome (2=victoire, 3=défaite, 1=égalité, 4=non terminé).")
             st.plotly_chart(fig_out, width="stretch")
 
+            st.subheader("Tableau — par période")
+            d = dff.dropna(subset=["outcome"]).copy()
+            if d.empty:
+                st.info("Aucune donnée pour construire le tableau.")
+            else:
+                if is_session_scope:
+                    d = d.sort_values("start_time").reset_index(drop=True)
+                    if len(d.index) <= 20:
+                        d["bucket"] = (d.index + 1)
+                    else:
+                        t = pd.to_datetime(d["start_time"], errors="coerce")
+                        d["bucket"] = t.dt.floor("h")
+                else:
+                    tmin = pd.to_datetime(d["start_time"], errors="coerce").min()
+                    tmax = pd.to_datetime(d["start_time"], errors="coerce").max()
+                    dt_range = (tmax - tmin) if (tmin == tmin and tmax == tmax) else pd.Timedelta(days=999)
+                    days = float(dt_range.total_seconds() / 86400.0) if dt_range is not None else 999.0
+                    cfg = SESSION_CONFIG
+                    if days < cfg.bucket_threshold_hourly:
+                        d = d.sort_values("start_time").reset_index(drop=True)
+                        d["bucket"] = (d.index + 1)
+                    elif days <= cfg.bucket_threshold_daily:
+                        d["bucket"] = d["start_time"].dt.floor("h")
+                    elif days <= cfg.bucket_threshold_weekly:
+                        d["bucket"] = d["start_time"].dt.to_period("D").astype(str)
+                    elif days <= cfg.bucket_threshold_monthly:
+                        d["bucket"] = d["start_time"].dt.to_period("W-MON").astype(str)
+                    else:
+                        d["bucket"] = d["start_time"].dt.to_period("M").astype(str)
+
+                d["my_score"] = pd.to_numeric(d.get("my_team_score"), errors="coerce")
+                d["enemy_score"] = pd.to_numeric(d.get("enemy_team_score"), errors="coerce")
+                d["score_diff"] = d["my_score"] - d["enemy_score"]
+
+                pivot = (
+                    d.pivot_table(index="bucket", columns="outcome", values="match_id", aggfunc="count")
+                    .fillna(0)
+                    .astype(int)
+                    .sort_index()
+                )
+                out_tbl = pd.DataFrame(index=pivot.index)
+                out_tbl["Victoires"] = pivot[2] if 2 in pivot.columns else 0
+                out_tbl["Défaites"] = pivot[3] if 3 in pivot.columns else 0
+                out_tbl["Égalités"] = pivot[1] if 1 in pivot.columns else 0
+                out_tbl["Non terminés"] = pivot[4] if 4 in pivot.columns else 0
+                out_tbl["Total"] = out_tbl[["Victoires", "Défaites", "Égalités", "Non terminés"]].sum(axis=1)
+                out_tbl["Win rate"] = (
+                    100.0
+                    * (out_tbl["Victoires"] / out_tbl["Total"].where(out_tbl["Total"] > 0))
+                ).fillna(0.0)
+
+                score_diff_avg = d.groupby("bucket")["score_diff"].mean(numeric_only=True)
+                out_tbl["Diff score moy."] = score_diff_avg
+
+                out_tbl = out_tbl.reset_index().rename(columns={"bucket": bucket_label.capitalize()})
+
+                def _style_pct(v) -> str:
+                    try:
+                        x = float(v)
+                    except Exception:
+                        return ""
+                    return "color: #E0E0E0; font-weight: 700;"
+
+                out_styled = out_tbl.style.map(_style_pct, subset=["Win rate"]).map(_style_signed_number, subset=["Diff score moy."])
+                st.dataframe(
+                    out_styled,
+                    width="stretch",
+                    hide_index=True,
+                    column_config={
+                        "Win rate": st.column_config.NumberColumn("Win rate", format="%.1f%%"),
+                        "Diff score moy.": st.column_config.NumberColumn("Diff score moy.", format="%.2f"),
+                    },
+                )
+
+            st.divider()
+            st.subheader("Ratio par cartes")
+            st.caption("Compare tes performances par map.")
+
+            scope = st.radio(
+                "Scope",
+                options=["Moi (filtres actuels)", "Moi (toutes les parties)", "Avec Madina972", "Avec Chocoboflor"],
+                horizontal=True,
+            )
+            min_matches = st.slider(
+                "Minimum de matchs par carte",
+                1,
+                30,
+                1,
+                step=1,
+                key="min_matches_maps",
+                on_change=_clear_min_matches_maps_auto,
+            )
+
+            if scope == "Moi (toutes les parties)":
+                base_scope = base
+            elif scope == "Avec Madina972":
+                match_ids = set(
+                    cached_same_team_match_ids_with_friend(
+                        db_path,
+                        xuid.strip(),
+                        "2533274858283686",
+                        db_key=db_key,
+                    )
+                )
+                base_scope = base.loc[base["match_id"].astype(str).isin(match_ids)].copy()
+            elif scope == "Avec Chocoboflor":
+                match_ids = set(
+                    cached_same_team_match_ids_with_friend(
+                        db_path,
+                        xuid.strip(),
+                        "2535469190789936",
+                        db_key=db_key,
+                    )
+                )
+                base_scope = base.loc[base["match_id"].astype(str).isin(match_ids)].copy()
+            else:
+                base_scope = dff
+
+            with st.spinner("Calcul des stats par carte…"):
+                breakdown = compute_map_breakdown(base_scope)
+                breakdown = breakdown.loc[breakdown["matches"] >= int(min_matches)].copy()
+
+            if breakdown.empty:
+                st.warning("Pas assez de matchs par map avec ces filtres.")
+            else:
+                metric = st.selectbox(
+                    "Métrique",
+                    options=[
+                        ("ratio_global", "Ratio Victoire/défaite"),
+                        ("win_rate", "Win rate"),
+                        ("accuracy_avg", "Précision moyenne"),
+                    ],
+                    format_func=lambda x: x[1],
+                )
+                key, label = metric
+
+                view = breakdown.head(20).iloc[::-1]
+                title = f"{label} par carte — {scope} (min {min_matches} matchs)"
+                if key == "ratio_global":
+                    fig = plot_map_ratio_with_winloss(view, title=title)
+                else:
+                    fig = plot_map_comparison(view, key, title=title)
+
+                if key in ("win_rate",):
+                    fig.update_xaxes(tickformat=".0%")
+                if key in ("accuracy_avg",):
+                    fig.update_xaxes(ticksuffix="%")
+
+                st.plotly_chart(fig, width="stretch")
+
+                tbl = breakdown.copy()
+                tbl["win_rate"] = (tbl["win_rate"] * 100).round(1)
+                tbl["loss_rate"] = (tbl["loss_rate"] * 100).round(1)
+                tbl["accuracy_avg"] = tbl["accuracy_avg"].round(2)
+                tbl["ratio_global"] = tbl["ratio_global"].round(2)
+
+                def _single_or_multi_label(series: pd.Series) -> str:
+                    try:
+                        vals = sorted({str(x).strip() for x in series.dropna().tolist() if str(x).strip()})
+                    except Exception:
+                        return "-"
+                    if len(vals) == 0:
+                        return "-"
+                    if len(vals) == 1:
+                        return vals[0]
+                    return "Plusieurs"
+
+                if "playlist_ui" in base_scope.columns:
+                    playlist_ctx = _single_or_multi_label(base_scope["playlist_ui"])
+                else:
+                    playlist_ctx = _single_or_multi_label(
+                        base_scope["playlist_name"].apply(_clean_asset_label).apply(translate_playlist_name)
+                    )
+
+                if "mode_ui" in base_scope.columns:
+                    mode_ctx = _single_or_multi_label(base_scope["mode_ui"])
+                else:
+                    mode_ctx = _single_or_multi_label(base_scope["pair_name"].apply(_normalize_mode_label))
+
+                tbl_disp = tbl.copy()
+                tbl_disp["playlist_ctx"] = playlist_ctx
+                tbl_disp["mode_ctx"] = mode_ctx
+                tbl_disp = tbl_disp.rename(
+                    columns={
+                        "map_name": "Carte",
+                        "matches": "Parties",
+                        "accuracy_avg": "Précision moy. (%)",
+                        "win_rate": "Taux victoire (%)",
+                        "loss_rate": "Taux défaite (%)",
+                        "ratio_global": "Ratio global",
+                        "playlist_ctx": "Playlist",
+                        "mode_ctx": "Mode",
+                    }
+                )
+                ordered_cols = [
+                    "Carte",
+                    "Playlist",
+                    "Mode",
+                    "Parties",
+                    "Précision moy. (%)",
+                    "Taux victoire (%)",
+                    "Taux défaite (%)",
+                    "Ratio global",
+                ]
+                tbl_disp = tbl_disp[[c for c in ordered_cols if c in tbl_disp.columns]]
+                st.dataframe(tbl_disp, width="stretch", hide_index=True)
+
             # (Le graphique "Net victoires/défaites" a été retiré :
             #  l'onglet se concentre sur le graphe Victoires au-dessus / Défaites en dessous.)
 
     # --------------------------------------------------------------------------
-    # Tab: Avec un joueur
+    # Tab: Mes coéquipiers (fusion)
     # --------------------------------------------------------------------------
-    with tab_friend:
-        pending_friend_raw = st.session_state.pop("_pending_friend_raw", None)
-        if isinstance(pending_friend_raw, str):
-            st.session_state["friend_raw"] = pending_friend_raw
-        pending_friend_pick_label = st.session_state.pop("_pending_friend_pick_label", None)
-        if isinstance(pending_friend_pick_label, str):
-            st.session_state["friend_pick_label"] = pending_friend_pick_label
+    with tab_teammates:
+        st.caption("Vue dédiée aux matchs joués avec tes coéquipiers (XUID rencontrés / alias).")
 
-        st.caption(
-            "La DB locale ne contient pas les gamertags, uniquement des PlayerId de type xuid(...). "
-            "Tu peux soit coller un XUID, soit sélectionner un XUID rencontré dans tes matchs."
-        )
-
-        quick = st.columns(2)
-        if quick[0].button("Madina97294", width="stretch"):
-            st.session_state["_pending_friend_raw"] = "2533274858283686"
-            st.session_state["_pending_friend_pick_label"] = "(aucun)"
-            st.rerun()
-        if quick[1].button("Chocoboflor", width="stretch"):
-            st.session_state["_pending_friend_raw"] = "2535469190789936"
-            st.session_state["_pending_friend_pick_label"] = "(aucun)"
-            st.rerun()
-
-        apply_current_filters_friend = st.toggle(
+        apply_current_filters_teammates = st.toggle(
             "Appliquer les filtres actuels (période/sessions + map/playlist)",
             value=True,
-            key="apply_current_filters_friend",
+            key="apply_current_filters_teammates",
         )
+        same_team_only_teammates = st.checkbox("Même équipe", value=True, key="teammates_same_team_only")
 
-        cols = st.columns([2, 2, 1])
-        with cols[0]:
-            friend_raw = st.text_input("Ami: XUID ou xuid(123)", value="", key="friend_raw")
-        with cols[1]:
-            opts_map = build_xuid_option_map(
-                cached_list_other_xuids(db_path, xuid.strip(), limit=500),
-                display_name_fn=display_name_from_xuid,
-            )
-            friend_pick_label = st.selectbox(
-                "Ou choisir un XUID vu",
-                options=["(aucun)"] + list(opts_map.keys()),
-                index=0,
-                key="friend_pick_label",
-            )
-        with cols[2]:
-            same_team_only = st.checkbox("Même équipe", value=True, key="friend_same_team_only")
-
-        friend_xuid = parse_xuid_input(friend_raw) or (
-            opts_map.get(friend_pick_label) if friend_pick_label != "(aucun)" else None
+        opts_map, default_labels = _build_friends_opts_map(db_path, xuid.strip(), db_key, aliases_key)
+        picked_labels = st.multiselect(
+            "Coéquipiers",
+            options=list(opts_map.keys()),
+            default=default_labels,
+            key="teammates_picked_labels",
         )
+        picked_xuids = [opts_map[lbl] for lbl in picked_labels if lbl in opts_map]
 
-        with st.spinner("Chargement des matchs avec ce joueur…"):
-            if friend_xuid is None:
-                st.info("Renseigne un XUID (numérique) ou choisis-en un.")
-            else:
+        if len(picked_xuids) < 1:
+            st.info("Sélectionne au moins un coéquipier.")
+        elif len(picked_xuids) == 1:
+            friend_xuid = picked_xuids[0]
+            with st.spinner("Chargement des matchs avec ce coéquipier…"):
                 dfr = cached_friend_matches_df(
                     db_path,
                     xuid.strip(),
                     friend_xuid,
-                    same_team_only=same_team_only,
+                    same_team_only=bool(same_team_only_teammates),
                     db_key=db_key,
                 )
                 if dfr.empty:
-                    st.warning("Aucun match trouvé avec ce joueur (selon le filtre).")
+                    st.warning("Aucun match trouvé avec ce coéquipier (selon le filtre).")
                 else:
                     outcome_map = {2: "Victoire", 3: "Défaite", 1: "Égalité", 4: "Non terminé"}
                     dfr["my_outcome_label"] = dfr["my_outcome"].map(outcome_map).fillna("?")
@@ -1348,7 +1706,7 @@ def main() -> None:
                             hide_index=True,
                         )
 
-                    base_for_friend = dff if apply_current_filters_friend else df
+                    base_for_friend = dff if apply_current_filters_teammates else df
                     shared_ids = set(dfr["match_id"].astype(str))
                     sub = base_for_friend.loc[base_for_friend["match_id"].astype(str).isin(shared_ids)].copy()
 
@@ -1383,7 +1741,7 @@ def main() -> None:
                             f"{stats_sub.assists_per_minute:.2f}" if stats_sub.assists_per_minute else "-",
                         )
 
-                        friend_df = load_df(db_path, friend_xuid)
+                        friend_df = load_df(db_path, friend_xuid, db_key=db_key)
                         friend_sub = friend_df.loc[friend_df["match_id"].astype(str).isin(shared_ids)].copy()
 
                         c1, c2 = st.columns(2)
@@ -1391,7 +1749,7 @@ def main() -> None:
                             st.plotly_chart(plot_timeseries(sub, title=f"{me_name} — matchs avec {name}"), width="stretch")
                         with c2:
                             if friend_sub.empty:
-                                st.warning("Impossible de charger les stats de l'ami sur les matchs partagés.")
+                                st.warning("Impossible de charger les stats du coéquipier sur les matchs partagés.")
                             else:
                                 st.plotly_chart(
                                     plot_timeseries(friend_sub, title=f"{name} — matchs avec {me_name}"),
@@ -1428,12 +1786,73 @@ def main() -> None:
                                     width="stretch",
                                 )
 
+                        # Avant-dernier: Folie meurtrière / Tirs à la tête (style barres + moyenne lissée) puis médailles.
+                        st.subheader("Folie meurtrière (max) & tirs à la tête")
+                        colors = HALO_COLORS.as_dict()
+                        s1, s2 = st.columns(2)
+                        with s1:
+                            st.caption(f"{me_name}")
+                            fig_spree_me = _plot_metric_bars_by_match(
+                                sub,
+                                metric_col="max_killing_spree",
+                                title="Folie meurtrière (max)",
+                                y_axis_title="Folie meurtrière (max)",
+                                hover_label="folie meurtrière",
+                                bar_color=colors["amber"],
+                                smooth_color=colors["green"],
+                                smooth_window=10,
+                            )
+                            if fig_spree_me is not None:
+                                st.plotly_chart(fig_spree_me, width="stretch")
+                            fig_hs_me = _plot_metric_bars_by_match(
+                                sub,
+                                metric_col="headshot_kills",
+                                title="Tirs à la tête",
+                                y_axis_title="Tirs à la tête",
+                                hover_label="tirs à la tête",
+                                bar_color=colors["red"],
+                                smooth_color=colors["green"],
+                                smooth_window=10,
+                            )
+                            if fig_hs_me is not None:
+                                st.plotly_chart(fig_hs_me, width="stretch")
+
+                        with s2:
+                            st.caption(f"{name}")
+                            if friend_sub.empty:
+                                st.info("Stats du coéquipier indisponibles pour ces matchs.")
+                            else:
+                                fig_spree_fr = _plot_metric_bars_by_match(
+                                    friend_sub,
+                                    metric_col="max_killing_spree",
+                                    title="Folie meurtrière (max)",
+                                    y_axis_title="Folie meurtrière (max)",
+                                    hover_label="folie meurtrière",
+                                    bar_color=colors["amber"],
+                                    smooth_color=colors["green"],
+                                    smooth_window=10,
+                                )
+                                if fig_spree_fr is not None:
+                                    st.plotly_chart(fig_spree_fr, width="stretch")
+                                fig_hs_fr = _plot_metric_bars_by_match(
+                                    friend_sub,
+                                    metric_col="headshot_kills",
+                                    title="Tirs à la tête",
+                                    y_axis_title="Tirs à la tête",
+                                    hover_label="tirs à la tête",
+                                    bar_color=colors["red"],
+                                    smooth_color=colors["green"],
+                                    smooth_window=10,
+                                )
+                                if fig_hs_fr is not None:
+                                    st.plotly_chart(fig_hs_fr, width="stretch")
+
                         st.subheader("Médailles (matchs partagés)")
                         shared_list = sorted({str(x) for x in shared_ids if str(x).strip()})
                         if not shared_list:
                             st.info("Aucun match partagé pour calculer les médailles.")
                         else:
-                            with st.spinner("Agrégation des médailles (moi + ami)…"):
+                            with st.spinner("Agrégation des médailles (moi + coéquipier)…"):
                                 my_top = _top_medals(db_path, xuid.strip(), shared_list, top_n=12, db_key=db_key)
                                 fr_top = _top_medals(db_path, friend_xuid, shared_list, top_n=12, db_key=db_key)
 
@@ -1450,34 +1869,9 @@ def main() -> None:
                                     [{"name_id": int(n), "count": int(c)} for n, c in (fr_top or [])],
                                     cols_per_row=6,
                                 )
-
-    # --------------------------------------------------------------------------
-    # Tab: Avec mes amis
-    # --------------------------------------------------------------------------
-    with tab_friends:
-        st.caption("Vue dédiée aux matchs joués avec tes amis (définis via alias XUID).")
-        apply_current_filters = st.toggle(
-            "Appliquer les filtres actuels (période/sessions + map/playlist)",
-            value=True,
-            key="apply_current_filters_friends",
-        )
-        opts_map, default_labels = _build_friends_opts_map(db_path, xuid.strip(), db_key, aliases_key)
-        picked_labels = st.multiselect(
-            "Coéquipiers",
-            options=list(opts_map.keys()),
-            default=default_labels,
-            key="friends_picked_labels",
-        )
-        picked_xuids = [opts_map[lbl] for lbl in picked_labels if lbl in opts_map]
-        # Forcé: les stats "avec mes amis" n'ont de sens que si vous êtes dans la même équipe.
-        same_team_only_friends = True
-
-        if len(picked_xuids) < 1:
-            st.info("Sélectionne au moins un coéquipier.")
         else:
-            # Agrégation sur tous les coéquipiers
-            st.subheader("Par carte — avec mes amis")
-            with st.spinner("Calcul du ratio par carte (amis)…"):
+            st.subheader("Par carte — avec mes coéquipiers")
+            with st.spinner("Calcul du ratio par carte (coéquipiers)…"):
                 current_mode = st.session_state.get("filter_mode")
                 latest_session_label = st.session_state.get("_latest_session_label")
                 trio_latest_label = st.session_state.get("_trio_latest_session_label")
@@ -1491,7 +1885,6 @@ def main() -> None:
 
                 if is_last_session or is_last_trio_session:
                     last_applied = st.session_state.get("_friends_min_matches_last_session_label")
-                    # Ne force que lors de l'entrée sur une nouvelle "dernière session".
                     if last_applied != selected_session:
                         st.session_state["min_matches_maps_friends"] = 1
                         st.session_state["_min_matches_maps_friends_auto"] = True
@@ -1507,31 +1900,160 @@ def main() -> None:
                     on_change=_clear_min_matches_maps_friends_auto,
                 )
 
-                base_for_friends_all = dff if apply_current_filters else df
+                base_for_friends_all = dff if apply_current_filters_teammates else df
                 all_match_ids: set[str] = set()
+                per_friend_ids: dict[str, set[str]] = {}
                 for fx in picked_xuids:
-                    if same_team_only_friends:
-                        all_match_ids.update(
-                            cached_same_team_match_ids_with_friend(db_path, xuid.strip(), fx, db_key=db_key)
-                        )
+                    ids: set[str] = set()
+                    if bool(same_team_only_teammates):
+                        ids = {str(x) for x in cached_same_team_match_ids_with_friend(db_path, xuid.strip(), fx, db_key=db_key)}
                     else:
                         rows = cached_query_matches_with_friend(db_path, xuid.strip(), fx, db_key=db_key)
-                        for r in rows:
-                            all_match_ids.add(str(r.match_id))
+                        ids = {str(r.match_id) for r in rows}
+                    per_friend_ids[str(fx)] = ids
+                    all_match_ids.update(ids)
 
                 sub_all = base_for_friends_all.loc[
                     base_for_friends_all["match_id"].astype(str).isin(all_match_ids)
                 ].copy()
 
+                # Graphes demandés: style identique (barres + moyenne lissée), un sous-onglet par coéquipier.
+                st.subheader("Folie meurtrière (max) & tirs à la tête")
+                colors = HALO_COLORS.as_dict()
+                tab_labels = [display_name_from_xuid(fx) for fx in picked_xuids]
+                max_tabs = 8
+                if len(tab_labels) > max_tabs:
+                    st.warning(f"Beaucoup de coéquipiers sélectionnés : affichage limité aux {max_tabs} premiers pour garder l'UI lisible.")
+                use_xuids = picked_xuids[:max_tabs]
+                use_tabs = tab_labels[:max_tabs]
+                friend_tabs = st.tabs(use_tabs)
+                for tab_obj, fx in zip(friend_tabs, use_xuids):
+                    with tab_obj:
+                        ids = per_friend_ids.get(str(fx), set())
+                        sub_fx = base_for_friends_all.loc[
+                            base_for_friends_all["match_id"].astype(str).isin(ids)
+                        ].copy()
+                        g1, g2 = st.columns(2)
+                        with g1:
+                            fig_spree = _plot_metric_bars_by_match(
+                                sub_fx,
+                                metric_col="max_killing_spree",
+                                title="Folie meurtrière (max)",
+                                y_axis_title="Folie meurtrière (max)",
+                                hover_label="folie meurtrière",
+                                bar_color=colors["amber"],
+                                smooth_color=colors["green"],
+                                smooth_window=10,
+                            )
+                            if fig_spree is None:
+                                st.info("Aucune donnée de folie meurtrière (max) sur ces matchs.")
+                            else:
+                                st.plotly_chart(fig_spree, width="stretch")
+
+                        with g2:
+                            fig_hs = _plot_metric_bars_by_match(
+                                sub_fx,
+                                metric_col="headshot_kills",
+                                title="Tirs à la tête",
+                                y_axis_title="Tirs à la tête",
+                                hover_label="tirs à la tête",
+                                bar_color=colors["red"],
+                                smooth_color=colors["green"],
+                                smooth_window=10,
+                            )
+                            if fig_hs is None:
+                                st.info("Aucune donnée de tirs à la tête sur ces matchs.")
+                            else:
+                                st.plotly_chart(fig_hs, width="stretch")
+
                 breakdown_all = compute_map_breakdown(sub_all)
                 breakdown_all = breakdown_all.loc[breakdown_all["matches"] >= int(min_matches_maps_friends)].copy()
-                
+
                 if breakdown_all.empty:
-                    st.info("Pas assez de matchs avec tes amis (selon le filtre actuel).")
+                    st.info("Pas assez de matchs avec tes coéquipiers (selon le filtre actuel).")
                 else:
                     view_all = breakdown_all.head(20).iloc[::-1]
-                    title = f"Ratio global par carte — avec mes amis (min {min_matches_maps_friends} matchs)"
+                    title = f"Ratio global par carte — avec mes coéquipiers (min {min_matches_maps_friends} matchs)"
                     st.plotly_chart(plot_map_ratio_with_winloss(view_all, title=title), width="stretch")
+
+                st.subheader("Historique — matchs avec mes coéquipiers")
+                if sub_all.empty:
+                    st.info("Aucun match trouvé avec tes coéquipiers (selon le filtre actuel).")
+                else:
+                    friends_table = sub_all.copy()
+                    friends_table["start_time_fr"] = friends_table["start_time"].apply(_format_datetime_fr_hm)
+                    if "playlist_fr" not in friends_table.columns:
+                        friends_table["playlist_fr"] = friends_table["playlist_name"].apply(translate_playlist_name)
+                    if "mode_ui" in friends_table.columns:
+                        friends_table["mode"] = friends_table["mode_ui"].apply(
+                            lambda x: x if (x is not None and str(x).strip()) else None
+                        )
+                    else:
+                        friends_table["mode"] = None
+                    if friends_table["mode"].isna().any() and "pair_name" in friends_table.columns:
+                        mask = friends_table["mode"].isna()
+                        friends_table.loc[mask, "mode"] = friends_table.loc[mask, "pair_name"].apply(
+                            lambda p: _normalize_mode_label(str(p) if p is not None else None)
+                        )
+                    friends_table["mode"] = friends_table["mode"].fillna("-")
+                    friends_table["outcome_label"] = friends_table["outcome"].map({2: "Victoire", 3: "Défaite", 1: "Égalité", 4: "Non terminé"}).fillna("-")
+                    friends_table["score"] = friends_table.apply(
+                        lambda r: _format_score_label(r.get("my_team_score"), r.get("enemy_team_score")), axis=1
+                    )
+                    wp = str(waypoint_player or "").strip()
+                    if wp:
+                        friends_table["match_url"] = (
+                            "https://www.halowaypoint.com/halo-infinite/players/"
+                            + wp
+                            + "/matches/"
+                            + friends_table["match_id"].astype(str)
+                        )
+                    else:
+                        friends_table["match_url"] = ""
+
+                    friends_show = [
+                        "match_url",
+                        "start_time_fr",
+                        "map_name",
+                        "playlist_fr",
+                        "mode",
+                        "outcome_label",
+                        "score",
+                        "kda",
+                        "kills",
+                        "deaths",
+                        "assists",
+                        "accuracy",
+                    ]
+                    friends_view = (
+                        friends_table.sort_values("start_time", ascending=False)[friends_show]
+                        .reset_index(drop=True)
+                    )
+                    friends_styled = (
+                        friends_view.style
+                        .map(_style_outcome_text, subset=["outcome_label"])
+                        .map(_style_score_label, subset=["score"])
+                        .map(_style_signed_number, subset=["kda"])
+                    )
+                    st.dataframe(
+                        friends_styled,
+                        width="stretch",
+                        hide_index=True,
+                        column_config={
+                            "match_url": st.column_config.LinkColumn("HaloWaypoint", display_text="Ouvrir"),
+                            "start_time_fr": st.column_config.TextColumn("Date"),
+                            "map_name": st.column_config.TextColumn("Carte"),
+                            "playlist_fr": st.column_config.TextColumn("Playlist"),
+                            "mode": st.column_config.TextColumn("Mode"),
+                            "outcome_label": st.column_config.TextColumn("Résultat"),
+                            "score": st.column_config.TextColumn("Score"),
+                            "kda": st.column_config.NumberColumn("FDA", format="%.2f"),
+                            "kills": st.column_config.NumberColumn("Frags"),
+                            "deaths": st.column_config.NumberColumn("Morts"),
+                            "assists": st.column_config.NumberColumn("Assistances"),
+                            "accuracy": st.column_config.NumberColumn("Précision (%)", format="%.2f"),
+                        },
+                    )
 
             # Vue trio (moi + 2 coéquipiers) : uniquement si on a au moins deux personnes.
             if len(picked_xuids) >= 2:
@@ -1548,7 +2070,7 @@ def main() -> None:
                 )
                 trio_ids = ids_m & ids_c
 
-                base_for_trio = dff if apply_current_filters else df
+                base_for_trio = dff if apply_current_filters_teammates else df
                 trio_ids = trio_ids & set(base_for_trio["match_id"].astype(str))
 
                 if not trio_ids:
@@ -1714,105 +2236,6 @@ def main() -> None:
 
 
     # --------------------------------------------------------------------------
-    # Tab: Ratio par cartes
-    # --------------------------------------------------------------------------
-    with tab_maps:
-        st.caption("Compare tes performances par map.")
-
-        scope = st.radio(
-            "Scope",
-            options=["Moi (filtres actuels)", "Moi (toutes les parties)", "Avec Madina972", "Avec Chocoboflor"],
-            horizontal=True,
-        )
-        min_matches = st.slider(
-            "Minimum de matchs par carte",
-            1,
-            30,
-            1,
-            step=1,
-            key="min_matches_maps",
-            on_change=_clear_min_matches_maps_auto,
-        )
-
-        if scope == "Moi (toutes les parties)":
-            base_scope = base
-        elif scope == "Avec Madina972":
-            match_ids = set(
-                cached_same_team_match_ids_with_friend(
-                    db_path,
-                    xuid.strip(),
-                    "2533274858283686",
-                    db_key=db_key,
-                )
-            )
-            base_scope = base.loc[base["match_id"].astype(str).isin(match_ids)].copy()
-        elif scope == "Avec Chocoboflor":
-            match_ids = set(
-                cached_same_team_match_ids_with_friend(
-                    db_path,
-                    xuid.strip(),
-                    "2535469190789936",
-                    db_key=db_key,
-                )
-            )
-            base_scope = base.loc[base["match_id"].astype(str).isin(match_ids)].copy()
-        else:
-            base_scope = dff
-
-        with st.spinner("Calcul des stats par carte…"):
-            breakdown = compute_map_breakdown(base_scope)
-            breakdown = breakdown.loc[breakdown["matches"] >= int(min_matches)].copy()
-
-        if breakdown.empty:
-            st.warning("Pas assez de matchs par map avec ces filtres.")
-        else:
-            metric = st.selectbox(
-                "Métrique",
-                options=[
-                    ("ratio_global", "Ratio Victoire/défaite"),
-                    ("win_rate", "Win rate"),
-                    ("accuracy_avg", "Précision moyenne"),
-                ],
-                format_func=lambda x: x[1],
-            )
-            key, label = metric
-
-            view = breakdown.head(20).iloc[::-1]
-            title = f"{label} par carte — {scope} (min {min_matches} matchs)"
-            if key == "ratio_global":
-                fig = plot_map_ratio_with_winloss(view, title=title)
-            else:
-                fig = plot_map_comparison(view, key, title=title)
-
-            if key in ("win_rate",):
-                fig.update_xaxes(tickformat=".0%")
-            if key in ("accuracy_avg",):
-                fig.update_xaxes(ticksuffix="%")
-
-            st.plotly_chart(fig, width="stretch")
-
-            tbl = breakdown.copy()
-            tbl["win_rate"] = (tbl["win_rate"] * 100).round(1)
-            tbl["loss_rate"] = (tbl["loss_rate"] * 100).round(1)
-            tbl["accuracy_avg"] = tbl["accuracy_avg"].round(2)
-            tbl["ratio_global"] = tbl["ratio_global"].round(2)
-
-            st.dataframe(
-                tbl.rename(
-                    columns={
-                        "map_name": "Carte",
-                        "matches": "Parties",
-                        "accuracy_avg": "Précision moy. (%)",
-                        "win_rate": "Taux victoire (%)",
-                        "loss_rate": "Taux défaite (%)",
-                        "ratio_global": "Ratio global",
-                    }
-                ),
-                width="stretch",
-                hide_index=True,
-            )
-
-    # --------------------------------------------------------------------------
     # Tab: Historique des parties
     # --------------------------------------------------------------------------
     with tab_table:
@@ -1820,6 +2243,8 @@ def main() -> None:
         dff_table = dff.copy()
         if "playlist_fr" not in dff_table.columns:
             dff_table["playlist_fr"] = dff_table["playlist_name"].apply(translate_playlist_name)
+        if "mode_ui" not in dff_table.columns:
+            dff_table["mode_ui"] = dff_table["pair_name"].apply(_normalize_mode_label)
         dff_table["match_url"] = (
             "https://www.halowaypoint.com/halo-infinite/players/"
             + waypoint_player.strip()
@@ -1830,37 +2255,25 @@ def main() -> None:
         outcome_map = {2: "Victoire", 3: "Défaite", 1: "Égalité", 4: "Non terminé"}
         dff_table["outcome_label"] = dff_table["outcome"].map(outcome_map).fillna("-")
 
+        dff_table["score"] = dff_table.apply(
+            lambda r: _format_score_label(r.get("my_team_score"), r.get("enemy_team_score")), axis=1
+        )
+
         dff_table["average_life_mmss"] = dff_table["average_life_seconds"].apply(lambda x: format_mmss(x))
 
         show_cols = [
-            "match_url", "start_time", "map_name", "playlist_fr", "outcome_label",
+            "match_url", "start_time", "map_name", "playlist_fr", "mode_ui", "outcome_label", "score",
             "kda", "kills", "deaths", "max_killing_spree", "headshot_kills",
             "average_life_mmss", "assists", "accuracy", "ratio",
         ]
         table = dff_table[show_cols].sort_values("start_time", ascending=False).reset_index(drop=True)
 
-        def _style_outcome(v: str) -> str:
-            s = (v or "").strip().lower()
-            if s == "victoire":
-                return "color: #1B5E20; font-weight: 700;"
-            if s in ("défaite", "defaite"):
-                return "color: #B71C1C; font-weight: 700;"
-            if s in ("égalité", "egalite", "non terminé", "non termine"):
-                return "color: #8E6CFF; font-weight: 700;"
-            return ""
-
-        def _style_kda(v) -> str:
-            try:
-                x = float(v)
-            except Exception:
-                return ""
-            if x > 0:
-                return "color: #1B5E20; font-weight: 700;"
-            if x < 0:
-                return "color: #B71C1C; font-weight: 700;"
-            return "color: #424242;"
-
-        styled = table.style.map(_style_outcome, subset=["outcome_label"]).map(_style_kda, subset=["kda"])
+        styled = (
+            table.style
+            .map(_style_outcome_text, subset=["outcome_label"])
+            .map(_style_score_label, subset=["score"])
+            .map(_style_signed_number, subset=["kda"])
+        )
 
         st.dataframe(
             styled,
@@ -1873,7 +2286,9 @@ def main() -> None:
                 ),
                 "map_name": st.column_config.TextColumn("Carte"),
                 "playlist_fr": st.column_config.TextColumn("Playlist"),
+                "mode_ui": st.column_config.TextColumn("Mode"),
                 "outcome_label": st.column_config.TextColumn("Résultat"),
+                "score": st.column_config.TextColumn("Score"),
                 "kda": st.column_config.NumberColumn("FDA", format="%.2f"),
                 "kills": st.column_config.NumberColumn("Frags"),
                 "deaths": st.column_config.NumberColumn("Morts"),

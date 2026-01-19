@@ -54,6 +54,10 @@ class MatchRow:
     game_variant_id: Optional[str] = None
     game_variant_name: Optional[str] = None
 
+    # Scores d'équipe (si applicable). Pour FFA / modes sans score, reste à None.
+    my_team_score: Optional[int] = None
+    enemy_team_score: Optional[int] = None
+
     @property
     def ratio(self) -> float:
         """Calcule le ratio (Frags + assists/2) / morts.

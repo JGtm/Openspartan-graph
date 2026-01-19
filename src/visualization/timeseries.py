@@ -424,7 +424,7 @@ def plot_average_life(df: pd.DataFrame, title: str = "Durée de vie moyenne") ->
 
 
 def plot_spree_headshots_accuracy(df: pd.DataFrame) -> go.Figure:
-    """Graphique combiné: Spree, Headshots et Précision.
+    """Graphique combiné: Spree, Tirs à la tête et Précision.
     
     Args:
         df: DataFrame avec colonnes max_killing_spree, headshot_kills, accuracy.
@@ -463,13 +463,13 @@ def plot_spree_headshots_accuracy(df: pd.DataFrame) -> go.Figure:
         go.Bar(
             x=x_idx,
             y=d["headshot_kills"],
-            name="Headshots",
+            name="Tirs à la tête",
             marker_color=colors["red"],
             opacity=0.70,
             alignmentgroup="spree_hs",
             offsetgroup="headshots",
             width=0.42,
-            hovertemplate="headshots=%{y}<extra></extra>",
+            hovertemplate="tirs à la tête=%{y}<extra></extra>",
         ),
         secondary_y=False,
     )
@@ -505,7 +505,7 @@ def plot_spree_headshots_accuracy(df: pd.DataFrame) -> go.Figure:
         bargroupgap=0.06,
     )
 
-    fig.update_yaxes(title_text="Spree / Headshots", rangemode="tozero", secondary_y=False)
+    fig.update_yaxes(title_text="Spree / Tirs à la tête", rangemode="tozero", secondary_y=False)
     fig.update_yaxes(title_text="Précision (%)", ticksuffix="%", rangemode="tozero", secondary_y=True)
     
     return apply_halo_plot_style(fig, height=420)
