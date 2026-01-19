@@ -26,12 +26,13 @@ def apply_halo_plot_style(
     """
     fig.update_layout(
         template="plotly_dark",
-        paper_bgcolor="rgba(0,0,0,1)",
-        plot_bgcolor="rgba(0,0,0,1)",
-        font=dict(color="rgba(255,255,255,0.90)", size=13),
+        # Fond opaque, cohérent avec le thème global (dark navy)
+        paper_bgcolor="rgba(7,11,16,1)",
+        plot_bgcolor="rgba(7,11,16,1)",
+        font=dict(color="rgba(245,248,255,0.90)", size=13),
         hoverlabel=dict(
-            bgcolor="rgba(10,16,32,0.92)",
-            bordercolor="rgba(255,255,255,0.18)",
+            bgcolor="rgba(12,16,22,0.96)",
+            bordercolor="rgba(255,255,255,0.16)",
         ),
     )
     
@@ -42,17 +43,17 @@ def apply_halo_plot_style(
 
     fig.update_xaxes(
         showgrid=True,
-        gridcolor="rgba(255,255,255,0.06)",
+        gridcolor="rgba(255,255,255,0.07)",
         zeroline=False,
         showline=True,
-        linecolor="rgba(255,255,255,0.10)",
+        linecolor="rgba(255,255,255,0.12)",
     )
     fig.update_yaxes(
         showgrid=True,
-        gridcolor="rgba(255,255,255,0.06)",
+        gridcolor="rgba(255,255,255,0.07)",
         zeroline=False,
         showline=True,
-        linecolor="rgba(255,255,255,0.10)",
+        linecolor="rgba(255,255,255,0.12)",
     )
     
     return fig

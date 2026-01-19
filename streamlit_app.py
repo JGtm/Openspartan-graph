@@ -117,6 +117,94 @@ def _normalize_mode_label(pair_name: str | None) -> str | None:
     return s or None
 
 
+def _format_duration_hms(seconds: float | int | None) -> str:
+    if seconds is None or seconds != seconds:
+        return "-"
+    try:
+        total = int(round(float(seconds)))
+    except Exception:
+        return "-"
+    if total < 0:
+        return "-"
+    h, rem = divmod(total, 3600)
+    m, s = divmod(rem, 60)
+    if h > 0:
+        return f"{h:d}:{m:02d}:{s:02d}"
+    return f"{m:d}:{s:02d}"
+
+
+def _compute_session_span_seconds(df_: pd.DataFrame) -> float | None:
+    if df_ is None or df_.empty or "start_time" not in df_.columns:
+        return None
+    starts = pd.to_datetime(df_["start_time"], errors="coerce")
+    if starts.dropna().empty:
+        return None
+    t0 = starts.min()
+    if "time_played_seconds" in df_.columns:
+        durations = pd.to_numeric(df_["time_played_seconds"], errors="coerce")
+        ends = starts + pd.to_timedelta(durations.fillna(0), unit="s")
+    else:
+        ends = starts
+    t1 = ends.max()
+    if pd.isna(t0) or pd.isna(t1):
+        return None
+    return float((t1 - t0).total_seconds())
+
+
+def _avg_match_duration_seconds(df_: pd.DataFrame) -> float | None:
+    if df_ is None or df_.empty or "time_played_seconds" not in df_.columns:
+        return None
+    s = pd.to_numeric(df_["time_played_seconds"], errors="coerce").dropna()
+    if s.empty:
+        return None
+    return float(s.mean())
+
+
+def _render_kpi_cards(cards: list[tuple[str, str]], *, dense: bool = True) -> None:
+    if not cards:
+        return
+    grid_class = "os-kpi-grid os-kpi-grid--dense" if dense else "os-kpi-grid"
+    items = "".join(
+        f"<div class='os-kpi'><div class='os-kpi__label'>{label}</div><div class='os-kpi__value'>{value}</div></div>"
+        for (label, value) in cards
+    )
+    st.markdown(f"<div class='{grid_class}'>{items}</div>", unsafe_allow_html=True)
+
+
+def _render_top_summary(total_matches: int, rates) -> None:
+    if total_matches <= 0:
+        st.markdown(
+            "<div class='os-top-summary'>"
+            "  <div class='os-top-summary__empty'>Aucun match sélectionné</div>"
+            "</div>",
+            unsafe_allow_html=True,
+        )
+        return
+
+    wins = int(getattr(rates, "wins", 0) or 0)
+    losses = int(getattr(rates, "losses", 0) or 0)
+    ties = int(getattr(rates, "ties", 0) or 0)
+    no_finish = int(getattr(rates, "no_finish", 0) or 0)
+
+    st.markdown(
+        "<div class='os-top-summary'>"
+        "  <div class='os-top-summary__row'>"
+        "    <div class='os-top-summary__left'>"
+        "      <div class='os-top-summary__kicker'>Parties sélectionnées</div>"
+        f"      <div class='os-top-summary__count'>{total_matches}</div>"
+        "    </div>"
+        "    <div class='os-top-summary__chips'>"
+        f"      <div class='os-top-chip os-top-chip--win'><span class='os-top-chip__label'>Victoires</span><span class='os-top-chip__value'>{wins}</span></div>"
+        f"      <div class='os-top-chip os-top-chip--loss'><span class='os-top-chip__label'>Défaites</span><span class='os-top-chip__value'>{losses}</span></div>"
+        f"      <div class='os-top-chip os-top-chip--tie'><span class='os-top-chip__label'>Égalités</span><span class='os-top-chip__value'>{ties}</span></div>"
+        f"      <div class='os-top-chip os-top-chip--nf'><span class='os-top-chip__label'>Non terminés</span><span class='os-top-chip__value'>{no_finish}</span></div>"
+        "    </div>"
+        "  </div>"
+        "</div>",
+        unsafe_allow_html=True,
+    )
+
+
 def _normalize_map_label(map_name: str | None) -> str | None:
     base = _clean_asset_label(map_name)
     if base is None:
@@ -233,7 +321,6 @@ def main() -> None:
 
     # Charge et applique le CSS
     st.markdown(load_css(), unsafe_allow_html=True)
-    st.markdown(get_hero_html(), unsafe_allow_html=True)
 
     # ==========================================================================
     # Sidebar - Configuration
@@ -242,6 +329,8 @@ def main() -> None:
     DEFAULT_DB = get_default_db_path()
     
     with st.sidebar:
+        st.markdown("<div class='os-sidebar-brand'>OpenSpartan Graphs</div>", unsafe_allow_html=True)
+        st.markdown("<div class='os-sidebar-divider'></div>", unsafe_allow_html=True)
         with st.expander("Source", expanded=False):
             # --- Multi-DB / Profils ---
             profiles = load_profiles()
@@ -745,31 +834,64 @@ def main() -> None:
     global_ratio = compute_global_ratio(dff)
     avg_life = dff["average_life_seconds"].dropna().mean() if not dff.empty else None
 
+    # ------------------------------------------------------------------
+    # Bandeau résumé (en haut du site)
+    # ------------------------------------------------------------------
+    _render_top_summary(len(dff), rates)
+
+    avg_match_seconds = _avg_match_duration_seconds(dff)
+    span_seconds = _compute_session_span_seconds(dff)
+    avg_match_txt = _format_duration_hms(avg_match_seconds)
+    span_txt = _format_duration_hms(span_seconds)
+    st.markdown(
+        "<div class='os-top-kpis'>"
+        "  <div class='os-top-kpi'>"
+        "    <div class='os-top-kpi__label'>Durée moyenne / match</div>"
+        f"    <div class='os-top-kpi__value'>{avg_match_txt}</div>"
+        "  </div>"
+        "  <div class='os-top-kpi'>"
+        "    <div class='os-top-kpi__label'>Durée totale</div>"
+        f"    <div class='os-top-kpi__value'>{span_txt}</div>"
+        "  </div>"
+        "</div>",
+        unsafe_allow_html=True,
+    )
+
     # Moyennes par partie
     kpg = dff["kills"].mean() if not dff.empty else None
     dpg = dff["deaths"].mean() if not dff.empty else None
     apg = dff["assists"].mean() if not dff.empty else None
 
-    avg_row = st.columns(3)
-    avg_row[0].metric("Frags par partie", f"{kpg:.2f}" if (kpg is not None and pd.notna(kpg)) else "-")
-    avg_row[1].metric("Morts par partie", f"{dpg:.2f}" if (dpg is not None and pd.notna(dpg)) else "-")
-    avg_row[2].metric("Assistances par partie", f"{apg:.2f}" if (apg is not None and pd.notna(apg)) else "-")
+    _render_kpi_cards(
+        [
+            ("Frags par partie", f"{kpg:.2f}" if (kpg is not None and pd.notna(kpg)) else "-"),
+            ("Morts par partie", f"{dpg:.2f}" if (dpg is not None and pd.notna(dpg)) else "-"),
+            ("Assistances par partie", f"{apg:.2f}" if (apg is not None and pd.notna(apg)) else "-"),
+        ]
+    )
 
     # Stats par minute
     stats = compute_aggregated_stats(dff)
-    per_min_row = st.columns(3)
-    per_min_row[0].metric("Frags / min", f"{stats.kills_per_minute:.2f}" if stats.kills_per_minute else "-")
-    per_min_row[1].metric("Morts / min", f"{stats.deaths_per_minute:.2f}" if stats.deaths_per_minute else "-")
-    per_min_row[2].metric("Assistances / min", f"{stats.assists_per_minute:.2f}" if stats.assists_per_minute else "-")
 
-    kpi = st.columns(5)
-    kpi[0].metric("Précision moyenne", f"{avg_acc:.2f}%" if avg_acc is not None else "-")
-    kpi[1].metric("Taux de victoire", f"{win_rate*100:.1f}%" if rates.total else "-")
-    kpi[2].metric("Taux de défaite", f"{loss_rate*100:.1f}%" if rates.total else "-")
-    kpi[3].metric("Ratio global", f"{global_ratio:.2f}" if global_ratio is not None else "-")
-    kpi[4].metric("Durée de vie moyenne", format_mmss(avg_life))
+    _render_kpi_cards(
+        [
+            ("Frags / min", f"{stats.kills_per_minute:.2f}" if stats.kills_per_minute else "-"),
+            ("Morts / min", f"{stats.deaths_per_minute:.2f}" if stats.deaths_per_minute else "-"),
+            ("Assistances / min", f"{stats.assists_per_minute:.2f}" if stats.assists_per_minute else "-"),
+        ]
+    )
 
-    st.info(format_selected_matches_summary(len(dff), rates))
+    _render_kpi_cards(
+        [
+            ("Précision moyenne", f"{avg_acc:.2f}%" if avg_acc is not None else "-"),
+            ("Taux de victoire", f"{win_rate*100:.1f}%" if rates.total else "-"),
+            ("Taux de défaite", f"{loss_rate*100:.1f}%" if rates.total else "-"),
+            ("Ratio global", f"{global_ratio:.2f}" if global_ratio is not None else "-"),
+            ("Durée de vie moyenne", format_mmss(avg_life)),
+        ]
+    )
+
+    # (Résumé déplacé en haut du site)
 
     # ==========================================================================
     # Onglets
@@ -827,12 +949,12 @@ def main() -> None:
                 if (last_mode_ui or last_pair_fr or last_pair or last_mode)
                 else "-",
             )
-
-            st.caption(f"MatchId: {last_match_id}")
             wp = str(waypoint_player or "").strip()
             if wp and last_match_id and last_match_id.strip() and last_match_id.strip() != "-":
                 match_url = f"https://www.halowaypoint.com/halo-infinite/players/{wp}/matches/{last_match_id.strip()}"
-                st.link_button("Ouvrir sur HaloWaypoint", match_url, width="stretch")
+                b1, _ = st.columns([1, 5])
+                with b1:
+                    st.link_button("Ouvrir sur HaloWaypoint", match_url)
 
             with st.spinner("Lecture des stats détaillées (attendu vs réel, médailles)…"):
                 pm = load_player_match_result(db_path, last_match_id, xuid.strip())
@@ -859,8 +981,7 @@ def main() -> None:
 
             st.markdown(
                 "<div style='line-height:1.15'>"
-                "<div style='font-size:0.9rem; opacity:0.85'>Résultat</div>"
-                f"<div style='font-size:1.7rem; font-weight:800; color:{c}'>"
+                f"<div style='font-size:2.2rem; font-weight:900; color:{c}'>"
                 f"{outcome_label}"
                 "</div>"
                 "</div>",
@@ -882,22 +1003,11 @@ def main() -> None:
                 if delta_mmr is None:
                     mmr_cols[2].metric("Écart MMR (équipe - adverse)", "-")
                 else:
-                    colors = HALO_COLORS.as_dict()
-                    if abs(float(delta_mmr)) < 1e-9:
-                        c = colors["violet"]
-                    elif float(delta_mmr) > 0:
-                        c = colors["green"]
-                    else:
-                        c = colors["red"]
-
-                    mmr_cols[2].markdown(
-                        "<div style='line-height:1.15'>"
-                        "<div style='font-size:0.9rem; opacity:0.85'>Écart MMR (équipe - adverse)</div>"
-                        f"<div style='font-size:1.7rem; font-weight:700; color:{c}'>"
-                        f"{float(delta_mmr):+.1f}"
-                        "</div>"
-                        "</div>",
-                        unsafe_allow_html=True,
+                    mmr_cols[2].metric(
+                        "Écart MMR (équipe - adverse)",
+                        "-",
+                        f"{float(delta_mmr):+.1f}",
+                        delta_color="normal",
                     )
 
                 # Attendu vs réel (K / D) + ratios (match uniquement)
@@ -1390,6 +1500,7 @@ def main() -> None:
                 sub_all = base_for_friends_all.loc[
                     base_for_friends_all["match_id"].astype(str).isin(all_match_ids)
                 ].copy()
+
                 breakdown_all = compute_map_breakdown(sub_all)
                 breakdown_all = breakdown_all.loc[breakdown_all["matches"] >= int(min_matches_maps_friends)].copy()
                 
@@ -1405,7 +1516,7 @@ def main() -> None:
                 f1_xuid, f2_xuid = picked_xuids[0], picked_xuids[1]
                 f1_name = display_name_from_xuid(f1_xuid)
                 f2_name = display_name_from_xuid(f2_xuid)
-                st.subheader(f"Tous les trois (même équipe) — {f1_name} + {f2_name}")
+                st.subheader(f"Tous les trois — {f1_name} + {f2_name}")
 
                 rows_m = query_matches_with_friend(db_path, xuid.strip(), f1_xuid)
                 rows_c = query_matches_with_friend(db_path, xuid.strip(), f2_xuid)
@@ -1440,7 +1551,7 @@ def main() -> None:
 
                     st.session_state["_trio_latest_session_label"] = latest_label
                     if latest_label:
-                        st.caption(f"Dernière session trio détectée : {latest_label} (gap {gm} min). Bouton dans la sidebar.")
+                        st.caption(f"Dernière session trio détectée : {latest_label} (gap {gm} min).")
                     else:
                         st.caption("Impossible de déterminer une session trio (données insuffisantes).")
 
@@ -1480,7 +1591,7 @@ def main() -> None:
                             },
                         ]
                     )
-                    st.subheader("Stats/min (tous les trois)")
+                    st.subheader("Stats par minute")
                     st.dataframe(trio_per_min, width="stretch", hide_index=True)
 
                     f1_df = f1_df[["match_id", "kills", "deaths", "assists", "accuracy", "ratio", "average_life_seconds"]].copy()
@@ -1519,36 +1630,36 @@ def main() -> None:
 
                         names = (me_name, f1_name, f2_name)
                         st.plotly_chart(
-                            plot_trio_metric(d_self, d_f1, d_f2, metric="kills", names=names, title="Frags (tous les trois)", y_title="Frags"),
+                            plot_trio_metric(d_self, d_f1, d_f2, metric="kills", names=names, title="Frags", y_title="Frags"),
                             width="stretch",
                         )
                         st.plotly_chart(
-                            plot_trio_metric(d_self, d_f1, d_f2, metric="deaths", names=names, title="Morts (tous les trois)", y_title="Morts"),
+                            plot_trio_metric(d_self, d_f1, d_f2, metric="deaths", names=names, title="Morts", y_title="Morts"),
                             width="stretch",
                         )
                         st.plotly_chart(
-                            plot_trio_metric(d_self, d_f1, d_f2, metric="assists", names=names, title="Assistances (tous les trois)", y_title="Assists"),
+                            plot_trio_metric(d_self, d_f1, d_f2, metric="assists", names=names, title="Assistances", y_title="Assists"),
                             width="stretch",
                         )
                         st.plotly_chart(
-                            plot_trio_metric(d_self, d_f1, d_f2, metric="ratio", names=names, title="FDA (tous les trois)", y_title="FDA", y_format=".3f"),
+                            plot_trio_metric(d_self, d_f1, d_f2, metric="ratio", names=names, title="FDA", y_title="FDA", y_format=".3f"),
                             width="stretch",
                         )
                         st.plotly_chart(
-                            plot_trio_metric(d_self, d_f1, d_f2, metric="accuracy", names=names, title="Précision (tous les trois)", y_title="%", y_suffix="%", y_format=".2f"),
+                            plot_trio_metric(d_self, d_f1, d_f2, metric="accuracy", names=names, title="Précision", y_title="%", y_suffix="%", y_format=".2f"),
                             width="stretch",
                         )
                         st.plotly_chart(
-                            plot_trio_metric(d_self, d_f1, d_f2, metric="average_life_seconds", names=names, title="Durée de vie moyenne (tous les trois)", y_title="Secondes", y_format=".1f"),
+                            plot_trio_metric(d_self, d_f1, d_f2, metric="average_life_seconds", names=names, title="Durée de vie moyenne", y_title="Secondes", y_format=".1f"),
                             width="stretch",
                         )
 
-                        st.subheader("Médailles (tous les trois)")
+                        st.subheader("Médailles")
                         trio_match_ids = [str(x) for x in merged["match_id"].dropna().astype(str).tolist()]
                         if not trio_match_ids:
                             st.info("Impossible de déterminer la liste des matchs pour l'agrégation des médailles.")
                         else:
-                            with st.spinner("Agrégation des médailles (tous les trois)…"):
+                            with st.spinner("Agrégation des médailles…"):
                                 top_self = load_top_medals(db_path, xuid.strip(), trio_match_ids, top_n=12)
                                 top_f1 = load_top_medals(db_path, f1_xuid, trio_match_ids, top_n=12)
                                 top_f2 = load_top_medals(db_path, f2_xuid, trio_match_ids, top_n=12)
@@ -1681,10 +1792,12 @@ def main() -> None:
         outcome_map = {2: "Victoire", 3: "Défaite", 1: "Égalité", 4: "Non terminé"}
         dff_table["outcome_label"] = dff_table["outcome"].map(outcome_map).fillna("-")
 
+        dff_table["average_life_mmss"] = dff_table["average_life_seconds"].apply(lambda x: format_mmss(x))
+
         show_cols = [
             "match_url", "start_time", "map_name", "playlist_fr", "outcome_label",
             "kda", "kills", "deaths", "max_killing_spree", "headshot_kills",
-            "average_life_seconds", "assists", "accuracy", "ratio",
+            "average_life_mmss", "assists", "accuracy", "ratio",
         ]
         table = dff_table[show_cols].sort_values("start_time", ascending=False).reset_index(drop=True)
 
@@ -1726,6 +1839,9 @@ def main() -> None:
                 "kda": st.column_config.NumberColumn("FDA", format="%.2f"),
                 "kills": st.column_config.NumberColumn("Frags"),
                 "deaths": st.column_config.NumberColumn("Morts"),
+                "max_killing_spree": st.column_config.NumberColumn("Folie meurtrière (max)", format="%d"),
+                "headshot_kills": st.column_config.NumberColumn("Tirs à la tête", format="%d"),
+                "average_life_mmss": st.column_config.TextColumn("Durée de vie moyenne"),
                 "assists": st.column_config.NumberColumn("Assistances"),
                 "accuracy": st.column_config.NumberColumn("Précision (%)", format="%.2f"),
             },
