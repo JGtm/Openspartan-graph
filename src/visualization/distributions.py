@@ -79,12 +79,17 @@ def plot_kda_distribution(df: pd.DataFrame) -> go.Figure:
     return apply_halo_plot_style(fig, height=PLOT_CONFIG.default_height)
 
 
-def plot_outcomes_over_time(df: pd.DataFrame) -> tuple[go.Figure, str]:
+def plot_outcomes_over_time(df: pd.DataFrame, *, session_style: bool = False) -> tuple[go.Figure, str]:
     """Graphique d'évolution des victoires/défaites dans le temps.
     
     Args:
         df: DataFrame avec colonnes outcome et start_time.
         
+    Args:
+        session_style: Si True, force une logique de bucket orientée "session" :
+            - <= 20 matchs : bucket par partie (1..n)
+            - > 20 matchs : bucket par heure
+
     Returns:
         Tuple (figure, bucket_label) où bucket_label décrit la granularité.
     """
@@ -97,31 +102,41 @@ def plot_outcomes_over_time(df: pd.DataFrame) -> tuple[go.Figure, str]:
         fig.update_yaxes(title_text="Nombre")
         return apply_halo_plot_style(fig, height=PLOT_CONFIG.default_height), "période"
 
-    tmin = pd.to_datetime(d["start_time"], errors="coerce").min()
-    tmax = pd.to_datetime(d["start_time"], errors="coerce").max()
-
-    dt_range = (tmax - tmin) if (tmin == tmin and tmax == tmax) else pd.Timedelta(days=999)
-    days = float(dt_range.total_seconds() / 86400.0) if dt_range is not None else 999.0
-
-    cfg = SESSION_CONFIG
-    
-    # Détermine le bucket selon la plage de dates
-    if days < cfg.bucket_threshold_hourly:
+    if session_style:
         d = d.sort_values("start_time").reset_index(drop=True)
-        bucket = (d.index + 1)
-        bucket_label = "partie"
-    elif days <= cfg.bucket_threshold_daily:
-        bucket = d["start_time"].dt.floor("h")
-        bucket_label = "heure"
-    elif days <= cfg.bucket_threshold_weekly:
-        bucket = d["start_time"].dt.to_period("D").astype(str)
-        bucket_label = "jour"
-    elif days <= cfg.bucket_threshold_monthly:
-        bucket = d["start_time"].dt.to_period("W-MON").astype(str)
-        bucket_label = "semaine"
+        if len(d.index) <= 20:
+            bucket = (d.index + 1)
+            bucket_label = "partie"
+        else:
+            t = pd.to_datetime(d["start_time"], errors="coerce")
+            bucket = t.dt.floor("h")
+            bucket_label = "heure"
     else:
-        bucket = d["start_time"].dt.to_period("M").astype(str)
-        bucket_label = "mois"
+        tmin = pd.to_datetime(d["start_time"], errors="coerce").min()
+        tmax = pd.to_datetime(d["start_time"], errors="coerce").max()
+
+        dt_range = (tmax - tmin) if (tmin == tmin and tmax == tmax) else pd.Timedelta(days=999)
+        days = float(dt_range.total_seconds() / 86400.0) if dt_range is not None else 999.0
+
+        cfg = SESSION_CONFIG
+        
+        # Détermine le bucket selon la plage de dates
+        if days < cfg.bucket_threshold_hourly:
+            d = d.sort_values("start_time").reset_index(drop=True)
+            bucket = (d.index + 1)
+            bucket_label = "partie"
+        elif days <= cfg.bucket_threshold_daily:
+            bucket = d["start_time"].dt.floor("h")
+            bucket_label = "heure"
+        elif days <= cfg.bucket_threshold_weekly:
+            bucket = d["start_time"].dt.to_period("D").astype(str)
+            bucket_label = "jour"
+        elif days <= cfg.bucket_threshold_monthly:
+            bucket = d["start_time"].dt.to_period("W-MON").astype(str)
+            bucket_label = "semaine"
+        else:
+            bucket = d["start_time"].dt.to_period("M").astype(str)
+            bucket_label = "mois"
 
     d["bucket"] = bucket
     pivot = (

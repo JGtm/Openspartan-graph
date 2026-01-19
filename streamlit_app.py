@@ -125,6 +125,10 @@ def _normalize_map_label(map_name: str | None) -> str | None:
     return s or None
 
 
+def _clear_min_matches_maps_auto() -> None:
+    st.session_state["_min_matches_maps_auto"] = False
+
+
 # =============================================================================
 # Chargement des données (avec cache)
 # =============================================================================
@@ -484,6 +488,12 @@ def main() -> None:
             key="filter_mode",
         )
 
+        # UX: si on a forcé automatiquement le minimum par carte à 1 (via un bouton session),
+        # on remet la valeur par défaut quand on revient en mode "Période".
+        if filter_mode == "Période" and bool(st.session_state.get("_min_matches_maps_auto")):
+            st.session_state["min_matches_maps"] = 5
+            st.session_state["_min_matches_maps_auto"] = False
+
         start_d, end_d = dmin, dmax
         gap_minutes = 35
         picked_session_labels: Optional[list[str]] = None
@@ -531,6 +541,9 @@ def main() -> None:
             cols = st.columns(2)
             if cols[0].button("Dernière session", width="stretch"):
                 _set_session_selection(options_ui[0] if options_ui else "(toutes)")
+                # UX: en session courte, on veut voir des cartes même jouées 1 fois.
+                st.session_state["min_matches_maps"] = 1
+                st.session_state["_min_matches_maps_auto"] = True
             if cols[1].button("Session précédente", width="stretch"):
                 current = st.session_state.get("picked_session_label", "(toutes)")
                 if not options_ui:
@@ -582,6 +595,8 @@ def main() -> None:
                 st.session_state["_pending_filter_mode"] = "Sessions"
                 st.session_state["_pending_picked_session_label"] = trio_label
                 st.session_state["_pending_picked_sessions"] = [trio_label]
+                st.session_state["min_matches_maps"] = 1
+                st.session_state["_min_matches_maps_auto"] = True
                 st.rerun()
             if disabled_trio:
                 st.caption('Trio : sélectionne 2 amis dans "Avec mes amis" pour activer.')
@@ -785,7 +800,14 @@ def main() -> None:
             meta_cols[0].metric("Date", format_date_fr(last_time))
             meta_cols[1].metric("Carte", str(last_map) if last_map else "-")
             meta_cols[2].metric("Playlist", str(last_playlist_fr or last_playlist) if (last_playlist_fr or last_playlist) else "-")
-            meta_cols[3].metric("Mode", str(last_mode or last_pair_fr or last_pair) if (last_mode or last_pair_fr or last_pair) else "-")
+            # Mode "propre" (dérivé du couple carte/mode) en priorité.
+            last_mode_ui = last_row.get("mode_ui") or _normalize_mode_label(str(last_pair) if last_pair else None)
+            meta_cols[3].metric(
+                "Mode",
+                str(last_mode_ui or last_pair_fr or last_pair or last_mode)
+                if (last_mode_ui or last_pair_fr or last_pair or last_mode)
+                else "-",
+            )
 
             st.caption(f"MatchId: {last_match_id}")
 
@@ -812,12 +834,28 @@ def main() -> None:
                 mmr_cols = st.columns(3)
                 mmr_cols[0].metric("MMR d'équipe", f"{team_mmr:.1f}" if team_mmr is not None else "-")
                 mmr_cols[1].metric("MMR adverse", f"{enemy_mmr:.1f}" if enemy_mmr is not None else "-")
-                mmr_cols[2].metric(
-                    "Écart MMR (équipe - adverse)",
-                    f"{delta_mmr:+.1f}" if delta_mmr is not None else "-",
-                )
+                if delta_mmr is None:
+                    mmr_cols[2].metric("Écart MMR (équipe - adverse)", "-")
+                else:
+                    colors = HALO_COLORS.as_dict()
+                    if abs(float(delta_mmr)) < 1e-9:
+                        c = colors["violet"]
+                    elif float(delta_mmr) > 0:
+                        c = colors["green"]
+                    else:
+                        c = colors["red"]
 
-                # Attendu vs réel (K / D / A) + ratios (match uniquement)
+                    mmr_cols[2].markdown(
+                        "<div style='line-height:1.15'>"
+                        "<div style='font-size:0.9rem; opacity:0.85'>Écart MMR (équipe - adverse)</div>"
+                        f"<div style='font-size:1.7rem; font-weight:700; color:{c}'>"
+                        f"{float(delta_mmr):+.1f}"
+                        "</div>"
+                        "</div>",
+                        unsafe_allow_html=True,
+                    )
+
+                # Attendu vs réel (K / D) + ratios (match uniquement)
                 def _metric_expected_vs_actual(title: str, perf: dict, delta_color: str) -> None:
                     count = perf.get("count")
                     expected = perf.get("expected")
@@ -832,14 +870,12 @@ def main() -> None:
                 perf_a = pm.get("assists") or {}
 
                 st.subheader("Réel vs attendu")
-                av_cols = st.columns(4)
+                av_cols = st.columns(3)
                 with av_cols[0]:
                     _metric_expected_vs_actual("Kills", perf_k, delta_color="normal")
                 with av_cols[1]:
                     _metric_expected_vs_actual("Morts", perf_d, delta_color="inverse")
                 with av_cols[2]:
-                    _metric_expected_vs_actual("Assistances", perf_a, delta_color="normal")
-                with av_cols[3]:
                     avg_life_last = last_row.get("average_life_seconds")
                     st.metric("Durée de vie moyenne", format_mmss(avg_life_last))
 
@@ -856,6 +892,7 @@ def main() -> None:
                 ]
 
                 show_expected_ratio = all(v is not None for v in exp_vals)
+
                 real_ratio = last_row.get("ratio")
                 try:
                     real_ratio_f = float(real_ratio) if real_ratio == real_ratio else None
@@ -1012,7 +1049,11 @@ def main() -> None:
     # --------------------------------------------------------------------------
     with tab_mom:
         with st.spinner("Calcul des victoires/défaites…"):
-            fig_out, bucket_label = plot_outcomes_over_time(dff)
+            # En mode Sessions, si on a sélectionné une ou plusieurs sessions on raisonne "session".
+            # Si on est sur "(toutes)", on revient au bucket temporel normal (jour/semaine/mois...).
+            current_mode = st.session_state.get("filter_mode")
+            is_session_scope = bool(current_mode == "Sessions" and picked_session_labels)
+            fig_out, bucket_label = plot_outcomes_over_time(dff, session_style=is_session_scope)
             st.markdown(
                 f"Par **{bucket_label}** : on regroupe les parties par {bucket_label} et on compte le nombre de "
                 "victoires/défaites (et autres statuts) pour suivre l'évolution."
@@ -1476,7 +1517,15 @@ def main() -> None:
             options=["Moi (filtres actuels)", "Moi (toutes les parties)", "Avec Madina972", "Avec Chocoboflor"],
             horizontal=True,
         )
-        min_matches = st.slider("Minimum de matchs par map", 1, 30, 5, step=1)
+        min_matches = st.slider(
+            "Minimum de matchs par carte",
+            1,
+            30,
+            5,
+            step=1,
+            key="min_matches_maps",
+            on_change=_clear_min_matches_maps_auto,
+        )
 
         if scope == "Moi (toutes les parties)":
             base_scope = base
