@@ -82,7 +82,7 @@ Si vous utilisez l'import SPNKr ([scripts/spnkr_import_db.py](scripts/spnkr_impo
 Exemple (recommandé, mode minimal fiable):
 
 ```bash
-python run_dashboard.py --refresh-spnkr --refresh-no-assets --refresh-no-skill
+python run_dashboard.py --refresh-spnkr --refresh-no-assets
 ```
 
 Au premier lancement (si `data/spnkr.db` n'existe pas ou est vide), le launcher fait automatiquement une **construction complète** (bootstrap) avec un `--max-matches` élevé et `--match-type all`.
@@ -149,7 +149,7 @@ python scripts/spnkr_import_db.py --out-db data\spnkr.db --player <xuid_ou_gamer
 Astuce (import minimal, plus robuste) :
 
 ```bash
-python scripts/spnkr_import_db.py --out-db data\spnkr.db --player <xuid_ou_gamertag> --max-matches 50 --resume --no-assets --no-skill
+python scripts/spnkr_import_db.py --out-db data\spnkr.db --player <xuid_ou_gamertag> --max-matches 50 --resume --no-assets
 ```
 ```
 

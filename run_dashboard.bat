@@ -25,10 +25,9 @@ echo [SPNKr] (Default gamertag=%DEFAULT_GAMERTAG% / xuid=%DEFAULT_XUID%)
 echo [SPNKr] (Override possible via variable d'env SPNKR_PLAYER)
 
 if not "%SPNKR_PLAYER%"=="" (
-  "%PY%" "%ROOT%run_dashboard.py" --refresh-spnkr --refresh-no-skill
-  if exist "%ROOT%data\spnkr.db" (
-    set OPENSPARTAN_DB_PATH=%ROOT%data\spnkr.db
-  )
+  "%PY%" "%ROOT%run_dashboard.py" --refresh-spnkr
+  rem Si plusieurs DB SPNKr existent (spnkr_*.db), on laisse la sidebar choisir.
+  rem OPENSPARTAN_DB_PATH n'est donc plus forcé ici.
 ) else (
   "%PY%" "%ROOT%run_dashboard.py"
 )

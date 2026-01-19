@@ -1458,6 +1458,18 @@ def main() -> None:
                 st.info(
                     "Stats détaillées indisponibles pour ce match (PlayerMatchStats manquant ou format inattendu)."
                 )
+
+                is_spnkr_db = os.path.basename(str(db_path or "")).lower().startswith("spnkr")
+                if is_spnkr_db:
+                    st.caption(
+                        "Astuce: réimporte/rafraîchis la DB SPNKr **sans** l’option `--refresh-no-skill` "
+                        "pour récupérer les stats détaillées (MMR/attendu vs réel). "
+                        "Le refresh fait un backfill incrémental quand c’est possible (delta)."
+                    )
+                    cmd_example = (
+                        "python run_dashboard.py --refresh-spnkr --player \"<gamertag_ou_xuid>\" --refresh-max-matches 200"
+                    )
+                    st.code(cmd_example, language="bash")
             else:
                 team_mmr = pm.get("team_mmr")
                 enemy_mmr = pm.get("enemy_mmr")
