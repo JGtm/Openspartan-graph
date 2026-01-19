@@ -106,7 +106,13 @@ def main() -> int:
         action="store_true",
         help="Rafraîchit la DB SPNKr (data/spnkr.db) avant de lancer Streamlit.",
     )
-    ap.add_argument("--refresh-player", default=None, help="Gamertag ou XUID pour SPNKr (sinon: SPNKR_PLAYER env).")
+    ap.add_argument(
+        "--refresh-player",
+        "--player",
+        dest="refresh_player",
+        default=None,
+        help="Gamertag ou XUID pour SPNKr (sinon: SPNKR_PLAYER env).",
+    )
     ap.add_argument("--refresh-out-db", default=None, help="Chemin DB SPNKr (défaut: data/spnkr.db)")
     ap.add_argument(
         "--refresh-match-type",
