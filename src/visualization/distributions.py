@@ -154,13 +154,51 @@ def plot_outcomes_over_time(df: pd.DataFrame, *, session_style: bool = False) ->
     ties = col(1)
     nofin = col(4)
 
+    # Objectif UI: victoires au-dessus (positif) et défaites en dessous (négatif).
+    # Plotly empile séparément positifs/négatifs en mode "relative".
+    losses_neg = -losses
+
     fig = go.Figure()
-    fig.add_bar(x=pivot.index, y=wins, name="Victoires", marker_color=colors["green"])
-    fig.add_bar(x=pivot.index, y=losses, name="Défaites", marker_color=colors["red"])
-    fig.add_bar(x=pivot.index, y=ties, name="Égalités", marker_color=colors["violet"])
-    fig.add_bar(x=pivot.index, y=nofin, name="Non terminés", marker_color=colors["violet"])
-    fig.update_layout(barmode="stack", height=PLOT_CONFIG.default_height, margin=dict(l=40, r=20, t=30, b=40))
-    fig.update_yaxes(title_text="Nombre")
+    fig.add_bar(
+        x=pivot.index,
+        y=wins,
+        name="Victoires",
+        marker_color=colors["green"],
+        hovertemplate="%{x}<br>Victoires: %{y}<extra></extra>",
+    )
+    fig.add_bar(
+        x=pivot.index,
+        y=losses_neg,
+        name="Défaites",
+        marker_color=colors["red"],
+        customdata=losses.to_numpy(),
+        hovertemplate="%{x}<br>Défaites: %{customdata}<extra></extra>",
+    )
+
+    # Ces statuts ne sont pas des "défaites" : on les garde au-dessus.
+    if ties.sum() > 0:
+        fig.add_bar(
+            x=pivot.index,
+            y=ties,
+            name="Égalités",
+            marker_color=colors["violet"],
+            hovertemplate="%{x}<br>Égalités: %{y}<extra></extra>",
+        )
+    if nofin.sum() > 0:
+        fig.add_bar(
+            x=pivot.index,
+            y=nofin,
+            name="Non terminés",
+            marker_color=colors["slate"],
+            hovertemplate="%{x}<br>Non terminés: %{y}<extra></extra>",
+        )
+
+    fig.update_layout(
+        barmode="relative",
+        height=PLOT_CONFIG.default_height,
+        margin=dict(l=40, r=20, t=30, b=40),
+    )
+    fig.update_yaxes(title_text="Nombre", zeroline=True)
     
     if bucket_label == "partie" and len(pivot.index) > 30:
         fig.update_xaxes(showticklabels=False, title_text="")

@@ -4,8 +4,17 @@ services:
     ports:
       - "8501:8501"
     environment:
-      # Exemple: monte ta DB dans ./data puis pointe dessus
+      # Monte ta DB dans ./data puis pointe dessus
       - OPENSPARTAN_DB=/data/openspartan.db
+      # Utile si ./data est monté en lecture seule
+      - OPENSPARTAN_DB_READONLY=1
+
+      # Persistance des profils + alias (facultatif)
+      - OPENSPARTAN_PROFILES_PATH=/appdata/db_profiles.json
+      - OPENSPARTAN_ALIASES_PATH=/appdata/xuid_aliases.json
     volumes:
       # Place un fichier .db dans ./data/openspartan.db (ou adapte le chemin)
       - ./data:/data:ro
+      - ./appdata:/appdata
+
+    restart: unless-stopped

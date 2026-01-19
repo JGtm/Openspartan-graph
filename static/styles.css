@@ -37,14 +37,15 @@
 }
 
 section.main {
+    /* Fond global : rayures obliques fines noir / gris foncé */
     background:
-        /* brume centrale douce */
-        radial-gradient(1200px 820px at 50% 12%, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.00) 58%),
-        /* signature Waypoint: glow radial bleu-gris */
-        radial-gradient(116.5% 168.84% at 115.37% 167.93%, rgba(107,155,183,0.22) 0%, rgba(0,52,82,0) 62%),
-        /* accent cyan haut/gauche */
-        radial-gradient(900px 520px at 10% -12%, rgba(112,205,223,0.14) 0%, transparent 60%),
-        linear-gradient(180deg, var(--bg) 0%, #0c1012 70%, #090c0e 100%);
+        repeating-linear-gradient(
+            135deg,
+            #050505 0px,
+            #050505 6px,
+            #0f0f0f 6px,
+            #0f0f0f 12px
+        );
     color: var(--text);
     position: relative;
     z-index: 1;
@@ -56,36 +57,12 @@ section.main {
 
 /* Hatch diagonal */
 section.main:before {
-    content: "";
-    position: fixed;
-    inset: 0;
-    pointer-events: none;
-    z-index: 0;
-    background:
-        repeating-linear-gradient(
-            135deg,
-            rgba(255,255,255,0.060) 0px,
-            rgba(255,255,255,0.060) 2px,
-            transparent 2px,
-            transparent 8px
-        );
-    opacity: 0.14;
-    mix-blend-mode: overlay;
+    content: none;
 }
 
 /* Vignette + grain */
 section.main:after {
-    content: "";
-    position: fixed;
-    inset: 0;
-    pointer-events: none;
-    z-index: 0;
-    background:
-        radial-gradient(1400px 900px at 50% 10%, rgba(0,0,0,0.00) 40%, rgba(0,0,0,0.72) 100%),
-        radial-gradient(rgba(255,255,255,0.060) 1px, transparent 1.35px);
-    background-size: auto, 24px 24px;
-    opacity: 0.14;
-    mix-blend-mode: overlay;
+    content: none;
 }
 
 /* =============================================================================

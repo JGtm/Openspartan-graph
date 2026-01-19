@@ -43,6 +43,9 @@ def get_default_workshop_exe_path() -> str:
 
 def get_aliases_file_path() -> str:
     """Retourne le chemin du fichier d'alias XUID."""
+    override = os.environ.get("OPENSPARTAN_ALIASES_PATH")
+    if override:
+        return override
     return os.path.join(os.path.dirname(os.path.dirname(__file__)), "xuid_aliases.json")
 
 

@@ -114,11 +114,16 @@ pytest tests/test_models.py -v
 Le container ne peut pas « découvrir » automatiquement la DB Windows (pas de `LOCALAPPDATA`).
 Monte donc ton fichier `.db` en volume et fournis son chemin via `OPENSPARTAN_DB`.
 
+Astuce : tu peux monter la DB en lecture seule (`:ro`). L'app détecte ça et bascule en SQLite read-only
+automatiquement, ou via `OPENSPARTAN_DB_READONLY=1`.
+
 ### Docker Compose (recommandé)
 
 1) Place ta DB dans `./data/openspartan.db` (ou adapte le chemin)
 
-2) Lance :
+2) (Optionnel) Pour persister profils/alias Streamlit entre redémarrages, crée un dossier `./appdata`.
+
+3) Lance :
 
 ```bash
 docker compose up --build
@@ -133,7 +138,11 @@ docker build -t openspartan-graph .
 
 docker run --rm -p 8501:8501 \
 	-e OPENSPARTAN_DB=/data/openspartan.db \
+	-e OPENSPARTAN_DB_READONLY=1 \
+	-e OPENSPARTAN_PROFILES_PATH=/appdata/db_profiles.json \
+	-e OPENSPARTAN_ALIASES_PATH=/appdata/xuid_aliases.json \
 	-v "%CD%\data:/data:ro" \
+	-v "%CD%\appdata:/appdata" \
 	openspartan-graph
 ```
 

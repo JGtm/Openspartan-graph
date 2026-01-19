@@ -13,7 +13,8 @@ def apply_halo_plot_style(
 ) -> go.Figure:
     """Applique le thème Halo aux graphiques Plotly.
     
-    Style sombre avec fonds transparents pour s'intégrer au background CSS.
+    Style sombre avec fond noir opaque et uni (les graphes doivent rester lisibles
+    même si le site a un background rayé).
     
     Args:
         fig: Figure Plotly à styliser.
@@ -25,8 +26,8 @@ def apply_halo_plot_style(
     """
     fig.update_layout(
         template="plotly_dark",
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(0,0,0,0)",
+        paper_bgcolor="rgba(0,0,0,1)",
+        plot_bgcolor="rgba(0,0,0,1)",
         font=dict(color="rgba(255,255,255,0.90)", size=13),
         hoverlabel=dict(
             bgcolor="rgba(10,16,32,0.92)",

@@ -129,6 +129,10 @@ def _clear_min_matches_maps_auto() -> None:
     st.session_state["_min_matches_maps_auto"] = False
 
 
+def _clear_min_matches_maps_friends_auto() -> None:
+    st.session_state["_min_matches_maps_friends_auto"] = False
+
+
 # =============================================================================
 # Chargement des données (avec cache)
 # =============================================================================
@@ -494,6 +498,10 @@ def main() -> None:
             st.session_state["min_matches_maps"] = 5
             st.session_state["_min_matches_maps_auto"] = False
 
+        if filter_mode == "Période" and bool(st.session_state.get("_min_matches_maps_friends_auto")):
+            st.session_state["min_matches_maps_friends"] = 5
+            st.session_state["_min_matches_maps_friends_auto"] = False
+
         start_d, end_d = dmin, dmax
         gap_minutes = 35
         picked_session_labels: Optional[list[str]] = None
@@ -523,6 +531,7 @@ def main() -> None:
                 .sort_values("session_id", ascending=False)
             )
             options_ui = session_labels_ui["session_label"].tolist()
+            st.session_state["_latest_session_label"] = options_ui[0] if options_ui else None
 
             compare_multi = st.toggle("Comparer plusieurs sessions", value=False)
 
@@ -544,6 +553,8 @@ def main() -> None:
                 # UX: en session courte, on veut voir des cartes même jouées 1 fois.
                 st.session_state["min_matches_maps"] = 1
                 st.session_state["_min_matches_maps_auto"] = True
+                st.session_state["min_matches_maps_friends"] = 1
+                st.session_state["_min_matches_maps_friends_auto"] = True
             if cols[1].button("Session précédente", width="stretch"):
                 current = st.session_state.get("picked_session_label", "(toutes)")
                 if not options_ui:
@@ -597,6 +608,8 @@ def main() -> None:
                 st.session_state["_pending_picked_sessions"] = [trio_label]
                 st.session_state["min_matches_maps"] = 1
                 st.session_state["_min_matches_maps_auto"] = True
+                st.session_state["min_matches_maps_friends"] = 1
+                st.session_state["_min_matches_maps_friends_auto"] = True
                 st.rerun()
             if disabled_trio:
                 st.caption('Trio : sélectionne 2 amis dans "Avec mes amis" pour activer.')
@@ -796,13 +809,19 @@ def main() -> None:
             last_playlist_fr = translate_playlist_name(str(last_playlist)) if last_playlist else None
             last_pair_fr = translate_pair_name(str(last_pair)) if last_pair else None
 
-            meta_cols = st.columns(4)
+            meta_cols = st.columns(3)
             meta_cols[0].metric("Date", format_date_fr(last_time))
             meta_cols[1].metric("Carte", str(last_map) if last_map else "-")
-            meta_cols[2].metric("Playlist", str(last_playlist_fr or last_playlist) if (last_playlist_fr or last_playlist) else "-")
+            meta_cols[2].metric(
+                "Playlist",
+                str(last_playlist_fr or last_playlist)
+                if (last_playlist_fr or last_playlist)
+                else "-",
+            )
+
             # Mode "propre" (dérivé du couple carte/mode) en priorité.
             last_mode_ui = last_row.get("mode_ui") or _normalize_mode_label(str(last_pair) if last_pair else None)
-            meta_cols[3].metric(
+            st.metric(
                 "Mode",
                 str(last_mode_ui or last_pair_fr or last_pair or last_mode)
                 if (last_mode_ui or last_pair_fr or last_pair or last_mode)
@@ -817,9 +836,31 @@ def main() -> None:
 
             # Rappel du résultat (même si PlayerMatchStats est indispo)
             outcome_map = {2: "Victoire", 3: "Défaite", 1: "Égalité", 4: "Non terminé"}
-            st.metric(
-                "Résultat",
-                outcome_map.get(int(last_outcome), "?") if last_outcome == last_outcome else "-",
+            outcome_code = None
+            try:
+                outcome_code = int(last_outcome) if last_outcome == last_outcome else None
+            except Exception:
+                outcome_code = None
+
+            outcome_label = outcome_map.get(outcome_code, "?") if outcome_code is not None else "-"
+            colors = HALO_COLORS.as_dict()
+            if outcome_code == OUTCOME_CODES.WIN:
+                c = colors["green"]
+            elif outcome_code == OUTCOME_CODES.LOSS:
+                c = colors["red"]
+            elif outcome_code == OUTCOME_CODES.TIE:
+                c = colors["violet"]
+            else:
+                c = colors["slate"]
+
+            st.markdown(
+                "<div style='line-height:1.15'>"
+                "<div style='font-size:0.9rem; opacity:0.85'>Résultat</div>"
+                f"<div style='font-size:1.7rem; font-weight:800; color:{c}'>"
+                f"{outcome_label}"
+                "</div>"
+                "</div>",
+                unsafe_allow_html=True,
             )
 
             if not pm:
@@ -974,7 +1015,7 @@ def main() -> None:
                 st.plotly_chart(exp_fig, width="stretch")
 
             # Médailles (match)
-            st.subheader("Médailles (match)")
+            st.subheader("Médailles")
             if not medals_last:
                 st.info("Médailles indisponibles pour ce match (ou aucune médaille).")
             else:
@@ -1060,6 +1101,9 @@ def main() -> None:
             )
             st.caption("Basé sur Players[].Outcome (2=victoire, 3=défaite, 1=égalité, 4=non terminé).")
             st.plotly_chart(fig_out, width="stretch")
+
+            # (Le graphique "Net victoires/défaites" a été retiré :
+            #  l'onglet se concentre sur le graphe Victoires au-dessus / Défaites en dessous.)
 
     # --------------------------------------------------------------------------
     # Tab: Avec un joueur
@@ -1299,9 +1343,36 @@ def main() -> None:
             st.info("Sélectionne au moins un coéquipier.")
         else:
             # Agrégation sur tous les coéquipiers
-            st.subheader("Par carte — avec mes amis (agrégé)")
+            st.subheader("Par carte — avec mes amis")
             with st.spinner("Calcul du ratio par carte (amis)…"):
-                min_matches_maps_friends = st.slider("Minimum de matchs par carte (amis)", 1, 30, 5, step=1)
+                current_mode = st.session_state.get("filter_mode")
+                latest_session_label = st.session_state.get("_latest_session_label")
+                trio_latest_label = st.session_state.get("_trio_latest_session_label")
+
+                selected_session = None
+                if current_mode == "Sessions" and isinstance(picked_session_labels, list) and len(picked_session_labels) == 1:
+                    selected_session = picked_session_labels[0]
+
+                is_last_session = bool(selected_session and selected_session == latest_session_label)
+                is_last_trio_session = bool(selected_session and isinstance(trio_latest_label, str) and selected_session == trio_latest_label)
+
+                if is_last_session or is_last_trio_session:
+                    last_applied = st.session_state.get("_friends_min_matches_last_session_label")
+                    # Ne force que lors de l'entrée sur une nouvelle "dernière session".
+                    if last_applied != selected_session:
+                        st.session_state["min_matches_maps_friends"] = 1
+                        st.session_state["_min_matches_maps_friends_auto"] = True
+                        st.session_state["_friends_min_matches_last_session_label"] = selected_session
+
+                min_matches_maps_friends = st.slider(
+                    "Minimum de matchs par carte",
+                    1,
+                    30,
+                    5,
+                    step=1,
+                    key="min_matches_maps_friends",
+                    on_change=_clear_min_matches_maps_friends_auto,
+                )
 
                 base_for_friends_all = dff if apply_current_filters else df
                 all_match_ids: set[str] = set()
@@ -1450,23 +1521,23 @@ def main() -> None:
 
                             c1, c2, c3 = st.columns(3)
                             with c1:
-                                st.caption(f"{me_name}")
-                                render_medals_grid(
-                                    [{"name_id": int(n), "count": int(c)} for n, c in (top_self or [])],
-                                    cols_per_row=6,
-                                )
+                                with st.expander(f"{me_name}", expanded=True):
+                                    render_medals_grid(
+                                        [{"name_id": int(n), "count": int(c)} for n, c in (top_self or [])],
+                                        cols_per_row=6,
+                                    )
                             with c2:
-                                st.caption(f"{f1_name}")
-                                render_medals_grid(
-                                    [{"name_id": int(n), "count": int(c)} for n, c in (top_f1 or [])],
-                                    cols_per_row=6,
-                                )
+                                with st.expander(f"{f1_name}", expanded=True):
+                                    render_medals_grid(
+                                        [{"name_id": int(n), "count": int(c)} for n, c in (top_f1 or [])],
+                                        cols_per_row=6,
+                                    )
                             with c3:
-                                st.caption(f"{f2_name}")
-                                render_medals_grid(
-                                    [{"name_id": int(n), "count": int(c)} for n, c in (top_f2 or [])],
-                                    cols_per_row=6,
-                                )
+                                with st.expander(f"{f2_name}", expanded=True):
+                                    render_medals_grid(
+                                        [{"name_id": int(n), "count": int(c)} for n, c in (top_f2 or [])],
+                                        cols_per_row=6,
+                                    )
 
             st.subheader("Résumé par ami")
             base_for_friends = dff if apply_current_filters else df
@@ -1492,6 +1563,7 @@ def main() -> None:
                     {
                         "Ami": name,
                         "Matchs": int(len(sub)),
+                        "Matchs DB": int(len({str(r.match_id) for r in rows})),
                         "Win%": round(win_rate_sub * 100, 1),
                         "Loss%": round(loss_rate_sub * 100, 1),
                         "Ratio": round(float(global_ratio_sub), 2) if global_ratio_sub is not None else None,
@@ -1552,7 +1624,7 @@ def main() -> None:
             metric = st.selectbox(
                 "Métrique",
                 options=[
-                    ("ratio_global", "Ratio global"),
+                    ("ratio_global", "Ratio Victoire/défaite"),
                     ("win_rate", "Win rate"),
                     ("accuracy_avg", "Précision moyenne"),
                 ],

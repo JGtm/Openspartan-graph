@@ -19,7 +19,11 @@ __all__ = [
 ]
 
 # Chemin du fichier de profils (à côté du script principal)
-PROFILES_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "db_profiles.json")
+_DEFAULT_PROFILES_PATH = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
+    "db_profiles.json",
+)
+PROFILES_PATH = os.environ.get("OPENSPARTAN_PROFILES_PATH") or _DEFAULT_PROFILES_PATH
 
 
 def load_profiles() -> dict[str, dict[str, str]]:

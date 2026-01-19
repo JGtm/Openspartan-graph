@@ -59,7 +59,7 @@ def plot_map_ratio_with_winloss(df_breakdown: pd.DataFrame, title: str) -> go.Fi
         title: Titre du graphique.
         
     Returns:
-        Figure Plotly avec barres groupées Win/Loss.
+        Figure Plotly avec barres empilées Win/Loss (+ autres statuts).
     """
     colors = HALO_COLORS.as_dict()
     d = df_breakdown.dropna(subset=["win_rate", "loss_rate"]).copy()
@@ -68,6 +68,9 @@ def plot_map_ratio_with_winloss(df_breakdown: pd.DataFrame, title: str) -> go.Fi
         fig = go.Figure()
         fig.update_layout(height=PLOT_CONFIG.default_height, margin=dict(l=40, r=20, t=30, b=40))
         return apply_halo_plot_style(fig, height=PLOT_CONFIG.default_height)
+
+    # Complément: égalités / non terminés / inconnus -> affiché en "Autres".
+    d["other_rate"] = (1.0 - (d["win_rate"].astype(float) + d["loss_rate"].astype(float))).clip(0.0, 1.0)
 
     fig = go.Figure()
 
@@ -79,7 +82,8 @@ def plot_map_ratio_with_winloss(df_breakdown: pd.DataFrame, title: str) -> go.Fi
             name="Taux de victoire",
             marker_color=colors["green"],
             opacity=0.70,
-            hovertemplate="win=%{x:.1%}<extra></extra>",
+            customdata=d[["matches"]].values,
+            hovertemplate="%{y}<br>win=%{x:.1%}<br>matchs=%{customdata[0]}<extra></extra>",
         )
     )
     fig.add_trace(
@@ -90,7 +94,21 @@ def plot_map_ratio_with_winloss(df_breakdown: pd.DataFrame, title: str) -> go.Fi
             name="Taux de défaite",
             marker_color=colors["red"],
             opacity=0.55,
-            hovertemplate="loss=%{x:.1%}<extra></extra>",
+            customdata=d[["matches"]].values,
+            hovertemplate="%{y}<br>loss=%{x:.1%}<br>matchs=%{customdata[0]}<extra></extra>",
+        )
+    )
+
+    fig.add_trace(
+        go.Bar(
+            x=d["other_rate"],
+            y=d["map_name"],
+            orientation="h",
+            name="Autres (égalité / non terminé)",
+            marker_color=colors["violet"],
+            opacity=0.35,
+            customdata=d[["matches"]].values,
+            hovertemplate="%{y}<br>autres=%{x:.1%}<br>matchs=%{customdata[0]}<extra></extra>",
         )
     )
 
@@ -98,9 +116,8 @@ def plot_map_ratio_with_winloss(df_breakdown: pd.DataFrame, title: str) -> go.Fi
         height=PLOT_CONFIG.tall_height,
         title=title,
         margin=dict(l=40, r=20, t=60, b=90),
-        barmode="group",
+        barmode="stack",
         bargap=0.18,
-        bargroupgap=0.06,
         legend=get_legend_horizontal_bottom(),
     )
     fig.update_xaxes(title_text="Win / Loss", tickformat=".0%", range=[0, 1])
