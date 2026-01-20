@@ -2,8 +2,7 @@
 __pycache__/
 *.pyc
 out/
-.streamlit/
-!.streamlit/
+.streamlit/*
 !.streamlit/secrets.toml.example
 .env
 .env.local
