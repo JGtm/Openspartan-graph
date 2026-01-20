@@ -6,7 +6,10 @@ depuis la base de données OpenSpartan Workshop.
 
 import os
 import re
-from datetime import date
+import subprocess
+import sys
+import urllib.parse
+from datetime import date, datetime, time, timedelta
 from typing import Optional
 
 import pandas as pd
@@ -32,6 +35,8 @@ from src.db import (
     load_player_match_result,
     load_match_medals_for_player,
     load_top_medals,
+    load_highlight_events_for_match,
+    has_table,
 )
 from src.db.parsers import parse_xuid_input
 from src.analysis import (
@@ -44,6 +49,9 @@ from src.analysis import (
     is_allowed_playlist_name,
     build_option_map,
     build_xuid_option_map,
+    compute_killer_victim_pairs,
+    killer_victim_counts_long,
+    killer_victim_matrix,
 )
 from src.analysis.stats import format_selected_matches_summary, format_mmss
 from src.visualization import (
@@ -68,6 +76,9 @@ from src.ui import (
     get_hero_html,
     translate_playlist_name,
     translate_pair_name,
+    AppSettings,
+    load_settings,
+    save_settings,
 )
 from src.ui.medals import (
     load_medal_name_maps,
@@ -77,6 +88,7 @@ from src.ui.medals import (
     medal_icon_path,
     render_medals_grid,
 )
+from src.ui.commendations import render_h5g_commendations_section
 from src.ui.formatting import format_date_fr
 from src.db.profiles import (
     PROFILES_PATH,
@@ -92,6 +104,123 @@ from src.ui.sections import render_openspartan_tools, render_source_section
 
 _LABEL_SUFFIX_RE = re.compile(r"^(.*?)(?:\s*[\-–—]\s*[0-9A-Za-z]{8,})$", re.IGNORECASE)
 _SCORE_LABEL_RE = re.compile(r"^\s*(-?\d+)\s*[-–—]\s*(-?\d+)\s*$")
+
+
+def _qp_first(value) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, (list, tuple)):
+        return str(value[0]) if value else None
+    s = str(value)
+    return s if s.strip() else None
+
+
+def _set_query_params(**kwargs: str) -> None:
+    clean: dict[str, str] = {k: str(v) for k, v in kwargs.items() if v is not None and str(v).strip()}
+    try:
+        st.query_params.clear()
+        for k, v in clean.items():
+            st.query_params[k] = v
+    except Exception:
+        # Fallback API legacy (compat)
+        try:
+            st.experimental_set_query_params(**clean)
+        except Exception:
+            pass
+
+
+def _app_url(page: str, **params: str) -> str:
+    qp: dict[str, str] = {"page": page}
+    for k, v in params.items():
+        if v is None:
+            continue
+        s = str(v).strip()
+        if s:
+            qp[k] = s
+    return "?" + urllib.parse.urlencode(qp)
+
+
+def _default_identity_from_secrets() -> tuple[str, str, str]:
+    """Retourne (xuid_or_gamertag, xuid_fallback, waypoint_player) depuis secrets/env/constants."""
+    # Secrets Streamlit: .streamlit/secrets.toml
+    try:
+        player = st.secrets.get("player", {})
+        if isinstance(player, dict):
+            gt = str(player.get("gamertag") or "").strip()
+            xu = str(player.get("xuid") or "").strip()
+            wp = str(player.get("waypoint_player") or "").strip()
+        else:
+            gt = xu = wp = ""
+    except Exception:
+        gt = xu = wp = ""
+
+    # Env vars (utile Docker/CLI)
+    gt = gt or str(os.environ.get("OPENSPARTAN_DEFAULT_GAMERTAG") or "").strip()
+    xu = xu or str(os.environ.get("OPENSPARTAN_DEFAULT_XUID") or "").strip()
+    wp = wp or str(os.environ.get("OPENSPARTAN_DEFAULT_WAYPOINT_PLAYER") or "").strip() or gt
+
+    # Fallback constants
+    gt = gt or str(DEFAULT_PLAYER_GAMERTAG or "").strip()
+    xu = xu or str(DEFAULT_PLAYER_XUID or "").strip()
+    wp = wp or str(DEFAULT_WAYPOINT_PLAYER or "").strip() or gt
+
+    xuid_or_gt = gt or xu
+    return xuid_or_gt, xu, wp
+
+
+def _init_source_state(default_db: str) -> None:
+    if "db_path" not in st.session_state:
+        st.session_state["db_path"] = str(default_db or "")
+    if "xuid_input" not in st.session_state:
+        legacy = str(st.session_state.get("xuid", "") or "").strip()
+        guessed = guess_xuid_from_db_path(st.session_state.get("db_path", "") or "") or ""
+        xuid_or_gt, _xuid_fallback, _wp = _default_identity_from_secrets()
+        st.session_state["xuid_input"] = legacy or guessed or xuid_or_gt
+    if "waypoint_player" not in st.session_state:
+        _xuid_or_gt, _xuid_fallback, wp = _default_identity_from_secrets()
+        st.session_state["waypoint_player"] = wp
+
+
+def _ensure_h5g_commendations_repo() -> None:
+    """Génère automatiquement le référentiel Citations s'il est absent."""
+    if st.session_state.get("_h5g_repo_ensured") is True:
+        return
+    st.session_state["_h5g_repo_ensured"] = True
+
+    repo_root = os.path.abspath(os.path.dirname(__file__))
+    json_path = os.path.join(repo_root, "data", "wiki", "halo5_commendations_fr.json")
+    html_path = os.path.join(repo_root, "data", "wiki", "halo5_citations_printable.html")
+    script_path = os.path.join(repo_root, "scripts", "extract_h5g_commendations_fr.py")
+
+    if os.path.exists(json_path):
+        return
+    if not (os.path.exists(html_path) and os.path.exists(script_path)):
+        return
+
+    with st.spinner("Génération du référentiel Citations (offline)…"):
+        try:
+            subprocess.run(
+                [
+                    sys.executable,
+                    script_path,
+                    "--input-html",
+                    html_path,
+                    "--download-images",
+                    "--clean-output",
+                ],
+                check=True,
+                cwd=repo_root,
+                capture_output=True,
+                text=True,
+            )
+            try:
+                from src.ui.commendations import load_h5g_commendations_json
+
+                getattr(load_h5g_commendations_json, "clear")()
+            except Exception:
+                pass
+        except Exception:
+            return
 
 
 def _clean_asset_label(s: str | None) -> str | None:
@@ -672,14 +801,20 @@ def cached_load_match_medals_for_player(
 
 
 @st.cache_data(show_spinner=False)
+def cached_load_highlight_events_for_match(db_path: str, match_id: str, *, db_key: str | None = None):
+    _ = db_key
+    return load_highlight_events_for_match(db_path, match_id)
+
+
+@st.cache_data(show_spinner=False)
 def cached_load_top_medals(
     db_path: str,
     xuid: str,
     match_ids: tuple[str, ...],
-    top_n: int,
+    top_n: int | None,
     db_key: tuple[int, int] | None,
 ):
-    return load_top_medals(db_path, xuid, list(match_ids), top_n=int(top_n))
+    return load_top_medals(db_path, xuid, list(match_ids), top_n=(int(top_n) if top_n is not None else None))
 
 
 def _top_medals(
@@ -687,7 +822,7 @@ def _top_medals(
     xuid: str,
     match_ids: list[str],
     *,
-    top_n: int,
+    top_n: int | None,
     db_key: tuple[int, int] | None,
 ):
     # Évite de stocker d'immenses tuples en cache.
@@ -757,6 +892,454 @@ def _aliases_cache_key() -> int | None:
         return int(getattr(st_, "st_mtime_ns", int(st_.st_mtime * 1e9)))
     except OSError:
         return None
+
+
+def _render_settings_page(settings: AppSettings) -> AppSettings:
+    """Rend l'onglet Paramètres et retourne les settings (potentiellement modifiés)."""
+
+    st.subheader("Paramètres")
+
+    with st.expander("Source", expanded=True):
+        default_db = get_default_db_path()
+        render_source_section(
+            default_db,
+            get_local_dbs=cached_list_local_dbs,
+            on_clear_caches=_clear_app_caches,
+        )
+        st.caption("Valeurs par défaut: .streamlit/secrets.toml (ignoré par Git).")
+        st.code(
+            "[player]\n"
+            "gamertag=\"...\"\n"
+            "xuid=\"2533...\"\n"
+            "waypoint_player=\"...\"\n",
+            language="toml",
+        )
+
+    with st.expander("Paramètres avancés", expanded=False):
+        st.toggle(
+            "Inclure Firefight (PvE)",
+            key="include_firefight",
+            value=bool(st.session_state.get("include_firefight", False)),
+            help="Impacte les filtres et tous les onglets basés sur les matchs.",
+        )
+        st.toggle(
+            "Limiter aux playlists (Quick Play / Ranked Slayer / Ranked Arena)",
+            key="restrict_playlists",
+            value=bool(st.session_state.get("restrict_playlists", True)),
+            help="Réduit les playlists/modes/cartes aux valeurs attendues (utile si la DB est hétérogène).",
+        )
+
+    with st.expander("Médias", expanded=True):
+        media_enabled = st.toggle("Activer la section Médias", value=bool(settings.media_enabled))
+        media_screens_dir = st.text_input(
+            "Dossier captures (images)",
+            value=str(settings.media_screens_dir or ""),
+            help="Chemin vers un dossier contenant des captures (png/jpg/webp).",
+        )
+        media_videos_dir = st.text_input(
+            "Dossier vidéos",
+            value=str(settings.media_videos_dir or ""),
+            help="Chemin vers un dossier contenant des vidéos (mp4/webm/mkv).",
+        )
+        media_tolerance_minutes = st.slider(
+            "Tolérance (minutes) autour du match",
+            min_value=0,
+            max_value=30,
+            value=int(settings.media_tolerance_minutes or 0),
+            step=1,
+        )
+
+    with st.expander("Expérience", expanded=False):
+        refresh_clears_caches = st.toggle(
+            "Le bouton Actualiser vide aussi les caches",
+            value=bool(getattr(settings, "refresh_clears_caches", False)),
+            help="Utile si la DB change en dehors de l'app (NAS / import externe).",
+        )
+
+    with st.expander("Outils", expanded=False):
+        if os.name == "nt":
+            render_openspartan_tools()
+        else:
+            st.caption("Outils Windows masqués (environnement non-Windows/NAS).")
+
+    with st.expander("NAS / Docker", expanded=False):
+        st.caption(
+            "Astuce: sur NAS/Docker, monte la DB en volume et définis OPENSPARTAN_DB (et éventuellement OPENSPARTAN_DB_READONLY=1)."
+        )
+        st.code(
+            "OPENSPARTAN_DB=...\nOPENSPARTAN_DB_READONLY=1\nOPENSPARTAN_PROFILES_PATH=...\nOPENSPARTAN_ALIASES_PATH=...\nOPENSPARTAN_SETTINGS_PATH=...",
+            language="text",
+        )
+
+    cols = st.columns(2)
+    if cols[0].button("Enregistrer", width="stretch"):
+        new_settings = AppSettings(
+            media_enabled=bool(media_enabled),
+            media_screens_dir=str(media_screens_dir or "").strip(),
+            media_videos_dir=str(media_videos_dir or "").strip(),
+            media_tolerance_minutes=int(media_tolerance_minutes),
+            refresh_clears_caches=bool(refresh_clears_caches),
+        )
+        ok, err = save_settings(new_settings)
+        if ok:
+            st.success("Paramètres enregistrés.")
+            st.session_state["app_settings"] = new_settings
+            st.rerun()
+        else:
+            st.error(err)
+        return new_settings
+
+    if cols[1].button("Recharger depuis fichier", width="stretch"):
+        reloaded = load_settings()
+        st.session_state["app_settings"] = reloaded
+        st.rerun()
+        return reloaded
+
+    return settings
+
+
+def _request_open_match(match_id: str) -> None:
+    mid = str(match_id or "").strip()
+    if not mid:
+        return
+    _set_query_params(page="Match", match_id=mid)
+    st.session_state["_pending_page"] = "Match"
+    st.session_state["_pending_match_id"] = mid
+    st.rerun()
+
+
+def _safe_dt(v) -> datetime | None:
+    try:
+        ts = pd.to_datetime(v, errors="coerce")
+        if pd.isna(ts):
+            return None
+        return ts.to_pydatetime()
+    except Exception:
+        return None
+
+
+def _match_time_window(row: pd.Series, *, tolerance_minutes: int) -> tuple[datetime | None, datetime | None]:
+    start = _safe_dt(row.get("start_time"))
+    if start is None:
+        return None, None
+
+    dur_s = row.get("time_played_seconds")
+    try:
+        dur = float(dur_s) if dur_s == dur_s else None
+    except Exception:
+        dur = None
+    if dur is None or dur <= 0:
+        end = start + timedelta(minutes=30)
+    else:
+        end = start + timedelta(seconds=float(dur))
+
+    tol = max(0, int(tolerance_minutes))
+    return start - timedelta(minutes=tol), end + timedelta(minutes=tol)
+
+
+@st.cache_data(show_spinner=False, ttl=120)
+def _index_media_dir(dir_path: str, exts: tuple[str, ...]) -> pd.DataFrame:
+    rows: list[dict[str, object]] = []
+    p = str(dir_path or "").strip()
+    if not p or not os.path.isdir(p):
+        return pd.DataFrame(columns=["path", "mtime", "ext"])
+
+    wanted = {e.lower().lstrip(".") for e in (exts or tuple()) if isinstance(e, str) and e.strip()}
+    if not wanted:
+        return pd.DataFrame(columns=["path", "mtime", "ext"])
+
+    max_files = 12000
+    try:
+        for root, _dirs, files in os.walk(p):
+            for fn in files:
+                if len(rows) >= max_files:
+                    break
+                ext = os.path.splitext(fn)[1].lower().lstrip(".")
+                if ext not in wanted:
+                    continue
+                full = os.path.join(root, fn)
+                try:
+                    st_ = os.stat(full)
+                    mtime = float(st_.st_mtime)
+                except Exception:
+                    continue
+                rows.append({"path": full, "mtime": mtime, "ext": ext})
+            if len(rows) >= max_files:
+                break
+    except Exception:
+        return pd.DataFrame(columns=["path", "mtime", "ext"])
+
+    df = pd.DataFrame(rows)
+    if df.empty:
+        return df
+    return df.sort_values("mtime", ascending=False).reset_index(drop=True)
+
+
+def _render_media_section(*, row: pd.Series, settings: AppSettings) -> None:
+    if not bool(getattr(settings, "media_enabled", True)):
+        return
+
+    tol = int(getattr(settings, "media_tolerance_minutes", 0) or 0)
+    t0, t1 = _match_time_window(row, tolerance_minutes=tol)
+    if t0 is None or t1 is None:
+        return
+
+    screens_dir = str(getattr(settings, "media_screens_dir", "") or "").strip()
+    videos_dir = str(getattr(settings, "media_videos_dir", "") or "").strip()
+
+    if not screens_dir and not videos_dir:
+        return
+
+    st.subheader("Médias")
+    st.caption(f"Fenêtre de recherche: {_format_datetime_fr_hm(t0)} → {_format_datetime_fr_hm(t1)}")
+
+    found_any = False
+
+    if screens_dir and os.path.isdir(screens_dir):
+        img_df = _index_media_dir(screens_dir, ("png", "jpg", "jpeg", "webp"))
+        if not img_df.empty:
+            mask = (img_df["mtime"] >= t0.timestamp()) & (img_df["mtime"] <= t1.timestamp())
+            hits = img_df.loc[mask].head(24)
+            if not hits.empty:
+                found_any = True
+                st.caption("Captures")
+                for p in hits["path"].tolist():
+                    try:
+                        st.image(p, caption=str(p))
+                    except Exception:
+                        st.write(str(p))
+
+    if videos_dir and os.path.isdir(videos_dir):
+        vid_df = _index_media_dir(videos_dir, ("mp4", "webm", "mkv", "mov"))
+        if not vid_df.empty:
+            mask = (vid_df["mtime"] >= t0.timestamp()) & (vid_df["mtime"] <= t1.timestamp())
+            hits = vid_df.loc[mask].head(10)
+            if not hits.empty:
+                found_any = True
+                st.caption("Vidéos")
+                for p in hits["path"].tolist():
+                    try:
+                        st.video(p)
+                        st.caption(str(p))
+                    except Exception:
+                        st.write(str(p))
+
+    if not found_any:
+        st.info("Aucun média trouvé pour ce match.")
+
+
+def _render_match_view(
+    *,
+    row: pd.Series,
+    match_id: str,
+    db_path: str,
+    xuid: str,
+    waypoint_player: str,
+    db_key: tuple[int, int] | None,
+    settings: AppSettings,
+) -> None:
+    match_id = str(match_id or "").strip()
+    if not match_id:
+        st.info("MatchId manquant.")
+        return
+
+    last_time = row.get("start_time")
+    last_map = row.get("map_name")
+    last_playlist = row.get("playlist_name")
+    last_pair = row.get("pair_name")
+    last_mode = row.get("game_variant_name")
+    last_outcome = row.get("outcome")
+
+    last_playlist_fr = translate_playlist_name(str(last_playlist)) if last_playlist else None
+    last_pair_fr = translate_pair_name(str(last_pair)) if last_pair else None
+
+    # Résultat + score (pour affichage compact)
+    outcome_map = {2: "Victoire", 3: "Défaite", 1: "Égalité", 4: "Non terminé"}
+    try:
+        outcome_code = int(last_outcome) if last_outcome == last_outcome else None
+    except Exception:
+        outcome_code = None
+    outcome_label = outcome_map.get(outcome_code, "?") if outcome_code is not None else "-"
+
+    colors = HALO_COLORS.as_dict()
+    if outcome_code == OUTCOME_CODES.WIN:
+        outcome_color = colors["green"]
+    elif outcome_code == OUTCOME_CODES.LOSS:
+        outcome_color = colors["red"]
+    elif outcome_code == OUTCOME_CODES.TIE:
+        outcome_color = colors["violet"]
+    elif outcome_code == OUTCOME_CODES.NO_FINISH:
+        outcome_color = colors["violet"]
+    else:
+        outcome_color = colors["slate"]
+
+    last_my_score = row.get("my_team_score")
+    last_enemy_score = row.get("enemy_team_score")
+    score_label = _format_score_label(last_my_score, last_enemy_score)
+    score_color = _score_css_color(last_my_score, last_enemy_score)
+
+    wp = str(waypoint_player or "").strip()
+    match_url = None
+    if wp and match_id and match_id.strip() and match_id.strip() != "-":
+        match_url = f"https://www.halowaypoint.com/halo-infinite/players/{wp}/matches/{match_id.strip()}"
+
+    top_cols = st.columns([3, 4])
+    with top_cols[0]:
+        st.metric("Date", format_date_fr(last_time))
+    with top_cols[1]:
+        outcome_border = f"{outcome_color}55" if str(outcome_color).startswith("#") else outcome_color
+        outcome_bg = f"{outcome_color}14" if str(outcome_color).startswith("#") else "rgba(255,255,255,0.03)"
+        st.markdown(
+            "<div style='border:1px solid "
+            + str(outcome_border)
+            + "; border-radius:14px; padding:12px 14px; background: "
+            + str(outcome_bg)
+            + "; box-shadow: 0 6px 18px rgba(0,0,0,0.18)'>"
+            "<div style='display:flex; align-items:center; gap:12px; justify-content:space-between'>"
+            f"<div style='font-weight:900; font-size:1.10rem; color:{outcome_color}; letter-spacing:0.2px'>{outcome_label}</div>"
+            f"<div style='font-weight:900; font-size:1.10rem; color:{score_color}; letter-spacing:0.2px'>{score_label}</div>"
+            "</div>"
+            "</div>",
+            unsafe_allow_html=True,
+        )
+
+    last_mode_ui = row.get("mode_ui") or _normalize_mode_label(str(last_pair) if last_pair else None)
+    row_cols = st.columns(3)
+    row_cols[0].metric("Carte", str(last_map) if last_map else "-")
+    row_cols[1].metric(
+        "Playlist",
+        str(last_playlist_fr or last_playlist) if (last_playlist_fr or last_playlist) else "-",
+    )
+    row_cols[2].metric(
+        "Mode",
+        str(last_mode_ui or last_pair_fr or last_pair or last_mode)
+        if (last_mode_ui or last_pair_fr or last_pair or last_mode)
+        else "-",
+    )
+
+    with st.spinner("Lecture des stats détaillées (attendu vs réel, médailles)…"):
+        pm = cached_load_player_match_result(db_path, match_id, xuid.strip(), db_key=db_key)
+        medals_last = cached_load_match_medals_for_player(db_path, match_id, xuid.strip(), db_key=db_key)
+
+    if not pm:
+        st.info("Stats détaillées indisponibles pour ce match (PlayerMatchStats manquant ou format inattendu).")
+    else:
+        team_mmr = pm.get("team_mmr")
+        enemy_mmr = pm.get("enemy_mmr")
+        delta_mmr = (team_mmr - enemy_mmr) if (team_mmr is not None and enemy_mmr is not None) else None
+
+        mmr_cols = st.columns(3)
+        mmr_cols[0].metric("MMR d'équipe", f"{team_mmr:.1f}" if team_mmr is not None else "-")
+        mmr_cols[1].metric("MMR adverse", f"{enemy_mmr:.1f}" if enemy_mmr is not None else "-")
+        if delta_mmr is None:
+            mmr_cols[2].metric("Écart MMR", "-")
+        else:
+            mmr_cols[2].metric(
+                "Écart MMR (équipe - adverse)",
+                "-",
+                f"{float(delta_mmr):+.1f}",
+                delta_color="normal",
+            )
+
+        if match_url:
+            with mmr_cols[2]:
+                st.link_button("Ouvrir sur HaloWaypoint", match_url, width="stretch")
+
+        def _metric_expected_vs_actual(title: str, perf: dict, delta_color: str) -> None:
+            count = perf.get("count")
+            expected = perf.get("expected")
+            if count is None or expected is None:
+                st.metric(title, "-")
+                return
+            delta = float(count) - float(expected)
+            st.metric(title, f"{count:.0f} vs {expected:.1f}", f"{delta:+.1f}", delta_color=delta_color)
+
+        perf_k = pm.get("kills") or {}
+        perf_d = pm.get("deaths") or {}
+        perf_a = pm.get("assists") or {}
+
+        st.subheader("Réel vs attendu")
+        av_cols = st.columns(3)
+        with av_cols[0]:
+            _metric_expected_vs_actual("Frags", perf_k, delta_color="normal")
+        with av_cols[1]:
+            _metric_expected_vs_actual("Morts", perf_d, delta_color="inverse")
+        with av_cols[2]:
+            avg_life_last = row.get("average_life_seconds")
+            st.metric("Durée de vie moyenne", format_mmss(avg_life_last))
+
+    st.subheader("Médailles")
+    if not medals_last:
+        st.info("Médailles indisponibles pour ce match (ou aucune médaille).")
+    else:
+        md_df = pd.DataFrame(medals_last)
+        md_df["label"] = md_df["name_id"].apply(lambda x: medal_label(int(x)))
+        md_df = md_df.sort_values(["count", "label"], ascending=[False, True])
+        render_medals_grid(md_df[["name_id", "count"]].to_dict(orient="records"), cols_per_row=8)
+
+    st.subheader("Némésis / Souffre-douleur")
+    if not (match_id and match_id.strip() and has_table(db_path, "HighlightEvents")):
+        st.caption(
+            "Indisponible: la DB ne contient pas les highlight events. "
+            "Si tu utilises une DB SPNKr, relance l'import avec `--with-highlight-events`."
+        )
+    else:
+        with st.spinner("Chargement des highlight events (film)…"):
+            he = cached_load_highlight_events_for_match(db_path, match_id.strip(), db_key=db_key)
+
+        pairs = compute_killer_victim_pairs(he, tolerance_ms=5)
+        if not pairs:
+            st.info("Aucune paire kill/death trouvée (ou match sans timeline exploitable).")
+        else:
+            kv_long = killer_victim_counts_long(pairs)
+
+            me_xuid = str(xuid).strip()
+            killed_me = kv_long[kv_long["victim_xuid"].astype(str) == me_xuid]
+            i_killed = kv_long[kv_long["killer_xuid"].astype(str) == me_xuid]
+
+            nemesis_name = "-"
+            nemesis_kills = None
+            if not killed_me.empty:
+                top = (
+                    killed_me[["killer_gamertag", "count"]]
+                    .rename(columns={"killer_gamertag": "Joueur", "count": "Kills"})
+                    .sort_values(["Kills", "Joueur"], ascending=[False, True])
+                    .iloc[0]
+                )
+                nemesis_name = str(top.get("Joueur") or "-")
+                nemesis_kills = int(top.get("Kills")) if top.get("Kills") is not None else None
+
+            bully_name = "-"
+            bully_kills = None
+            if not i_killed.empty:
+                top = (
+                    i_killed[["victim_gamertag", "count"]]
+                    .rename(columns={"victim_gamertag": "Joueur", "count": "Kills"})
+                    .sort_values(["Kills", "Joueur"], ascending=[False, True])
+                    .iloc[0]
+                )
+                bully_name = str(top.get("Joueur") or "-")
+                bully_kills = int(top.get("Kills")) if top.get("Kills") is not None else None
+
+            def _clean_name(v: str) -> str:
+                s = str(v or "")
+                s = s.replace("\ufffd", "")
+                s = re.sub(r"[\x00-\x1f\x7f]", "", s)
+                s = re.sub(r"\s+", " ", s).strip()
+                return s or "-"
+
+            nemesis_name = _clean_name(nemesis_name)
+            bully_name = _clean_name(bully_name)
+
+            c = st.columns(2)
+            c[0].metric("Némésis (m'a le plus tué)", nemesis_name, f"{nemesis_kills} kills" if nemesis_kills is not None else None)
+            c[1].metric(
+                "Souffre-douleur (j'ai le plus tué)",
+                bully_name,
+                f"{bully_kills} kills" if bully_kills is not None else None,
+            )
+
+    _render_media_section(row=row, settings=settings)
 
 
 # =============================================================================
@@ -874,77 +1457,118 @@ def main() -> None:
     with perf_section("css"):
         st.markdown(load_css(), unsafe_allow_html=True)
 
+    _ensure_h5g_commendations_repo()
+
+    # Paramètres (persistés)
+    settings: AppSettings = load_settings()
+    st.session_state["app_settings"] = settings
+
     # ==========================================================================
-    # Sidebar - Configuration
+    # Source (persistée via session_state) — UI dans l'onglet Paramètres
     # ==========================================================================
-    
+
     DEFAULT_DB = get_default_db_path()
+    _init_source_state(DEFAULT_DB)
+
+    # Support liens internes via query params (?page=...&match_id=...)
+    try:
+        qp = dict(st.query_params)
+        qp_page = _qp_first(qp.get("page"))
+        qp_mid = _qp_first(qp.get("match_id"))
+    except Exception:
+        qp_page = None
+        qp_mid = None
+    qp_token = (str(qp_page or "").strip(), str(qp_mid or "").strip())
+    if any(qp_token) and st.session_state.get("_consumed_query_params") != qp_token:
+        st.session_state["_consumed_query_params"] = qp_token
+        if qp_token[0]:
+            st.session_state["_pending_page"] = qp_token[0]
+        if qp_token[1]:
+            st.session_state["_pending_match_id"] = qp_token[1]
+        # Nettoie l'URL après consommation pour ne pas forcer la page en boucle.
+        try:
+            st.query_params.clear()
+        except Exception:
+            try:
+                st.experimental_set_query_params()
+            except Exception:
+                pass
+
+    db_path = str(st.session_state.get("db_path", "") or "").strip()
+    xuid = str(st.session_state.get("xuid_input", "") or "").strip()
+    waypoint_player = str(st.session_state.get("waypoint_player", "") or "").strip()
 
     with st.sidebar:
         render_perf_panel(location="sidebar")
         st.markdown("<div class='os-sidebar-brand'>OpenSpartan Graphs</div>", unsafe_allow_html=True)
         st.markdown("<div class='os-sidebar-divider'></div>", unsafe_allow_html=True)
 
-        with perf_section("sidebar/source"):
-            with st.expander("Source", expanded=False):
-                db_path, xuid, waypoint_player = render_source_section(
-                    DEFAULT_DB,
-                    get_local_dbs=cached_list_local_dbs,
-                    on_clear_caches=_clear_app_caches,
-                )
+        # Toujours visible
+        if st.button(
+            "Actualiser",
+            width="stretch",
+            help="Relance l'app (optionnellement en vidant les caches selon Paramètres).",
+        ):
+            if bool(getattr(settings, "refresh_clears_caches", False)):
+                _clear_app_caches()
+                try:
+                    getattr(cached_list_local_dbs, "clear")()
+                except Exception:
+                    pass
+            st.rerun()
 
-        with perf_section("sidebar/openspartan"):
-            render_openspartan_tools()
+        st.caption("Source: onglet Paramètres")
 
-        with perf_section("sidebar/validate"):
-            if not db_path.strip():
-                st.error(
-                    "Aucun .db détecté automatiquement. "
-                    "Vérifie que OpenSpartan Workshop est installé."
-                )
-                st.stop()
-            if not os.path.exists(db_path):
-                st.error("Le fichier .db n'existe pas à ce chemin.")
-                st.stop()
-            # XUID: accepte aussi un gamertag et tente de le résoudre depuis la DB.
-            # IMPORTANT: ne pas écrire dans st.session_state["xuid"] ici (widget déjà instancié).
-            from src.db.parsers import parse_xuid_input
-            from src.db import resolve_xuid_from_db
+    # Validation légère (non bloquante)
+    from src.db import resolve_xuid_from_db
 
-            xraw = (xuid or "").strip()
-            xuid_resolved = parse_xuid_input(xraw) or ""
-            if not xuid_resolved and xraw and not xraw.isdigit():
-                xuid_resolved = resolve_xuid_from_db(db_path, xraw) or ""
-            if not xuid_resolved and not xraw:
-                # Évite de bloquer l'UI quand l'entrée est vide (cas typique: DB SPNKr = spnkr.db).
-                xuid_resolved = resolve_xuid_from_db(db_path, DEFAULT_PLAYER_GAMERTAG) or DEFAULT_PLAYER_XUID
+    if db_path and not os.path.exists(db_path):
+        db_path = ""
 
-            if not xuid_resolved:
-                st.error(
-                    "XUID invalide. Tu peux entrer ton gamertag (s'il est connu via les valeurs par défaut ou les aliases)."
-                )
-                st.stop()
+    xraw = (xuid or "").strip()
+    xuid_resolved = parse_xuid_input(xraw) or ""
+    if not xuid_resolved and xraw and not xraw.isdigit() and db_path:
+        xuid_resolved = resolve_xuid_from_db(db_path, xraw) or ""
+    if not xuid_resolved and not xraw and db_path:
+        xuid_or_gt, xuid_fallback, _wp = _default_identity_from_secrets()
+        if xuid_or_gt and not xuid_or_gt.isdigit():
+            xuid_resolved = resolve_xuid_from_db(db_path, xuid_or_gt) or xuid_fallback
+        else:
+            xuid_resolved = xuid_or_gt or xuid_fallback
 
-            if xuid_resolved != xraw:
-                st.caption(f"XUID résolu: {xuid_resolved}")
-            xuid = xuid_resolved
+    xuid = xuid_resolved or ""
 
-    me_name = display_name_from_xuid(xuid.strip())
+    me_name = display_name_from_xuid(xuid.strip()) if str(xuid or "").strip() else "(joueur)"
     aliases_key = _aliases_cache_key()
 
     # ==========================================================================
     # Chargement des données
     # ==========================================================================
     
-    db_key = _db_cache_key(db_path)
-    with perf_section("db/load_df"):
-        df = load_df(db_path, xuid.strip(), db_key=db_key)
-    if df.empty:
-        st.warning("Aucun match trouvé.")
-        st.stop()
+    df = pd.DataFrame()
+    db_key = _db_cache_key(db_path) if db_path else None
+    if db_path and os.path.exists(db_path) and str(xuid or "").strip():
+        with perf_section("db/load_df"):
+            df = load_df(db_path, xuid.strip(), db_key=db_key)
+        if df.empty:
+            st.warning("Aucun match trouvé.")
+    else:
+        st.info("Configure une DB et un joueur dans Paramètres.")
 
-    with perf_section("analysis/mark_firefight"):
-        df = mark_firefight(df)
+    if not df.empty:
+        with perf_section("analysis/mark_firefight"):
+            df = mark_firefight(df)
+
+    if df.empty:
+        st.radio(
+            "Navigation",
+            options=["Paramètres"],
+            horizontal=True,
+            key="page",
+            label_visibility="collapsed",
+        )
+        _render_settings_page(settings)
+        return
 
     # ==========================================================================
     # Sidebar - Filtres
@@ -1220,13 +1844,7 @@ def main() -> None:
 
         last_n_acc = st.slider("Précision: derniers matchs", 5, 50, 20, step=1)
 
-        with st.expander("Paramètres avancés", expanded=False):
-            st.toggle("Inclure Firefight (PvE)", key="include_firefight", value=False)
-            st.toggle(
-                "Limiter aux playlists (Quick Play / Ranked Slayer / Ranked Arena)",
-                key="restrict_playlists",
-                value=True,
-            )
+        # Paramètres avancés déplacés dans l'onglet Paramètres.
 
     # ==========================================================================
     # Application des filtres
@@ -1345,310 +1963,157 @@ def main() -> None:
     # (Résumé déplacé en haut du site)
 
     # ==========================================================================
-    # Onglets
+    # Pages (navigation)
     # ==========================================================================
-    
-    tab_series, tab_last, tab_medals, tab_mom, tab_teammates, tab_table = st.tabs(
-        [
-            "Séries temporelles",
-            "Dernier match",
-            "Médailles (Top 25)",
-            "Victoires/Défaites",
-            "Mes coéquipiers",
-            "Historique des parties",
-        ]
+
+    pages = [
+        "Séries temporelles",
+        "Dernier match",
+        "Match",
+        "Citations",
+        "Victoires/Défaites",
+        "Mes coéquipiers",
+        "Historique des parties",
+        "Paramètres",
+    ]
+
+    pending_page = st.session_state.pop("_pending_page", None)
+    if isinstance(pending_page, str) and pending_page in pages:
+        st.session_state["page"] = pending_page
+    if "page" not in st.session_state:
+        st.session_state["page"] = "Séries temporelles"
+
+    pending_mid = st.session_state.pop("_pending_match_id", None)
+    if isinstance(pending_mid, str) and pending_mid.strip():
+        st.session_state["match_id_input"] = pending_mid.strip()
+
+    page = st.segmented_control(
+        "Onglets",
+        options=pages,
+        key="page",
+        label_visibility="collapsed",
     )
 
     # --------------------------------------------------------------------------
-    # Tab: Dernier match
+    # Page: Dernier match
     # --------------------------------------------------------------------------
-    with tab_last:
+    if page == "Dernier match":
         st.caption("Dernière partie selon la sélection/filtres actuels.")
-
         if dff.empty:
             st.info("Aucun match disponible avec les filtres actuels.")
         else:
             last_row = dff.sort_values("start_time").iloc[-1]
-            last_match_id = str(last_row.get("match_id", ""))
-            last_time = last_row.get("start_time")
-            last_map = last_row.get("map_name")
-            last_playlist = last_row.get("playlist_name")
-            last_pair = last_row.get("pair_name")
-            last_mode = last_row.get("game_variant_name")
-            last_outcome = last_row.get("outcome")
-
-            last_playlist_fr = translate_playlist_name(str(last_playlist)) if last_playlist else None
-            last_pair_fr = translate_pair_name(str(last_pair)) if last_pair else None
-
-            # Résultat + score (pour affichage compact)
-            outcome_map = {2: "Victoire", 3: "Défaite", 1: "Égalité", 4: "Non terminé"}
-            try:
-                outcome_code = int(last_outcome) if last_outcome == last_outcome else None
-            except Exception:
-                outcome_code = None
-            outcome_label = outcome_map.get(outcome_code, "?") if outcome_code is not None else "-"
-
-            colors = HALO_COLORS.as_dict()
-            if outcome_code == OUTCOME_CODES.WIN:
-                outcome_color = colors["green"]
-            elif outcome_code == OUTCOME_CODES.LOSS:
-                outcome_color = colors["red"]
-            elif outcome_code == OUTCOME_CODES.TIE:
-                outcome_color = colors["violet"]
-            elif outcome_code == OUTCOME_CODES.NO_FINISH:
-                outcome_color = colors["violet"]
-            else:
-                outcome_color = colors["slate"]
-
-            last_my_score = last_row.get("my_team_score")
-            last_enemy_score = last_row.get("enemy_team_score")
-            score_label = _format_score_label(last_my_score, last_enemy_score)
-            score_color = _score_css_color(last_my_score, last_enemy_score)
-
-            wp = str(waypoint_player or "").strip()
-            match_url = None
-            if wp and last_match_id and last_match_id.strip() and last_match_id.strip() != "-":
-                match_url = f"https://www.halowaypoint.com/halo-infinite/players/{wp}/matches/{last_match_id.strip()}"
-
-            # Date plus large, et carte résultat plus propre.
-            top_cols = st.columns([3, 4])
-            with top_cols[0]:
-                st.metric("Date", format_date_fr(last_time))
-            with top_cols[1]:
-                outcome_border = f"{outcome_color}55" if str(outcome_color).startswith("#") else outcome_color
-                outcome_bg = f"{outcome_color}14" if str(outcome_color).startswith("#") else "rgba(255,255,255,0.03)"
-                st.markdown(
-                    "<div style='border:1px solid "
-                    + str(outcome_border)
-                    + "; border-radius:14px; padding:12px 14px; background: "
-                    + str(outcome_bg)
-                    + "; box-shadow: 0 6px 18px rgba(0,0,0,0.18)'>"
-                    "<div style='display:flex; align-items:center; gap:12px; justify-content:space-between'>"
-                    f"<div style='font-weight:900; font-size:1.10rem; color:{outcome_color}; letter-spacing:0.2px'>{outcome_label}</div>"
-                    f"<div style='font-weight:900; font-size:1.10rem; color:{score_color}; letter-spacing:0.2px'>{score_label}</div>"
-                    "</div>"
-                    "</div>",
-                    unsafe_allow_html=True,
-                )
-
-            # Carte + Playlist + Mode sur la même ligne
-            last_mode_ui = last_row.get("mode_ui") or _normalize_mode_label(str(last_pair) if last_pair else None)
-            row_cols = st.columns(3)
-            row_cols[0].metric("Carte", str(last_map) if last_map else "-")
-            row_cols[1].metric(
-                "Playlist",
-                str(last_playlist_fr or last_playlist) if (last_playlist_fr or last_playlist) else "-",
-            )
-            row_cols[2].metric(
-                "Mode",
-                str(last_mode_ui or last_pair_fr or last_pair or last_mode)
-                if (last_mode_ui or last_pair_fr or last_pair or last_mode)
-                else "-",
+            last_match_id = str(last_row.get("match_id", "")).strip()
+            _render_match_view(
+                row=last_row,
+                match_id=last_match_id,
+                db_path=db_path,
+                xuid=xuid,
+                waypoint_player=waypoint_player,
+                db_key=db_key,
+                settings=settings,
             )
 
-            with st.spinner("Lecture des stats détaillées (attendu vs réel, médailles)…"):
-                pm = cached_load_player_match_result(db_path, last_match_id, xuid.strip(), db_key=db_key)
-                medals_last = cached_load_match_medals_for_player(
-                    db_path, last_match_id, xuid.strip(), db_key=db_key
-                )
+    # --------------------------------------------------------------------------
+    # Page: Match (recherche)
+    # --------------------------------------------------------------------------
+    elif page == "Match":
+        st.caption("Afficher un match précis via un MatchId, une date/heure, ou une sélection.")
 
-            # (Le résultat + score est affiché en haut, compact, près de la date.)
+        # Entrée MatchId
+        match_id_input = st.text_input("MatchId", value=str(st.session_state.get("match_id_input", "") or ""), key="match_id_input")
 
-            if not pm:
-                st.info(
-                    "Stats détaillées indisponibles pour ce match (PlayerMatchStats manquant ou format inattendu)."
-                )
+        # Sélection rapide (sur les filtres actuels, triés du plus récent au plus ancien)
+        quick_df = dff.sort_values("start_time", ascending=False).head(200).copy()
+        quick_df["start_time_fr"] = quick_df["start_time"].apply(_format_datetime_fr_hm)
+        if "mode_ui" not in quick_df.columns:
+            quick_df["mode_ui"] = quick_df["pair_name"].apply(_normalize_mode_label)
+        quick_df["label"] = (
+            quick_df["start_time_fr"].astype(str)
+            + " — "
+            + quick_df["map_name"].astype(str)
+            + " — "
+            + quick_df["mode_ui"].astype(str)
+        )
+        opts = {r["label"]: str(r["match_id"]) for _, r in quick_df.iterrows()}
+        picked_label = st.selectbox("Sélection rapide (filtres actuels)", options=["(aucun)"] + list(opts.keys()), index=0)
+        if st.button("Utiliser ce match", width="stretch") and picked_label != "(aucun)":
+            st.session_state["match_id_input"] = opts[picked_label]
+            st.rerun()
 
-                is_spnkr_db = os.path.basename(str(db_path or "")).lower().startswith("spnkr")
-                if is_spnkr_db:
-                    st.caption(
-                        "Astuce: réimporte/rafraîchis la DB SPNKr **sans** l’option `--refresh-no-skill` "
-                        "pour récupérer les stats détaillées (MMR/attendu vs réel). "
-                        "Le refresh fait un backfill incrémental quand c’est possible (delta)."
-                    )
-                    cmd_example = (
-                        "python run_dashboard.py --refresh-spnkr --player \"<gamertag_ou_xuid>\" --refresh-max-matches 200"
-                    )
-                    st.code(cmd_example, language="bash")
-            else:
-                team_mmr = pm.get("team_mmr")
-                enemy_mmr = pm.get("enemy_mmr")
-                delta_mmr = (team_mmr - enemy_mmr) if (team_mmr is not None and enemy_mmr is not None) else None
-
-                mmr_cols = st.columns(3)
-                mmr_cols[0].metric("MMR d'équipe", f"{team_mmr:.1f}" if team_mmr is not None else "-")
-                mmr_cols[1].metric("MMR adverse", f"{enemy_mmr:.1f}" if enemy_mmr is not None else "-")
-                if delta_mmr is None:
-                    mmr_cols[2].metric("Écart MMR", "-")
+        # Recherche par date/heure
+        with st.expander("Recherche par date/heure", expanded=False):
+            dd = st.date_input("Date", value=date.today(), format="DD/MM/YYYY")
+            tt = st.time_input("Heure", value=time(20, 0))
+            tol_min = st.slider("Tolérance (minutes)", 0, 30, 10, 1)
+            if st.button("Rechercher", width="stretch"):
+                target = datetime.combine(dd, tt)
+                all_df = df.copy()
+                all_df["_dt"] = pd.to_datetime(all_df["start_time"], errors="coerce")
+                all_df = all_df.dropna(subset=["_dt"]).copy()
+                if all_df.empty:
+                    st.warning("Aucune date exploitable dans la DB.")
                 else:
-                    mmr_cols[2].metric(
-                        "Écart MMR (équipe - adverse)",
-                        "-",
-                        f"{float(delta_mmr):+.1f}",
-                        delta_color="normal",
-                    )
+                    all_df["_diff"] = (all_df["_dt"] - target).abs()
+                    best = all_df.sort_values("_diff").iloc[0]
+                    diff_min = float(best["_diff"].total_seconds() / 60.0)
+                    if diff_min <= float(tol_min):
+                        st.session_state["match_id_input"] = str(best.get("match_id") or "").strip()
+                        st.rerun()
+                    else:
+                        st.warning(f"Aucun match trouvé dans ±{tol_min} min (le plus proche est à {diff_min:.1f} min).")
 
-                if match_url:
-                    with mmr_cols[2]:
-                        st.link_button("Ouvrir sur HaloWaypoint", match_url, width="stretch")
-
-                # Attendu vs réel (K / D) + ratios (match uniquement)
-                def _metric_expected_vs_actual(title: str, perf: dict, delta_color: str) -> None:
-                    count = perf.get("count")
-                    expected = perf.get("expected")
-                    if count is None or expected is None:
-                        st.metric(title, "-")
-                        return
-                    delta = float(count) - float(expected)
-                    st.metric(title, f"{count:.0f} vs {expected:.1f}", f"{delta:+.1f}", delta_color=delta_color)
-
-                perf_k = pm.get("kills") or {}
-                perf_d = pm.get("deaths") or {}
-                perf_a = pm.get("assists") or {}
-
-                st.subheader("Réel vs attendu")
-                av_cols = st.columns(3)
-                with av_cols[0]:
-                    _metric_expected_vs_actual("Frags", perf_k, delta_color="normal")
-                with av_cols[1]:
-                    _metric_expected_vs_actual("Morts", perf_d, delta_color="inverse")
-                with av_cols[2]:
-                    avg_life_last = last_row.get("average_life_seconds")
-                    st.metric("Durée de vie moyenne", format_mmss(avg_life_last))
-
-                labels = ["F", "D", "A"]
-                actual_vals = [
-                    float(last_row.get("kills") or 0.0),
-                    float(last_row.get("deaths") or 0.0),
-                    float(last_row.get("assists") or 0.0),
-                ]
-                exp_vals = [
-                    perf_k.get("expected"),
-                    perf_d.get("expected"),
-                    perf_a.get("expected"),
-                ]
-
-                show_expected_ratio = all(v is not None for v in exp_vals)
-
-                real_ratio = last_row.get("ratio")
-                try:
-                    real_ratio_f = float(real_ratio) if real_ratio == real_ratio else None
-                except Exception:
-                    real_ratio_f = None
-                if real_ratio_f is None:
-                    denom = max(1.0, float(last_row.get("deaths") or 0.0))
-                    real_ratio_f = (float(last_row.get("kills") or 0.0) + float(last_row.get("assists") or 0.0)) / denom
-
-                exp_ratio_f = None
-                if show_expected_ratio:
-                    denom_e = max(1e-9, float(exp_vals[1] or 0.0))
-                    exp_ratio_f = (float(exp_vals[0] or 0.0) + float(exp_vals[2] or 0.0)) / denom_e
-
-                exp_fig = make_subplots(specs=[[{"secondary_y": True}]])
-
-                bar_colors = [HALO_COLORS.green, HALO_COLORS.red, HALO_COLORS.cyan]
-                exp_fig.add_trace(
-                    go.Bar(
-                        x=labels,
-                        y=exp_vals,
-                        name="Attendu",
-                        marker=dict(
-                            color=bar_colors,
-                            pattern=dict(shape="/", fgcolor="rgba(255,255,255,0.75)", solidity=0.22),
-                        ),
-                        opacity=0.50,
-                        hovertemplate="%{x} (attendu): %{y:.1f}<extra></extra>",
-                    ),
-                    secondary_y=False,
-                )
-                exp_fig.add_trace(
-                    go.Bar(
-                        x=labels,
-                        y=actual_vals,
-                        name="Réel",
-                        marker_color=bar_colors,
-                        opacity=0.90,
-                        hovertemplate="%{x} (réel): %{y:.0f}<extra></extra>",
-                    ),
-                    secondary_y=False,
-                )
-                exp_fig.add_trace(
-                    go.Scatter(
-                        x=labels,
-                        y=[real_ratio_f] * len(labels),
-                        mode="lines+markers",
-                        name="Ratio réel",
-                        line=dict(color=HALO_COLORS.amber, width=4),
-                        marker=dict(size=7),
-                        hovertemplate="ratio (réel): %{y:.2f}<extra></extra>",
-                    ),
-                    secondary_y=True,
-                )
-                if exp_ratio_f is not None:
-                    exp_fig.add_trace(
-                        go.Scatter(
-                            x=labels,
-                            y=[exp_ratio_f] * len(labels),
-                            mode="lines+markers",
-                            name="Ratio attendu",
-                            line=dict(color=HALO_COLORS.violet, width=3, dash="dot"),
-                            marker=dict(size=6),
-                            hovertemplate="ratio (attendu): %{y:.2f}<extra></extra>",
-                        ),
-                        secondary_y=True,
-                    )
-                else:
-                    st.caption("Ratio attendu indisponible (Assists attendues manquantes dans PlayerMatchStats).")
-
-                exp_fig.update_layout(
-                    barmode="group",
-                    height=360,
-                    margin=dict(l=40, r=20, t=30, b=90),
-                    legend=get_legend_horizontal_bottom(),
-                )
-                exp_fig.update_yaxes(title_text="F / D / A", rangemode="tozero", secondary_y=False)
-                exp_fig.update_yaxes(title_text="Ratio", secondary_y=True)
-                st.plotly_chart(exp_fig, width="stretch")
-
-            # Médailles (match)
-            st.subheader("Médailles")
-            if not medals_last:
-                st.info("Médailles indisponibles pour ce match (ou aucune médaille).")
+        mid = str(match_id_input or "").strip()
+        if not mid:
+            st.info("Renseigne un MatchId ou utilise la sélection/recherche ci-dessus.")
+        else:
+            rows = df.loc[df["match_id"].astype(str) == mid]
+            if rows.empty:
+                st.warning("MatchId introuvable dans la DB actuelle.")
             else:
-                md_df = pd.DataFrame(medals_last)
-                md_df["label"] = md_df["name_id"].apply(lambda x: medal_label(int(x)))
-                md_df = md_df.sort_values(["count", "label"], ascending=[False, True])
-                render_medals_grid(md_df[["name_id", "count"]].to_dict(orient="records"), cols_per_row=8)
-
-
+                match_row = rows.sort_values("start_time").iloc[-1]
+                _render_match_view(
+                    row=match_row,
+                    match_id=mid,
+                    db_path=db_path,
+                    xuid=xuid,
+                    waypoint_player=waypoint_player,
+                    db_key=db_key,
+                    settings=settings,
+                )
 
     # --------------------------------------------------------------------------
-    # Tab: Médailles (Top 25)
+    # Page: Citations (ex Médailles)
     # --------------------------------------------------------------------------
-    with tab_medals:
-        st.caption("Top 25 des médailles sur la sélection/filtres actuels.")
+    elif page == "Citations":
+        # 1) Commendations Halo 5 (référentiel offline)
+        render_h5g_commendations_section()
+        st.divider()
 
+        # 2) Médailles (Halo Infinite) sur la sélection/filtres actuels
+        st.caption("Médailles sur la sélection/filtres actuels (non limitées).")
         if dff.empty:
             st.info("Aucun match disponible avec les filtres actuels.")
         else:
-            match_ids = [str(x) for x in dff["match_id"].dropna().astype(str).tolist()]
+            show_all = st.toggle("Afficher toutes les médailles (peut être lent)", value=False)
+            top_n = None if show_all else int(st.slider("Nombre de médailles", 25, 500, 100, 25))
 
+            match_ids = [str(x) for x in dff["match_id"].dropna().astype(str).tolist()]
             with st.spinner("Agrégation des médailles…"):
-                top = _top_medals(db_path, xuid.strip(), match_ids, top_n=25, db_key=db_key)
+                top = _top_medals(db_path, xuid.strip(), match_ids, top_n=top_n, db_key=db_key)
 
             if not top:
                 st.info("Aucune médaille trouvée (ou payload médailles absent).")
             else:
                 md = pd.DataFrame(top, columns=["name_id", "count"])
-
                 md["label"] = md["name_id"].apply(lambda x: medal_label(int(x)))
                 md_desc = md.sort_values("count", ascending=False)
                 render_medals_grid(md_desc[["name_id", "count"]].to_dict(orient="records"), cols_per_row=8)
 
     # --------------------------------------------------------------------------
-    # Tab: Séries temporelles
+    # Page: Séries temporelles
     # --------------------------------------------------------------------------
-    with tab_series:
+    elif page == "Séries temporelles":
         with st.spinner("Génération des graphes…"):
             fig = plot_timeseries(dff, title=f"{me_name}")
             st.plotly_chart(fig, width="stretch")
@@ -1681,9 +2146,9 @@ def main() -> None:
             st.plotly_chart(plot_spree_headshots_accuracy(dff), width="stretch")
 
     # --------------------------------------------------------------------------
-    # Tab: Victoires/Défaites
+    # Page: Victoires/Défaites
     # --------------------------------------------------------------------------
-    with tab_mom:
+    elif page == "Victoires/Défaites":
         with st.spinner("Calcul des victoires/défaites…"):
             # En mode Sessions, si on a sélectionné une ou plusieurs sessions on raisonne "session".
             # Si on est sur "(toutes)", on revient au bucket temporel normal (jour/semaine/mois...).
@@ -1694,7 +2159,6 @@ def main() -> None:
                 f"Par **{bucket_label}** : on regroupe les parties par {bucket_label} et on compte le nombre de "
                 "victoires/défaites (et autres statuts) pour suivre l'évolution."
             )
-            st.caption("Basé sur Players[].Outcome (2=victoire, 3=défaite, 1=égalité, 4=non terminé).")
             st.plotly_chart(fig_out, width="stretch")
 
             st.subheader("Tableau — par période")
@@ -1956,9 +2420,9 @@ def main() -> None:
             #  l'onglet se concentre sur le graphe Victoires au-dessus / Défaites en dessous.)
 
     # --------------------------------------------------------------------------
-    # Tab: Mes coéquipiers (fusion)
+    # Page: Mes coéquipiers (fusion)
     # --------------------------------------------------------------------------
-    with tab_teammates:
+    elif page == "Mes coéquipiers":
         st.caption("Vue dédiée aux matchs joués avec tes coéquipiers (XUID rencontrés / alias).")
 
         apply_current_filters_teammates = st.toggle(
@@ -2251,7 +2715,7 @@ def main() -> None:
                     title = f"Ratio global par carte — avec mes coéquipiers (min {min_matches_maps_friends} matchs)"
                     st.plotly_chart(plot_map_ratio_with_winloss(view_all, title=title), width="stretch")
 
-                st.subheader("Historique — matchs avec mes coéquipiers")
+                    st.subheader("Historique — matchs avec mes coéquipiers")
                 if sub_all.empty:
                     st.info("Aucun match trouvé avec tes coéquipiers (selon le filtre actuel).")
                 else:
@@ -2303,7 +2767,12 @@ def main() -> None:
                     else:
                         friends_table["match_url"] = ""
 
+                    friends_table["app_match_url"] = friends_table["match_id"].astype(str).apply(
+                        lambda mid: _app_url("Match", match_id=str(mid))
+                    )
+
                     friends_show = [
+                        "app_match_url",
                         "match_url",
                         "start_time_fr",
                         "map_name",
@@ -2330,6 +2799,7 @@ def main() -> None:
                         width="stretch",
                         hide_index=True,
                         column_config={
+                            "app_match_url": st.column_config.LinkColumn("Match", display_text="Ouvrir"),
                             "match_url": st.column_config.LinkColumn("HaloWaypoint", display_text="Ouvrir"),
                             "start_time_fr": st.column_config.TextColumn("Date"),
                             "map_name": st.column_config.TextColumn("Carte"),
@@ -2598,9 +3068,9 @@ def main() -> None:
 
 
     # --------------------------------------------------------------------------
-    # Tab: Historique des parties
+    # Page: Historique des parties
     # --------------------------------------------------------------------------
-    with tab_table:
+    elif page == "Historique des parties":
         st.subheader("Historique des parties")
         dff_table = dff.copy()
         if "playlist_fr" not in dff_table.columns:
@@ -2619,6 +3089,10 @@ def main() -> None:
 
         dff_table["score"] = dff_table.apply(
             lambda r: _format_score_label(r.get("my_team_score"), r.get("enemy_team_score")), axis=1
+        )
+
+        dff_table["app_match_url"] = dff_table["match_id"].astype(str).apply(
+            lambda mid: _app_url("Match", match_id=str(mid))
         )
 
         # MMR équipe/adverse pour chaque match (source PlayerMatchStats).
@@ -2644,6 +3118,7 @@ def main() -> None:
         dff_table["average_life_mmss"] = dff_table["average_life_seconds"].apply(lambda x: format_mmss(x))
 
         show_cols = [
+            "app_match_url",
             "match_url", "start_time_fr", "map_name", "playlist_fr", "mode_ui", "outcome_label", "score",
             "team_mmr", "enemy_mmr", "delta_mmr",
             "kda", "kills", "deaths", "max_killing_spree", "headshot_kills",
@@ -2665,6 +3140,10 @@ def main() -> None:
             width="stretch",
             hide_index=True,
             column_config={
+                "app_match_url": st.column_config.LinkColumn(
+                    "Match",
+                    display_text="Ouvrir",
+                ),
                 "match_url": st.column_config.LinkColumn(
                     "Consulter sur HaloWaypoint",
                     display_text="Ouvrir",
@@ -2697,6 +3176,12 @@ def main() -> None:
             file_name="openspartan_matches.csv",
             mime="text/csv",
         )
+
+    # --------------------------------------------------------------------------
+    # Page: Paramètres
+    # --------------------------------------------------------------------------
+    elif page == "Paramètres":
+        _render_settings_page(settings)
 
 
 if __name__ == "__main__":

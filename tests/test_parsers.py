@@ -43,8 +43,10 @@ class TestResolveXuidFromDb:
         assert resolve_xuid_from_db(db_path, "JGtm") == "2533274823110022"
         assert resolve_xuid_from_db(db_path, "jgtm") == "2533274823110022"
 
-    def test_fallback_default_player(self, tmp_path):
-        # Même si la DB n'aide pas, on doit pouvoir résoudre via les defaults locaux.
+    def test_fallback_default_player(self, tmp_path, monkeypatch):
+        # Même si la DB n'aide pas, on doit pouvoir résoudre via des defaults locaux.
+        monkeypatch.setenv("OPENSPARTAN_DEFAULT_GAMERTAG", "JGtm")
+        monkeypatch.setenv("OPENSPARTAN_DEFAULT_XUID", "2533274823110022")
         db_path = str(tmp_path / "empty.db")
         assert resolve_xuid_from_db(db_path, "JGtm") == "2533274823110022"
 

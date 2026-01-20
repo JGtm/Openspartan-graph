@@ -8,8 +8,9 @@ from functools import lru_cache
 
 def get_css_path() -> str:
     """Retourne le chemin du fichier CSS."""
+    repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
     return os.path.join(
-        os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
+        repo_root,
         "static",
         "styles.css",
     )

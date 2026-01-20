@@ -15,12 +15,99 @@ from src.db import queries
 from src.models import MatchRow, FriendMatch
 
 
+_CTRL_RE = re.compile(r"[\x00-\x1f\x7f]")
+
+
+def _sanitize_gamertag(value: Any) -> Any:
+    if value is None:
+        return value
+    if isinstance(value, (bytes, bytearray, memoryview)):
+        raw = bytes(value)
+        for enc in ("utf-8", "utf-16-le", "utf-16"):
+            try:
+                value = raw.decode(enc)
+                break
+            except Exception:
+                continue
+        else:
+            value = raw.decode("utf-8", errors="replace")
+
+    if not isinstance(value, str):
+        return value
+    s = value.replace("\ufffd", "")
+    s = _CTRL_RE.sub("", s)
+    s = " ".join(s.split()).strip()
+    return s or value
+
+
+def has_table(db_path: str, table_name: str) -> bool:
+    if not db_path or not table_name:
+        return False
+    try:
+        with get_connection(db_path) as con:
+            cur = con.cursor()
+            cur.execute(queries.HAS_TABLE, (table_name,))
+            return cur.fetchone() is not None
+    except Exception:
+        return False
+
+
+def load_highlight_events_for_match(db_path: str, match_id: str) -> list[dict[str, Any]]:
+    """Charge les highlight events (film) pour un match.
+
+    Source: table HighlightEvents (produite par scripts/spnkr_import_db.py avec --with-highlight-events)
+
+    Returns:
+        Liste de dicts (JSON brut) — typiquement avec: event_type, time_ms, xuid, gamertag, type_hint, ...
+    """
+    if not match_id:
+        return []
+    if not has_table(db_path, "HighlightEvents"):
+        return []
+
+    out: list[dict[str, Any]] = []
+    with get_connection(db_path) as con:
+        cur = con.cursor()
+        cur.execute(queries.LOAD_HIGHLIGHT_EVENTS_BY_MATCH_ID, (match_id,))
+        for (body,) in cur.fetchall():
+            if body is None:
+                continue
+
+            body_str: str | None = None
+            if isinstance(body, str):
+                body_str = body
+            elif isinstance(body, (bytes, bytearray, memoryview)):
+                raw = bytes(body)
+                for enc in ("utf-8", "utf-16-le", "utf-16"):
+                    try:
+                        body_str = raw.decode(enc)
+                        break
+                    except Exception:
+                        continue
+                if body_str is None:
+                    body_str = raw.decode("utf-8", errors="replace")
+            else:
+                continue
+
+            if not body_str:
+                continue
+            try:
+                obj = json.loads(body_str)
+            except Exception:
+                continue
+            if isinstance(obj, dict):
+                if "gamertag" in obj:
+                    obj["gamertag"] = _sanitize_gamertag(obj.get("gamertag"))
+                out.append(obj)
+    return out
+
+
 def load_top_medals(
     db_path: str,
     xuid: str,
     match_ids: List[str],
     *,
-    top_n: int = 25,
+    top_n: int | None = 25,
 ) -> List[tuple[int, int]]:
     """Retourne les médailles les plus fréquentes (NameId -> total).
 
@@ -34,7 +121,7 @@ def load_top_medals(
     if not xuid or not match_ids:
         return []
 
-    if top_n <= 0:
+    if top_n is not None and int(top_n) <= 0:
         return []
 
     # Normalise et déduplique en gardant l'ordre
@@ -73,7 +160,10 @@ def load_top_medals(
                     continue
                 totals[nid] = totals.get(nid, 0) + cnt
 
-    return sorted(totals.items(), key=lambda kv: kv[1], reverse=True)[: int(top_n)]
+    out = sorted(totals.items(), key=lambda kv: kv[1], reverse=True)
+    if top_n is None:
+        return out
+    return out[: int(top_n)]
 
 
 def _xuid_id_matches(pid: Any, xuid: str) -> bool:

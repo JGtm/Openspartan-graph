@@ -22,6 +22,20 @@
 - **Python 3.10+** (recommandé: 3.11 ou 3.12)
 - **[OpenSpartan Workshop](https://github.com/OpenSpartan/openspartan-workshop)** installé et synchronisé
 
+## 📦 Assets offline (icônes)
+
+### Icônes de médailles (Halo Infinite)
+
+Par défaut, l'app lit les icônes de médailles depuis le cache OpenSpartan.Workshop (dans ton profil Windows).
+Pour rendre le projet autonome/offline, copie les PNG du cache vers le repo :
+
+```bash
+python scripts/sync_medal_icons.py
+```
+
+- Destination : `static/medals/icons/<NameId>.png`
+- Ensuite, l'UI utilisera automatiquement ces icônes locales (fallback vers le cache OpenSpartan si besoin).
+
 ## 🚀 Installation
 
 ### Installation rapide

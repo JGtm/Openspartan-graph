@@ -57,24 +57,22 @@ def get_aliases_file_path() -> str:
 # Identité par défaut (local)
 # =============================================================================
 
-# Valeurs par défaut pour simplifier l'usage en local.
-# (Le dashboard peut toujours utiliser une autre DB/XUID via la sidebar.)
-DEFAULT_PLAYER_GAMERTAG = "JGtm"
-DEFAULT_PLAYER_XUID = "2533274823110022"
+DEFAULT_PLAYER_GAMERTAG = (os.environ.get("OPENSPARTAN_DEFAULT_GAMERTAG") or "").strip()
+DEFAULT_PLAYER_XUID = (os.environ.get("OPENSPARTAN_DEFAULT_XUID") or "").strip()
 
 
-DEFAULT_WAYPOINT_PLAYER = DEFAULT_PLAYER_GAMERTAG
+DEFAULT_WAYPOINT_PLAYER = (os.environ.get("OPENSPARTAN_DEFAULT_WAYPOINT_PLAYER") or DEFAULT_PLAYER_GAMERTAG).strip()
 
 
 # =============================================================================
 # Alias XUID par défaut (hardcodés)
 # =============================================================================
 
-XUID_ALIASES_DEFAULT: Dict[str, str] = {
-    DEFAULT_PLAYER_XUID: DEFAULT_PLAYER_GAMERTAG,
-    "2533274858283686": "Madina972",
-    "2535469190789936": "Chocoboflor",
-}
+XUID_ALIASES_DEFAULT: Dict[str, str] = (
+    {DEFAULT_PLAYER_XUID: DEFAULT_PLAYER_GAMERTAG}
+    if (DEFAULT_PLAYER_XUID and DEFAULT_PLAYER_GAMERTAG)
+    else {}
+)
 
 
 # =============================================================================

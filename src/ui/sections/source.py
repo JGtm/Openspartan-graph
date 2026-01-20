@@ -14,6 +14,30 @@ from src.db import guess_xuid_from_db_path, load_profiles, save_profiles, resolv
 from src.ui.aliases import load_aliases_file, save_aliases_file, display_name_from_xuid
 
 
+def _default_identity_from_secrets() -> tuple[str, str]:
+    """Retourne (xuid_or_gamertag, waypoint_player) depuis secrets/env/constants."""
+    try:
+        player = st.secrets.get("player", {})
+        if isinstance(player, dict):
+            gt = str(player.get("gamertag") or "").strip()
+            xu = str(player.get("xuid") or "").strip()
+            wp = str(player.get("waypoint_player") or "").strip()
+        else:
+            gt = xu = wp = ""
+    except Exception:
+        gt = xu = wp = ""
+
+    gt = gt or str(os.environ.get("OPENSPARTAN_DEFAULT_GAMERTAG") or "").strip()
+    xu = xu or str(os.environ.get("OPENSPARTAN_DEFAULT_XUID") or "").strip()
+    wp = wp or str(os.environ.get("OPENSPARTAN_DEFAULT_WAYPOINT_PLAYER") or "").strip()
+
+    gt = gt or str(DEFAULT_PLAYER_GAMERTAG or "").strip()
+    wp = wp or str(DEFAULT_WAYPOINT_PLAYER or "").strip() or gt
+
+    xuid_or_gt = gt or xu
+    return xuid_or_gt, wp
+
+
 def render_source_section(
     default_db: str,
     *,
@@ -38,9 +62,11 @@ def render_source_section(
         legacy = str(st.session_state.get("xuid", "") or "").strip()
         guessed = guess_xuid_from_db_path(st.session_state.get("db_path", "")) or ""
         env_player = (os.environ.get("SPNKR_PLAYER") or "").strip()
-        st.session_state["xuid_input"] = legacy or guessed or env_player or DEFAULT_PLAYER_GAMERTAG
+        secret_player, _secret_wp = _default_identity_from_secrets()
+        st.session_state["xuid_input"] = legacy or guessed or env_player or secret_player
     if "waypoint_player" not in st.session_state:
-        st.session_state["waypoint_player"] = DEFAULT_WAYPOINT_PLAYER
+        _secret_player, secret_wp = _default_identity_from_secrets()
+        st.session_state["waypoint_player"] = secret_wp
 
     # DB SPNKr locale (par défaut: data/spnkr.db à la racine du repo)
     repo_root = Path(__file__).resolve().parents[3]
@@ -101,7 +127,8 @@ def render_source_section(
                         st.session_state["xuid_input"] = resolved
             else:
                 # Fallback local pour éviter un état "vide" qui bloque l'app.
-                st.session_state["xuid_input"] = DEFAULT_PLAYER_GAMERTAG
+                secret_player, _secret_wp = _default_identity_from_secrets()
+                st.session_state["xuid_input"] = secret_player
             st.rerun()
 
     with st.expander("Multi-DB (profils)", expanded=False):

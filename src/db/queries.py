@@ -78,6 +78,24 @@ WHERE MatchId = ?
 LIMIT 1;
 """
 
+
+# =============================================================================
+# Requêtes pour les highlight events (film)
+# =============================================================================
+
+HAS_TABLE = """
+SELECT 1
+FROM sqlite_master
+WHERE type='table' AND name=?
+LIMIT 1;
+"""
+
+LOAD_HIGHLIGHT_EVENTS_BY_MATCH_ID = """
+SELECT ResponseBody
+FROM HighlightEvents
+WHERE MatchId = ?
+"""
+
 # =============================================================================
 # Requêtes pour les joueurs
 # =============================================================================

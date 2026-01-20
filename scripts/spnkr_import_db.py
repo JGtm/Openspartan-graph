@@ -171,6 +171,23 @@ CREATE TABLE IF NOT EXISTS PlayerMatchStats (
 """
     )
 
+    # Highlight events (film) — optionnel.
+    # Stocke le JSON brut renvoyé par SPNKr (spnkr.film.read_highlight_events).
+    cur.execute(
+        """
+CREATE TABLE IF NOT EXISTS HighlightEvents (
+   MatchId TEXT NOT NULL,
+   ResponseBody TEXT NOT NULL,
+   EventType TEXT GENERATED ALWAYS AS (json_extract(ResponseBody, '$.event_type')) VIRTUAL,
+   TimeMs INTEGER GENERATED ALWAYS AS (json_extract(ResponseBody, '$.time_ms')) VIRTUAL,
+   Xuid TEXT GENERATED ALWAYS AS (json_extract(ResponseBody, '$.xuid')) VIRTUAL,
+   Gamertag TEXT GENERATED ALWAYS AS (json_extract(ResponseBody, '$.gamertag')) VIRTUAL,
+   TypeHint INTEGER GENERATED ALWAYS AS (json_extract(ResponseBody, '$.type_hint')) VIRTUAL
+)
+"""
+    )
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_HighlightEvents_MatchId ON HighlightEvents(MatchId)")
+
     # Assets — on garde le schéma OpenSpartan (virt cols) car c'est pratique et compatible.
     cur.execute(
         """
@@ -548,6 +565,12 @@ async def main_async(argv: list[str]) -> int:
     ap.add_argument("--no-skill", action="store_true", help="N'importe pas PlayerMatchStats (skill)")
     ap.add_argument("--no-assets", action="store_true", help="N'importe pas les assets UGC (Maps/Playlists/etc.)")
 
+    ap.add_argument(
+        "--with-highlight-events",
+        action="store_true",
+        help="Importe aussi les highlight events (film) par match (plus lent).",
+    )
+
     # Tokens manuels
     ap.add_argument("--spartan-token", default=None)
     ap.add_argument("--clearance-token", default=None)
@@ -600,6 +623,13 @@ async def main_async(argv: list[str]) -> int:
                 clearance_token=tokens.clearance_token,
                 requests_per_second=int(args.requests_per_second),
             )
+
+            film_mod = None
+            if args.with_highlight_events:
+                try:
+                    from spnkr import film as film_mod  # type: ignore
+                except Exception:
+                    film_mod = None
 
             player = args.player
             # `--player` peut être "123..." ou gamertag. SPNKr accepte les deux.
@@ -682,6 +712,47 @@ async def main_async(argv: list[str]) -> int:
                                     asset_seen=asset_seen,
                                     asset_missing=asset_missing,
                                 )
+
+                        # Backfill highlight events si demandé et si absent.
+                        if args.with_highlight_events and film_mod is not None:
+                            try:
+                                cur = con.cursor()
+                                cur.execute(
+                                    "SELECT 1 FROM HighlightEvents WHERE MatchId = ? LIMIT 1",
+                                    (mid,),
+                                )
+                                has_events = cur.fetchone() is not None
+                            except Exception:
+                                has_events = False
+
+                            if not has_events:
+                                try:
+                                    async def _get_events_existing():
+                                        return await film_mod.read_highlight_events(client, match_id=mid)
+
+                                    events = await _request_with_retries(_get_events_existing)
+                                    if events:
+                                        cur = con.cursor()
+
+                                        def _event_to_dict(e: Any) -> dict[str, Any]:
+                                            if isinstance(e, dict):
+                                                return e
+                                            if hasattr(e, "model_dump"):
+                                                return e.model_dump()  # type: ignore[no-any-return]
+                                            if hasattr(e, "dict"):
+                                                return e.dict()  # type: ignore[no-any-return]
+                                            if hasattr(e, "_asdict"):
+                                                return e._asdict()  # type: ignore[no-any-return]
+                                            return {"raw": str(e)}
+
+                                        for e in events:
+                                            cur.execute(
+                                                "INSERT INTO HighlightEvents(MatchId, ResponseBody) VALUES (?, ?)",
+                                                (mid, json.dumps(_event_to_dict(e), ensure_ascii=False)),
+                                            )
+                                        con.commit()
+                                except Exception:
+                                    pass
                         start += 1
                         remaining -= 1
                         continue
@@ -729,6 +800,37 @@ async def main_async(argv: list[str]) -> int:
 
                     # Commit au plus tôt pour éviter de perdre le match si un fetch d'asset hang.
                     con.commit()
+
+                    # --- Highlight events (optionnel) ---
+                    if args.with_highlight_events and film_mod is not None:
+                        try:
+                            async def _get_events():
+                                return await film_mod.read_highlight_events(client, match_id=mid)
+
+                            events = await _request_with_retries(_get_events)
+                            if events:
+                                cur = con.cursor()
+
+                                def _event_to_dict(e: Any) -> dict[str, Any]:
+                                    if isinstance(e, dict):
+                                        return e
+                                    if hasattr(e, "model_dump"):
+                                        return e.model_dump()  # type: ignore[no-any-return]
+                                    if hasattr(e, "dict"):
+                                        return e.dict()  # type: ignore[no-any-return]
+                                    if hasattr(e, "_asdict"):
+                                        return e._asdict()  # type: ignore[no-any-return]
+                                    return {"raw": str(e)}
+
+                                for e in events:
+                                    cur.execute(
+                                        "INSERT INTO HighlightEvents(MatchId, ResponseBody) VALUES (?, ?)",
+                                        (mid, json.dumps(_event_to_dict(e), ensure_ascii=False)),
+                                    )
+                                con.commit()
+                        except Exception:
+                            # Non bloquant: certains matchs/chunks peuvent être manquants.
+                            pass
 
                     # --- Assets (optionnel mais utile pour les noms) ---
                     mi = match_json.get("MatchInfo")

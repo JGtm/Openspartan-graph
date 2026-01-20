@@ -256,8 +256,10 @@ def resolve_xuid_from_db(db_path: str, player: str, *, limit_rows: int = 400) ->
         return parsed
 
     # Fallback 1: valeurs par défaut (local)
-    if p.casefold() == DEFAULT_PLAYER_GAMERTAG.casefold():
-        return DEFAULT_PLAYER_XUID
+    default_gt = (os.environ.get("OPENSPARTAN_DEFAULT_GAMERTAG") or DEFAULT_PLAYER_GAMERTAG or "").strip()
+    default_xuid = (os.environ.get("OPENSPARTAN_DEFAULT_XUID") or DEFAULT_PLAYER_XUID or "").strip()
+    if default_gt and p.casefold() == default_gt.casefold():
+        return default_xuid or None
 
     # Fallback 2: aliases locaux (et hardcodés)
     try:

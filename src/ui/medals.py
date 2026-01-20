@@ -65,12 +65,23 @@ def load_medal_name_maps() -> tuple[dict[str, str], dict[str, str]]:
                         break
         return out
 
-    fr_map = _load(os.path.join("static", "medals", "medals_fr.json"))
+    repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+    fr_map = _load(os.path.join(repo_root, "static", "medals", "medals_fr.json"))
     # Fallback EN : nouveau fichier généré (et compat avec un éventuel ancien medals.json)
-    en_map = _load(os.path.join("static", "medals", "medals_en.json"))
+    en_map = _load(os.path.join(repo_root, "static", "medals", "medals_en.json"))
     if not en_map:
-        en_map = _load(os.path.join("static", "medals", "medals.json"))
+        en_map = _load(os.path.join(repo_root, "static", "medals", "medals.json"))
     return fr_map, en_map
+
+
+def get_local_medals_icons_dir() -> str:
+    """Retourne le dossier d'icônes médailles embarquées dans le repo.
+
+    Returns:
+        Chemin absolu vers static/medals/icons
+    """
+    repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+    return os.path.join(repo_root, "static", "medals", "icons")
 
 
 def medal_has_known_label(nid: int) -> bool:
@@ -133,6 +144,10 @@ def medal_icon_path(nid: int) -> Optional[str]:
     Returns:
         Chemin absolu vers l'icône ou None si introuvable.
     """
+    local_p = os.path.join(get_local_medals_icons_dir(), f"{int(nid)}.png")
+    if os.path.exists(local_p):
+        return local_p
+
     p = os.path.join(get_medals_cache_dir(), f"{int(nid)}.png")
     return p if os.path.exists(p) else None
 
@@ -159,12 +174,15 @@ def render_medals_grid(medals: list[dict[str, int]], cols_per_row: int = 8) -> N
             + (" …" if len(missing_labels) > 12 else "")
         )
 
+    local_dir = get_local_medals_icons_dir()
     cache_dir = get_medals_cache_dir()
+    has_local = os.path.isdir(local_dir)
     has_cache = os.path.isdir(cache_dir)
-    if not has_cache:
+    if not (has_local or has_cache):
         st.caption(
-            "Cache d'images introuvable. "
-            "Définis OPENSPARTAN_MEDALS_CACHE ou vérifie l'installation OpenSpartan.Workshop."
+            "Icônes de médailles introuvables. "
+            "Utilise scripts/sync_medal_icons.py pour copier les PNG en local, "
+            "ou définis OPENSPARTAN_MEDALS_CACHE / installe OpenSpartan.Workshop."
         )
 
     cols_per_row = max(3, min(int(cols_per_row), 12))
@@ -174,7 +192,7 @@ def render_medals_grid(medals: list[dict[str, int]], cols_per_row: int = 8) -> N
         nid = int(m.get("name_id", 0))
         cnt = int(m.get("count", 0))
         name = medal_label(nid)
-        icon = medal_icon_path(nid) if has_cache else None
+        icon = medal_icon_path(nid)
 
         if icon:
             col.image(icon, width="stretch")

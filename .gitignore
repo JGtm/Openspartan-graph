@@ -3,6 +3,8 @@ __pycache__/
 *.pyc
 out/
 .streamlit/
+!.streamlit/
+!.streamlit/secrets.toml.example
 .env
 .env.local
 .DS_Store
@@ -11,11 +13,12 @@ Thumbs.db
 build/
 dist/
 *.spec
+app_settings.json
+data/wiki/*.html
 data/spnkr.db
 data/spnkr.db-journal
-run_dashboard.bat
 data/spnkr_gt_JGtm.db
 data/spnkr_gt_Madina97294.db
 data/spnkr_gt_Chocoboflor.db
-.gitignore
 data/spnkr_gt_Chocoboflor.db-journal
+data/spnkr_JGtm.db

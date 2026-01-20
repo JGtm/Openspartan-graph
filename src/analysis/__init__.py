@@ -13,6 +13,12 @@ from src.analysis.filters import (
     build_option_map,
     build_xuid_option_map,
 )
+from src.analysis.killer_victim import (
+    KVPair,
+    compute_killer_victim_pairs,
+    killer_victim_counts_long,
+    killer_victim_matrix,
+)
 
 __all__ = [
     "compute_aggregated_stats",
@@ -24,4 +30,8 @@ __all__ = [
     "is_allowed_playlist_name",
     "build_option_map",
     "build_xuid_option_map",
+    "KVPair",
+    "compute_killer_victim_pairs",
+    "killer_victim_counts_long",
+    "killer_victim_matrix",
 ]
