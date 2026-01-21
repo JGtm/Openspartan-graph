@@ -189,7 +189,7 @@ def plot_outcomes_over_time(df: pd.DataFrame, *, session_style: bool = False) ->
             x=pivot.index,
             y=nofin,
             name="Non terminés",
-            marker_color=colors["slate"],
+            marker_color=colors["violet"],
             hovertemplate="%{x}<br>Non terminés: %{y}<extra></extra>",
         )
 

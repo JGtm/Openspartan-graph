@@ -22,6 +22,20 @@
 - **Python 3.10+** (recommandé: 3.11 ou 3.12)
 - **[OpenSpartan Workshop](https://github.com/OpenSpartan/openspartan-workshop)** installé et synchronisé
 
+## 📦 Assets offline (icônes)
+
+### Icônes de médailles (Halo Infinite)
+
+Par défaut, l'app lit les icônes de médailles depuis le cache OpenSpartan.Workshop (dans ton profil Windows).
+Pour rendre le projet autonome/offline, copie les PNG du cache vers le repo :
+
+```bash
+python scripts/sync_medal_icons.py
+```
+
+- Destination : `static/medals/icons/<NameId>.png`
+- Ensuite, l'UI utilisera automatiquement ces icônes locales (fallback vers le cache OpenSpartan si besoin).
+
 ## 🚀 Installation
 
 ### Installation rapide
@@ -58,19 +72,89 @@ pip install -e ".[all]"
 
 ### Dashboard (recommandé)
 
-**Le plus simple :** double-cliquez sur `run_dashboard.bat`
+Le mode de lancement recommandé est désormais un **lanceur Python unique**.
 
-Ou en ligne de commande :
+Mode interactif (max 2 questions) :
 
 ```bash
-# Via le launcher
+python openspartan_launcher.py
+```
+
+Mode CLI (options claires + `--help` indispensable) :
+
+```bash
+python openspartan_launcher.py --help
+
+# Lancer le dashboard
+python openspartan_launcher.py run
+```
+
+Note : les fichiers `.bat` restent présents pour compatibilité mais sont considérés *deprecated* et délèguent vers `openspartan_launcher.py`.
+
+Alternative (si tu veux rester sur les anciens points d’entrée) :
+
+```bash
+# Ancien launcher (conservé)
 python run_dashboard.py
 
-# Ou directement Streamlit
+# Direct Streamlit
 streamlit run streamlit_app.py
 ```
 
 Le dashboard s'ouvre automatiquement dans votre navigateur.
+
+### Rafraîchir la DB au lancement (SPNKr)
+
+Si vous utilisez l'import SPNKr ([scripts/spnkr_import_db.py](scripts/spnkr_import_db.py)), vous pouvez rafraîchir la base avant d'ouvrir Streamlit.
+
+- Pré-requis: avoir l'auth SPNKr configurée (ex: `SPNKR_OAUTH_REFRESH_TOKEN` dans `.env.local`) et un joueur cible.
+- Définissez le joueur via `SPNKR_PLAYER` (env) ou `--refresh-player`.
+
+Exemple (recommandé, mode minimal fiable):
+
+```bash
+python openspartan_launcher.py run+refresh --player <GamertagOuXUID> --no-assets
+```
+
+Au premier lancement (si `data/spnkr.db` n'existe pas ou est vide), le launcher fait automatiquement une **construction complète** (bootstrap) avec un `--max-matches` élevé et `--match-type all`.
+Ensuite, les lancements suivants font un refresh plus léger.
+
+Options utiles (voir `--help`):
+
+- `--refresh-max-matches 50` (défaut: 50)
+- `--refresh-bootstrap-max-matches 2000` (défaut: 2000)
+- `--refresh-match-type matchmaking` (défaut: matchmaking)
+- `--refresh-bootstrap-match-type all` (défaut: all)
+- `--refresh-out-db data/spnkr.db` (défaut: data/spnkr.db)
+
+### Réparer les gamertags (aliases) via film roster
+
+Quand les `HighlightEvents.gamertag` sont corrompus, la stratégie la plus robuste est de compléter `xuid_aliases.json`
+en re-dérivant le roster depuis les film chunks (XUID -> Gamertag).
+
+Via le lanceur (recommandé) :
+
+```bash
+# Répare le match le plus récent de la DB
+python openspartan_launcher.py repair-aliases --db data/spnkr_gt_JGtm.db --latest
+
+# Répare tous les matchs (plus long)
+python openspartan_launcher.py repair-aliases --db data/spnkr_gt_JGtm.db --all-matches
+```
+
+Note: nécessite une auth SPNKr valide (ex: `.env.local` avec Azure refresh token).
+
+### Changer le joueur par défaut (Gamertag / XUID)
+
+Le projet est configuré avec des valeurs par défaut pour simplifier l'usage en local.
+
+- **Dans le code (valeurs en dur)**: modifie `DEFAULT_PLAYER_GAMERTAG` et `DEFAULT_PLAYER_XUID` dans [src/config.py](src/config.py).
+- **Dans le launcher (conseillé)**: passe `--player` à `openspartan_launcher.py` ou définis `SPNKR_PLAYER`.
+- **Au lancement (sans toucher au code)**:
+  - `SPNKR_PLAYER` (env) permet d'override le joueur ciblé par le refresh SPNKr.
+  - Le chemin DB utilisé par le dashboard peut être forcé via `OPENSPARTAN_DB_PATH` (ou `OPENSPARTAN_DB`).
+
+Sous Windows, les `.bat` sont maintenant *deprecated* : ils délèguent vers `openspartan_launcher.py`.
 
 ### CLI (génération PNG)
 
@@ -95,6 +179,80 @@ Par défaut, l'application détecte automatiquement la DB la plus récente dans 
 ```
 
 Vous pouvez aussi spécifier un chemin personnalisé dans la sidebar du dashboard.
+
+### Import alternatif (SPNKr)
+
+Si OpenSpartan Workshop est instable, vous pouvez générer une DB compatible via SPNKr (wrapper API Halo Infinite) :
+
+```bash
+pip install "spnkr @ git+https://github.com/acurtis166/SPNKr.git"
+
+# Tokens (option simple)
+# 1) Copie `.env.example` -> `.env` (ou `.env.local.example` -> `.env.local`)
+# 2) Remplis SPNKR_SPARTAN_TOKEN et SPNKR_CLEARANCE_TOKEN
+#    (le script charge automatiquement `.env.local` puis `.env` si présents)
+
+python scripts/spnkr_import_db.py --out-db data\spnkr.db --player <xuid_ou_gamertag> --max-matches 200 --resume
+
+Astuce (import minimal, plus robuste) :
+
+```bash
+python scripts/spnkr_import_db.py --out-db data\spnkr.db --player <xuid_ou_gamertag> --max-matches 50 --resume --no-assets
+```
+```
+
+#### Option Azure (recommandée)
+
+La doc officielle SPNKr propose un flow Azure AD qui évite de récupérer `343-clearance` à la main.
+
+1) Dans Azure AD, crée une App Registration, ajoute `https://localhost` en Redirect URI (type Web), puis génère un client secret.
+
+Guide anti-galère (portail Azure) :
+- Va sur `portal.azure.com`
+- Dans la barre de recherche du haut, tape **App registrations** (ou **Inscriptions d’applications**)
+- Clique **New registration**
+- **Supported account types** : choisis l’option qui inclut **personal Microsoft accounts**
+- **Redirect URI** : Type **Web**, URL `https://localhost`
+- Ensuite: **Gérer** → **Certificates & secrets** → **New client secret** → copie la **Value** (pas l’ID)
+
+Sécurité :
+- Ne commit jamais `SPNKR_AZURE_CLIENT_SECRET` ni `SPNKR_OAUTH_REFRESH_TOKEN`.
+- Utilise `.env.local` (ignoré par git) pour stocker ces valeurs.
+
+2) Mets ces valeurs dans `.env.local` :
+
+```text
+SPNKR_AZURE_CLIENT_ID=...
+SPNKR_AZURE_CLIENT_SECRET=...
+SPNKR_AZURE_REDIRECT_URI=https://localhost
+```
+
+3) Récupère une fois ton refresh token :
+
+```bash
+python scripts/spnkr_get_refresh_token.py
+```
+
+Le script affiche une URL `login.live.com`. Ouvre-la, connecte-toi, puis à la fin copie l'URL `https://localhost/?code=...` depuis la barre d'adresse.
+Note: la page `https://localhost` affiche souvent une erreur (pas de serveur local). C'est normal : ce qui compte c'est l'URL et le paramètre `code=`.
+
+Ensuite relance :
+
+```bash
+python scripts/spnkr_get_refresh_token.py --auth-code "https://localhost/?code=..."
+```
+
+Le script écrit automatiquement `SPNKR_OAUTH_REFRESH_TOKEN` dans `.env.local` (tu peux désactiver avec `--no-write-env-local`).
+
+Ensuite, relance l’import normalement (le script utilisera Azure automatiquement si ces variables sont présentes).
+
+FAQ (Azure)
+- `error=unauthorized_client` / "client does not have a secret configured" : tu n'as pas créé de **Client secret** (ou tu as copié le mauvais champ). Va dans **Certificates & secrets** → **New client secret** puis copie la **Value** (pas le Secret ID) dans `SPNKR_AZURE_CLIENT_SECRET`.
+- `unauthorized_client` / "not enabled for consumers" : ton App Registration n'autorise pas les comptes Microsoft personnels. Dans **App registrations** → (ton app) → **Supported account types**, choisis une option incluant **personal Microsoft accounts** (ou modifie le manifest `signInAudience` vers `AzureADandPersonalMicrosoftAccount`).
+- `invalid_client` / "client_secret is not valid" : le secret ne correspond pas au client id (souvent 2 apps différentes) ou le secret a expiré. Regénère un secret (copie la **Value**) et regénère un nouveau `code=` (un code OAuth est à usage unique et peut expirer vite). Le helper tente un fallback via endpoint OAuth v2 (consumers) si `login.live.com` refuse le secret.
+- Si tu ne vois jamais `code=` dans l'URL de `https://localhost` : vérifie que le redirect URI configuré dans Azure est exactement `https://localhost` (type Web), et qu'il correspond à `SPNKR_AZURE_REDIRECT_URI`.
+
+Ensuite, pointez la sidebar du dashboard sur `data\spnkr.db`.
 
 ## ⚡ Performance (démarrage / rerun)
 

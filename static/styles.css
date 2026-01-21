@@ -270,6 +270,10 @@ div[data-testid="stMetric"] {
     border-radius: 14px;
     padding: 14px 14px;
     box-shadow: 0 14px 28px rgba(0,0,0,0.22);
+    min-height: 118px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
 }
 
 div[data-testid="stMetric"] label {
@@ -375,6 +379,7 @@ div[data-testid="stMetric"] div {
 
 .os-top-chip--win {
     border-color: rgba(35, 209, 139, 0.35);
+    background: rgba(35, 209, 139, 0.10);
 }
 .os-top-chip--win .os-top-chip__value {
     background: rgba(35, 209, 139, 0.12);
@@ -383,6 +388,7 @@ div[data-testid="stMetric"] div {
 
 .os-top-chip--loss {
     border-color: rgba(255, 77, 77, 0.35);
+    background: rgba(255, 77, 77, 0.10);
 }
 .os-top-chip--loss .os-top-chip__value {
     background: rgba(255, 77, 77, 0.12);
@@ -390,15 +396,21 @@ div[data-testid="stMetric"] div {
 }
 
 .os-top-chip--tie {
-    border-color: rgba(255, 255, 255, 0.18);
+    border-color: rgba(142, 108, 255, 0.35);
+    background: rgba(142, 108, 255, 0.10);
+}
+.os-top-chip--tie .os-top-chip__value {
+    background: rgba(142, 108, 255, 0.12);
+    border-color: rgba(142, 108, 255, 0.20);
 }
 
 .os-top-chip--nf {
-    border-color: rgba(255, 176, 32, 0.35);
+    border-color: rgba(142, 108, 255, 0.35);
+    background: rgba(142, 108, 255, 0.10);
 }
 .os-top-chip--nf .os-top-chip__value {
-    background: rgba(255, 176, 32, 0.12);
-    border-color: rgba(255, 176, 32, 0.20);
+    background: rgba(142, 108, 255, 0.12);
+    border-color: rgba(142, 108, 255, 0.20);
 }
 
 /* =============================================================================
@@ -593,6 +605,69 @@ div[data-testid="stNumberInput"] input:focus {
     margin-top: 2px;
     font-size: 12px;
     color: rgba(180,180,180,0.90);
+}
+
+/* =============================================================================
+   Tables HTML (pour liens internes "Ouvrir")
+   ============================================================================= */
+
+.os-table-wrap {
+    width: 100%;
+    overflow-x: auto;
+    overflow-y: auto;
+    max-height: 560px;
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 14px;
+    background: rgba(18, 26, 36, 0.35);
+}
+
+.os-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.88rem;
+}
+
+.os-table th,
+.os-table td {
+    padding: 8px 10px;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    white-space: nowrap;
+    vertical-align: middle;
+}
+
+.os-table th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    text-align: left;
+    font-weight: 800;
+    color: rgba(245, 248, 255, 0.92);
+    background: rgba(10, 14, 20, 0.78);
+    border-bottom: 1px solid rgba(255,255,255,0.12);
+}
+
+.os-table tr:hover td {
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.os-table a {
+    color: var(--accent);
+    font-weight: 800;
+    text-decoration: none;
+}
+
+.os-table a:hover {
+    text-decoration: underline;
+}
+
+/* Citations (Halo 5) */
+.os-citation-name {
+    text-align: center;
+    font-size: 0.78rem;
+    line-height: 1.05rem;
+    font-weight: 800;
+    opacity: 0.92;
+    margin-top: 6px;
 }
 
 /* --- Medals grid (Streamlit columns) --- */

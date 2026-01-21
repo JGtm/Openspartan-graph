@@ -10,7 +10,45 @@ from src.db.parsers import (
     coerce_number,
     coerce_duration_seconds,
     parse_xuid_input,
+    resolve_xuid_from_db,
 )
+
+
+class TestResolveXuidFromDb:
+    def test_returns_xuid_if_already_xuid(self, tmp_path):
+        db_path = str(tmp_path / "dummy.db")
+        assert resolve_xuid_from_db(db_path, "2533274823110022") == "2533274823110022"
+        assert resolve_xuid_from_db(db_path, "xuid(2533274823110022)") == "2533274823110022"
+
+    def test_resolves_from_matchstats_players(self, tmp_path):
+        import json
+        import sqlite3
+
+        db_path = str(tmp_path / "test.db")
+        con = sqlite3.connect(db_path)
+        try:
+            con.execute("CREATE TABLE MatchStats (ResponseBody TEXT)")
+            payload = {
+                "MatchId": "m1",
+                "Players": [
+                    {"PlayerId": {"Gamertag": "JGtm", "Xuid": "2533274823110022"}},
+                    {"PlayerId": {"Gamertag": "Other", "Xuid": "2533270000000000"}},
+                ],
+            }
+            con.execute("INSERT INTO MatchStats(ResponseBody) VALUES (?)", (json.dumps(payload),))
+            con.commit()
+        finally:
+            con.close()
+
+        assert resolve_xuid_from_db(db_path, "JGtm") == "2533274823110022"
+        assert resolve_xuid_from_db(db_path, "jgtm") == "2533274823110022"
+
+    def test_fallback_default_player(self, tmp_path, monkeypatch):
+        # Même si la DB n'aide pas, on doit pouvoir résoudre via des defaults locaux.
+        monkeypatch.setenv("OPENSPARTAN_DEFAULT_GAMERTAG", "JGtm")
+        monkeypatch.setenv("OPENSPARTAN_DEFAULT_XUID", "2533274823110022")
+        db_path = str(tmp_path / "empty.db")
+        assert resolve_xuid_from_db(db_path, "JGtm") == "2533274823110022"
 
 
 class TestGuessXuidFromDbPath:

@@ -16,6 +16,11 @@ from src.analysis.filters import (
 )
 from src.models import OutcomeRates
 
+from src.analysis.killer_victim import (
+    compute_killer_victim_pairs,
+    killer_victim_counts_long,
+)
+
 
 class TestComputeGlobalRatio:
     """Tests pour compute_global_ratio."""
@@ -86,6 +91,12 @@ class TestIsAllowedPlaylistName:
     def test_ranked_arena(self):
         """Test Ranked Arena."""
         assert is_allowed_playlist_name("Ranked Arena") is True
+
+    def test_french_labels(self):
+        """Test libellés FR (UI)."""
+        assert is_allowed_playlist_name("Partie rapide") is True
+        assert is_allowed_playlist_name("Arène classée") is True
+        assert is_allowed_playlist_name("Assassin classé") is True
 
     def test_not_allowed(self):
         """Test playlists non autorisées."""
@@ -169,3 +180,45 @@ class TestFormatSelectedMatchesSummary:
         
         assert "Partie sélectionnée: 1" in result
         assert "Victoire: 1" in result
+
+
+class TestKillerVictim:
+    def test_join_kill_death_with_tolerance(self):
+        events = [
+            {"event_type": "kill", "time_ms": 1000, "xuid": "1", "gamertag": "Alice"},
+            {"event_type": "death", "time_ms": 1003, "xuid": "2", "gamertag": "Bob"},
+        ]
+
+        pairs = compute_killer_victim_pairs(events, tolerance_ms=5)
+        assert len(pairs) == 1
+        assert pairs[0].killer_gamertag == "Alice"
+        assert pairs[0].victim_gamertag == "Bob"
+
+    def test_no_match_outside_tolerance(self):
+        events = [
+            {"event_type": "kill", "time_ms": 1000, "xuid": "1", "gamertag": "Alice"},
+            {"event_type": "death", "time_ms": 1010, "xuid": "2", "gamertag": "Bob"},
+        ]
+        pairs = compute_killer_victim_pairs(events, tolerance_ms=5)
+        assert pairs == []
+
+    def test_infer_event_type_from_type_hint(self):
+        # Fallback: type_hint 50=kill, 20=death
+        events = [
+            {"type_hint": 50, "time_ms": 2000, "xuid": "1", "gamertag": "Alice"},
+            {"type_hint": 20, "time_ms": 2000, "xuid": "3", "gamertag": "Cara"},
+        ]
+        pairs = compute_killer_victim_pairs(events, tolerance_ms=0)
+        assert len(pairs) == 1
+        assert pairs[0].victim_gamertag == "Cara"
+
+    def test_aggregate_counts(self):
+        events = [
+            {"event_type": "kill", "time_ms": 1000, "xuid": "1", "gamertag": "Alice"},
+            {"event_type": "death", "time_ms": 1000, "xuid": "2", "gamertag": "Bob"},
+            {"event_type": "kill", "time_ms": 2000, "xuid": "1", "gamertag": "Alice"},
+            {"event_type": "death", "time_ms": 2000, "xuid": "2", "gamertag": "Bob"},
+        ]
+        pairs = compute_killer_victim_pairs(events, tolerance_ms=0)
+        df = killer_victim_counts_long(pairs)
+        assert int(df.iloc[0]["count"]) == 2

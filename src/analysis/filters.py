@@ -48,9 +48,18 @@ def is_allowed_playlist_name(name: str) -> bool:
     Returns:
         True si la playlist est autorisée.
     """
-    s = (name or "").strip().lower()
+    s = (name or "").strip().casefold()
     if not s:
         return False
+    # FR (UI)
+    if re.search(r"\bpartie\s*rapide\b", s):
+        return True
+    if re.search(r"\bar(?:e|è)ne\b.*\bclass(?:e|é)e\b", s):
+        return True
+    # "classé" (masc) / "classée" (fém)
+    if re.search(r"\bassassin\b.*\bclass(?:e|é)(?:e)?\b", s):
+        return True
+    # EN (API)
     if re.search(r"\bquick\s*play\b", s):
         return True
     if re.search(r"\branked\b.*\bslayer\b", s):

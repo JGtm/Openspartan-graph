@@ -11,9 +11,12 @@ if exist "%ROOT%.venv\Scripts\python.exe" (
 
 cd /d "%ROOT%"
 
-echo Lancement OpenSpartan Graphs...
-"%PY%" "%ROOT%run_dashboard.py"
-
 echo.
-echo (Ferme cette fenetre pour arreter le serveur)
-pause
+echo [INFO] run_dashboard.bat est deprecated.
+echo        Utilise plutot: %PY% openspartan_launcher.py
+echo.
+
+"%PY%" "%ROOT%openspartan_launcher.py" %*
+
+endlocal
+exit /b %errorlevel%

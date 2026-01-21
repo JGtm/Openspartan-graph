@@ -1,3 +1,19 @@
 {
-  "profiles": {}
+  "profiles": {
+    "JGtm": {
+      "db_path": "data/spnkr_gt_JGtm.db",
+      "xuid": "2533274823110022",
+      "waypoint_player": "JGtm"
+    },
+    "Madina97294": {
+      "db_path": "data/spnkr_gt_Madina97294.db",
+      "xuid": "2533274858283686",
+      "waypoint_player": "Madina97294"
+    },
+    "Chocoboflor": {
+      "db_path": "data/spnkr_gt_Chocoboflor.db",
+      "xuid": "2535469190789936",
+      "waypoint_player": "Chocoboflor"
+    }
+  }
 }

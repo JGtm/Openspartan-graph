@@ -12,11 +12,15 @@ from src.ui.medals import (
     load_medal_name_maps,
     medal_has_known_label,
     get_medals_cache_dir,
+    get_local_medals_icons_dir,
     medal_label,
     medal_icon_path,
     render_medals_grid,
 )
 from src.ui.formatting import format_date_fr, format_mmss
+
+from src.ui.settings import AppSettings, load_settings, save_settings
+from src.ui.path_picker import directory_input, file_input
 
 __all__ = [
     # aliases
@@ -34,10 +38,18 @@ __all__ = [
     "load_medal_name_maps",
     "medal_has_known_label",
     "get_medals_cache_dir",
+    "get_local_medals_icons_dir",
     "medal_label",
     "medal_icon_path",
     "render_medals_grid",
     # formatting
     "format_date_fr",
     "format_mmss",
+    # settings
+    "AppSettings",
+    "load_settings",
+    "save_settings",
+    # path picker
+    "directory_input",
+    "file_input",
 ]

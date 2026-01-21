@@ -14,6 +14,7 @@ from typing import Any
 
 __all__ = [
     "PROFILES_PATH",
+    "get_profiles_path",
     "load_profiles",
     "save_profiles",
     "list_local_dbs",
@@ -25,6 +26,14 @@ _DEFAULT_PROFILES_PATH = os.path.join(
     "db_profiles.json",
 )
 PROFILES_PATH = os.environ.get("OPENSPARTAN_PROFILES_PATH") or _DEFAULT_PROFILES_PATH
+
+
+def get_profiles_path() -> str:
+    """Retourne le chemin du fichier de profils (env override supporté)."""
+    override = os.environ.get("OPENSPARTAN_PROFILES_PATH")
+    if isinstance(override, str) and override.strip():
+        return override.strip()
+    return _DEFAULT_PROFILES_PATH
 
 
 def _safe_mtime(path: str) -> float | None:
@@ -41,7 +50,8 @@ def load_profiles() -> dict[str, dict[str, str]]:
         Dictionnaire {nom_profil: {db_path, xuid, waypoint_player}}.
         Retourne un dict vide si le fichier n'existe pas ou est invalide.
     """
-    return dict(_load_profiles_cached(PROFILES_PATH, _safe_mtime(PROFILES_PATH)))
+    path = get_profiles_path()
+    return dict(_load_profiles_cached(path, _safe_mtime(path)))
 
 
 @lru_cache(maxsize=8)
@@ -83,14 +93,15 @@ def save_profiles(profiles: dict[str, dict[str, str]]) -> tuple[bool, str]:
     Returns:
         Tuple (succès, message_erreur). succès=True si OK, sinon message d'erreur.
     """
+    path = get_profiles_path()
     try:
-        with open(PROFILES_PATH, "w", encoding="utf-8") as f:
+        with open(path, "w", encoding="utf-8") as f:
             json.dump({"profiles": profiles}, f, ensure_ascii=False, indent=2)
 
         _load_profiles_cached.cache_clear()
         return True, ""
     except Exception as e:
-        return False, f"Impossible d'écrire {PROFILES_PATH}: {e}"
+        return False, f"Impossible d'écrire {path}: {e}"
 
 
 def list_local_dbs() -> list[str]:

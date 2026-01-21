@@ -239,4 +239,50 @@ def translate_pair_name(name: str | None) -> str | None:
     if name is None:
         return None
     s = str(name).strip()
-    return PAIR_FR.get(s, s)
+    if not s:
+        return None
+
+    # 1) Match exact
+    if s in PAIR_FR:
+        return PAIR_FR[s]
+
+    # 2) Normalisation douce (casse) pour supporter des valeurs du type "arena:Team Slayer".
+    candidate = s
+    if ":" in s:
+        prefix, rest = s.split(":", 1)
+        prefix = prefix.strip()
+        rest = rest.strip()
+        if prefix:
+            prefix = prefix[:1].upper() + prefix[1:].lower()
+        # Si la partie mode est totalement en minuscules, on la TitleCase ("oddball" -> "Oddball").
+        if rest and rest == rest.lower():
+            rest = " ".join(w[:1].upper() + w[1:] for w in rest.split())
+        candidate = f"{prefix}:{rest}" if prefix else rest
+
+    if candidate in PAIR_FR:
+        return PAIR_FR[candidate]
+
+    # 3) Fallback: si on n'a pas la carte (pas de " on "), on cherche un pair connu avec ce préfixe.
+    # Exemple: "Arena:Team Slayer" -> match "Arena:Team Slayer on <map>".
+    base = candidate
+    if " on " not in base and base:
+        prefix_key = base + " on "
+        for k, v in PAIR_FR.items():
+            if k.startswith(prefix_key):
+                return v
+
+        # 4) Fallback générique pour éviter des labels techniques (ex: "arena:oddball").
+        if base.startswith("Arena:"):
+            rest = base.split(":", 1)[1].strip()
+            arena_mode_fr = {
+                "Slayer": "Assassin",
+                "Team Slayer": "Assassin en équipe",
+                "Oddball": "Oddball",
+                "CTF": "Capture du drapeau",
+                "Neutral Flag CTF": "Drapeau neutre",
+                "King of the Hill": "Roi de la colline",
+                "Strongholds": "Bases",
+            }
+            return f"Arène : {arena_mode_fr.get(rest, rest)}"
+
+    return s

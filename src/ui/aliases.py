@@ -8,6 +8,7 @@ from functools import lru_cache
 from typing import Dict
 
 from src.config import XUID_ALIASES_DEFAULT, get_aliases_file_path
+from src.db.parsers import parse_xuid_input
 
 
 def _safe_mtime(path: str) -> float | None:
@@ -90,5 +91,8 @@ def display_name_from_xuid(xuid: str) -> str:
     Returns:
         Gamertag si un alias existe, sinon le XUID tel quel.
     """
-    xuid = (xuid or "").strip()
-    return get_xuid_aliases().get(xuid, xuid)
+    raw = str(xuid or "").strip()
+    # SPNKr/OpenSpartan stockent souvent l'identifiant sous forme "xuid(2533...)".
+    # Normaliser ici permet aux alias (clés = XUID numérique) de fonctionner partout.
+    normalized = parse_xuid_input(raw) or raw
+    return get_xuid_aliases().get(normalized, normalized)

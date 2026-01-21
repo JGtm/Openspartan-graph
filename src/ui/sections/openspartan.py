@@ -12,15 +12,10 @@ def render_openspartan_tools() -> None:
     st.divider()
     st.header("OpenSpartan")
 
-    workshop_exe = st.text_input(
-        "Chemin de OpenSpartan.Workshop.exe",
-        value=get_default_workshop_exe_path(),
-        help="Bouton pratique pour lancer l'app OpenSpartan Workshop.",
-    )
-
-    if st.button("Lancer OpenSpartan Workshop", width="stretch"):
-        if not os.path.exists(workshop_exe):
-            st.error("Executable introuvable à ce chemin.")
+    if st.button("Lancer OpenSpartan Workshop", width="stretch", help="Lance l'app OpenSpartan Workshop"):
+        workshop_exe = (os.environ.get("OPENSPARTAN_WORKSHOP_EXE") or get_default_workshop_exe_path()).strip()
+        if not workshop_exe or not os.path.exists(workshop_exe):
+            st.error("Executable introuvable. Tu peux définir OPENSPARTAN_WORKSHOP_EXE si besoin.")
             return
         try:
             if hasattr(os, "startfile"):

@@ -5,9 +5,18 @@ depuis la base de données OpenSpartan Workshop.
 """
 
 import os
+import json
+import html
 import re
-from datetime import date
+import subprocess
+import sys
+import urllib.parse
+from pathlib import Path
+import uuid
+from datetime import date, datetime, time, timedelta, timezone
+from collections.abc import Mapping
 from typing import Optional
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 import plotly.graph_objects as go
@@ -32,8 +41,12 @@ from src.db import (
     load_player_match_result,
     load_match_medals_for_player,
     load_top_medals,
+    load_highlight_events_for_match,
+    load_match_player_gamertags,
+    has_table,
 )
 from src.db.parsers import parse_xuid_input
+from src.db import infer_spnkr_player_from_db_path
 from src.analysis import (
     compute_aggregated_stats,
     compute_outcome_rates,
@@ -44,6 +57,9 @@ from src.analysis import (
     is_allowed_playlist_name,
     build_option_map,
     build_xuid_option_map,
+    compute_killer_victim_pairs,
+    killer_victim_counts_long,
+    killer_victim_matrix,
 )
 from src.analysis.stats import format_selected_matches_summary, format_mmss
 from src.visualization import (
@@ -68,6 +84,11 @@ from src.ui import (
     get_hero_html,
     translate_playlist_name,
     translate_pair_name,
+    AppSettings,
+    load_settings,
+    save_settings,
+    directory_input,
+    file_input,
 )
 from src.ui.medals import (
     load_medal_name_maps,
@@ -77,6 +98,7 @@ from src.ui.medals import (
     medal_icon_path,
     render_medals_grid,
 )
+from src.ui.commendations import render_h5g_commendations_section
 from src.ui.formatting import format_date_fr
 from src.db.profiles import (
     PROFILES_PATH,
@@ -84,7 +106,7 @@ from src.db.profiles import (
     save_profiles,
     list_local_dbs,
 )
-from src.config import get_aliases_file_path
+from src.config import DEFAULT_PLAYER_GAMERTAG, DEFAULT_PLAYER_XUID, get_aliases_file_path
 
 from src.ui.perf import perf_reset_run, perf_section, render_perf_panel
 from src.ui.sections import render_openspartan_tools, render_source_section
@@ -92,6 +114,319 @@ from src.ui.sections import render_openspartan_tools, render_source_section
 
 _LABEL_SUFFIX_RE = re.compile(r"^(.*?)(?:\s*[\-–—]\s*[0-9A-Za-z]{8,})$", re.IGNORECASE)
 _SCORE_LABEL_RE = re.compile(r"^\s*(-?\d+)\s*[-–—]\s*(-?\d+)\s*$")
+
+
+PARIS_TZ_NAME = "Europe/Paris"
+PARIS_TZ = ZoneInfo(PARIS_TZ_NAME)
+
+
+def _to_paris_naive(dt_value) -> datetime | None:
+    """Convertit une date en datetime naïf (sans tzinfo) en heure de Paris.
+
+    - tz-aware -> convertit en Europe/Paris puis enlève tzinfo
+    - naïf -> supposé déjà en heure de Paris
+    """
+    if dt_value is None:
+        return None
+    try:
+        ts = pd.to_datetime(dt_value, errors="coerce")
+        if pd.isna(ts):
+            return None
+
+        # pandas.Timestamp: ts.tz != None si tz-aware
+        try:
+            if getattr(ts, "tz", None) is not None:
+                ts = ts.tz_convert(PARIS_TZ_NAME).tz_localize(None)
+        except Exception:
+            pass
+
+        d = ts.to_pydatetime()
+        if getattr(d, "tzinfo", None) is not None:
+            d = d.astimezone(PARIS_TZ).replace(tzinfo=None)
+        return d
+    except Exception:
+        return None
+
+
+def _paris_epoch_seconds(dt_value) -> float | None:
+    """Retourne un timestamp Unix (UTC) pour une date exprimée en heure de Paris."""
+    d = _to_paris_naive(dt_value)
+    if d is None:
+        return None
+    try:
+        aware = d.replace(tzinfo=PARIS_TZ)
+        return float(aware.astimezone(timezone.utc).timestamp())
+    except Exception:
+        return None
+
+
+def _qp_first(value) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, (list, tuple)):
+        return str(value[0]) if value else None
+    s = str(value)
+    return s if s.strip() else None
+
+
+def _set_query_params(**kwargs: str) -> None:
+    clean: dict[str, str] = {k: str(v) for k, v in kwargs.items() if v is not None and str(v).strip()}
+    try:
+        st.query_params.clear()
+        for k, v in clean.items():
+            st.query_params[k] = v
+    except Exception:
+        # Fallback API legacy (compat)
+        try:
+            st.experimental_set_query_params(**clean)
+        except Exception:
+            pass
+
+
+def _app_url(page: str, **params: str) -> str:
+    qp: dict[str, str] = {"page": page}
+    for k, v in params.items():
+        if v is None:
+            continue
+        s = str(v).strip()
+        if s:
+            qp[k] = s
+    return "?" + urllib.parse.urlencode(qp)
+
+
+def _default_identity_from_secrets() -> tuple[str, str, str]:
+    """Retourne (xuid_or_gamertag, xuid_fallback, waypoint_player) depuis secrets/env/constants."""
+    # Secrets Streamlit: .streamlit/secrets.toml
+    try:
+        player = st.secrets.get("player", {})
+        if isinstance(player, Mapping):
+            gt = str(player.get("gamertag") or "").strip()
+            xu = str(player.get("xuid") or "").strip()
+            wp = str(player.get("waypoint_player") or "").strip()
+        else:
+            gt = xu = wp = ""
+    except Exception:
+        gt = xu = wp = ""
+
+    # Env vars (utile Docker/CLI)
+    gt = gt or str(os.environ.get("OPENSPARTAN_DEFAULT_GAMERTAG") or "").strip()
+    xu = xu or str(os.environ.get("OPENSPARTAN_DEFAULT_XUID") or "").strip()
+    wp = wp or str(os.environ.get("OPENSPARTAN_DEFAULT_WAYPOINT_PLAYER") or "").strip() or gt
+
+    # Fallback constants
+    gt = gt or str(DEFAULT_PLAYER_GAMERTAG or "").strip()
+    xu = xu or str(DEFAULT_PLAYER_XUID or "").strip()
+    wp = wp or str(DEFAULT_WAYPOINT_PLAYER or "").strip() or gt
+
+    # UI: on préfère afficher le gamertag, tout en conservant xuid en fallback.
+    xuid_or_gt = gt or xu
+    return xuid_or_gt, xu, wp
+
+
+def _pick_latest_spnkr_db_if_any() -> str:
+    try:
+        repo_root = Path(__file__).resolve().parent
+        data_dir = repo_root / "data"
+        if not data_dir.exists():
+            return ""
+        candidates = [p for p in data_dir.glob("spnkr*.db") if p.is_file()]
+        if not candidates:
+            return ""
+        # On évite de sélectionner une DB vide (0 octet), ce qui bloque l'app (aucune table).
+        non_empty = [p for p in candidates if p.exists() and p.stat().st_size > 0]
+        non_empty.sort(key=lambda p: p.stat().st_mtime if p.exists() else 0.0, reverse=True)
+        if non_empty:
+            return str(non_empty[0])
+        # Fallback: si tout est vide, retourne quand même la plus récente pour debug.
+        candidates.sort(key=lambda p: p.stat().st_mtime if p.exists() else 0.0, reverse=True)
+        return str(candidates[0])
+    except Exception:
+        return ""
+
+
+def _is_spnkr_db_path(db_path: str) -> bool:
+    try:
+        p = Path(db_path)
+        return p.suffix.lower() == ".db" and p.name.lower().startswith("spnkr")
+    except Exception:
+        return False
+
+
+def _refresh_spnkr_db_via_api(
+    *,
+    db_path: str,
+    player: str,
+    match_type: str,
+    max_matches: int,
+    rps: int,
+    with_highlight_events: bool,
+    timeout_seconds: int = 180,
+) -> tuple[bool, str]:
+    """Rafraîchit une DB SPNKr en appelant scripts/spnkr_import_db.py.
+
+    Retourne (ok, message) pour affichage UI.
+    """
+    repo_root = Path(__file__).resolve().parent
+    importer = repo_root / "scripts" / "spnkr_import_db.py"
+    if not importer.exists():
+        return False, f"Script introuvable: {importer}"
+
+    p = (player or "").strip()
+    if not p:
+        return False, "Aucun joueur pour SPNKr (gamertag ou XUID)."
+
+    mt = (match_type or "matchmaking").strip().lower()
+    if mt not in {"all", "matchmaking", "custom", "local"}:
+        mt = "matchmaking"
+
+    target = str(db_path)
+    # IMPORTANT: on n'écrit jamais directement dans la DB cible.
+    # Si l'import crashe/timeout, SQLite peut laisser un fichier vide/corrompu.
+    tmp = f"{target}.tmp.{uuid.uuid4().hex}.db"
+
+    cmd = [
+        sys.executable,
+        str(importer),
+        "--out-db",
+        str(tmp),
+        "--player",
+        p,
+        "--match-type",
+        mt,
+        "--max-matches",
+        str(int(max_matches)),
+        "--requests-per-second",
+        str(int(rps)),
+        "--resume",
+    ]
+    if with_highlight_events:
+        cmd.append("--with-highlight-events")
+
+    try:
+        proc = subprocess.run(
+            cmd,
+            cwd=str(repo_root),
+            capture_output=True,
+            text=True,
+            timeout=int(timeout_seconds),
+        )
+    except subprocess.TimeoutExpired:
+        try:
+            if os.path.exists(tmp):
+                os.remove(tmp)
+        except Exception:
+            pass
+        return False, f"Timeout après {timeout_seconds}s (import SPNKr trop long)."
+    except Exception as e:
+        try:
+            if os.path.exists(tmp):
+                os.remove(tmp)
+        except Exception:
+            pass
+        return False, f"Erreur au lancement de l'import SPNKr: {e}"
+
+    if int(proc.returncode) != 0:
+        try:
+            if os.path.exists(tmp):
+                os.remove(tmp)
+        except Exception:
+            pass
+        tail = (proc.stderr or proc.stdout or "").strip()
+        if len(tail) > 1200:
+            tail = tail[-1200:]
+        return False, f"Import SPNKr en échec (code={proc.returncode}).\n{tail}".strip()
+
+    # Remplace la DB cible uniquement si le tmp semble valide (non vide).
+    try:
+        if not os.path.exists(tmp) or os.path.getsize(tmp) <= 0:
+            try:
+                if os.path.exists(tmp):
+                    os.remove(tmp)
+            except Exception:
+                pass
+            return False, "Import SPNKr terminé mais DB temporaire vide (annulé)."
+        os.makedirs(str(Path(target).resolve().parent), exist_ok=True)
+        os.replace(tmp, target)
+    except Exception as e:
+        try:
+            if os.path.exists(tmp):
+                os.remove(tmp)
+        except Exception:
+            pass
+        return False, f"Import SPNKr OK mais remplacement de la DB a échoué: {e}"
+
+    return True, "DB SPNKr rafraîchie."
+
+
+def _init_source_state(default_db: str, settings: AppSettings) -> None:
+    if "db_path" not in st.session_state:
+        chosen = str(default_db or "")
+        # Si l'utilisateur force une DB via env (OPENSPARTAN_DB_PATH/OPENSPARTAN_DB),
+        # on ne doit pas l'écraser par une auto-sélection SPNKr.
+        forced_env_db = str(os.environ.get("OPENSPARTAN_DB") or os.environ.get("OPENSPARTAN_DB_PATH") or "").strip()
+        if (not forced_env_db) and bool(getattr(settings, "prefer_spnkr_db_if_available", False)):
+            spnkr = _pick_latest_spnkr_db_if_any()
+            if spnkr and os.path.exists(spnkr) and os.path.getsize(spnkr) > 0:
+                chosen = spnkr
+        st.session_state["db_path"] = chosen
+    if "xuid_input" not in st.session_state:
+        legacy = str(st.session_state.get("xuid", "") or "").strip()
+        guessed = guess_xuid_from_db_path(st.session_state.get("db_path", "") or "") or ""
+        xuid_or_gt, _xuid_fallback, _wp = _default_identity_from_secrets()
+        # Pour les DB SPNKr, on pré-remplit avec le joueur déduit du nom de DB (gamertag le plus souvent).
+        inferred = infer_spnkr_player_from_db_path(str(st.session_state.get("db_path", "") or "")) or ""
+        st.session_state["xuid_input"] = legacy or inferred or guessed or xuid_or_gt
+    if "waypoint_player" not in st.session_state:
+        _xuid_or_gt, _xuid_fallback, wp = _default_identity_from_secrets()
+        st.session_state["waypoint_player"] = wp
+
+
+def _ensure_h5g_commendations_repo() -> None:
+    """Génère automatiquement le référentiel Citations s'il est absent."""
+    if st.session_state.get("_h5g_repo_ensured") is True:
+        return
+    st.session_state["_h5g_repo_ensured"] = True
+
+    try:
+        from src.config import get_repo_root
+
+        repo_root = get_repo_root(__file__)
+    except Exception:
+        repo_root = os.path.abspath(os.path.dirname(__file__))
+    json_path = os.path.join(repo_root, "data", "wiki", "halo5_commendations_fr.json")
+    html_path = os.path.join(repo_root, "data", "wiki", "halo5_citations_printable.html")
+    script_path = os.path.join(repo_root, "scripts", "extract_h5g_commendations_fr.py")
+
+    if os.path.exists(json_path):
+        return
+    if not (os.path.exists(html_path) and os.path.exists(script_path)):
+        return
+
+    with st.spinner("Génération du référentiel Citations (offline)…"):
+        try:
+            subprocess.run(
+                [
+                    sys.executable,
+                    script_path,
+                    "--input-html",
+                    html_path,
+                    "--clean-output",
+                    "--exclude",
+                    os.path.join(repo_root, "data", "wiki", "halo5_commendations_exclude.json"),
+                ],
+                check=True,
+                cwd=repo_root,
+                capture_output=True,
+                text=True,
+            )
+            try:
+                from src.ui.commendations import load_h5g_commendations_json
+
+                getattr(load_h5g_commendations_json, "clear")()
+            except Exception:
+                pass
+        except Exception:
+            return
 
 
 def _clean_asset_label(s: str | None) -> str | None:
@@ -185,7 +520,7 @@ def _style_outcome_text(v: str) -> str:
     if s in ("égalité", "egalite"):
         return "color: #8E6CFF; font-weight: 700;"
     if s in ("non terminé", "non termine"):
-        return "color: #616161; font-weight: 700;"
+        return "color: #8E6CFF; font-weight: 700;"
     return ""
 
 
@@ -222,17 +557,54 @@ def _style_score_label(v: str) -> str:
     return "color: #8E6CFF; font-weight: 800;"
 
 
+def _styler_map(styler, func, subset):
+    """Compat pandas: Styler.map n'existe pas sur certaines versions.
+
+    - pandas récents: .map(func, subset=...)
+    - pandas anciens: .applymap(func, subset=...)
+    """
+    try:
+        if hasattr(styler, "map"):
+            return styler.map(func, subset=subset)
+    except Exception:
+        pass
+    # Fallback
+    try:
+        return styler.applymap(func, subset=subset)
+    except Exception:
+        return styler
+
+
 def _format_datetime_fr_hm(dt_value) -> str:
     if dt_value is None:
         return "-"
-    try:
-        ts = pd.to_datetime(dt_value, errors="coerce")
-        if pd.isna(ts):
-            return "-"
-        d = ts.to_pydatetime()
-    except Exception:
+    d = _to_paris_naive(dt_value)
+    if d is None:
         return "-"
     return f"{format_date_fr(d)} {d:%H:%M}"
+
+
+_DATE_FR_RE = re.compile(r"^\s*(\d{1,2})\s*[\-/]\s*(\d{1,2})\s*[\-/]\s*(\d{4})\s*$")
+
+
+def _parse_date_fr_input(value: str | None, *, default_value: date) -> date:
+    """Parse une date au format dd/mm/yyyy (ou dd-mm-yyyy).
+
+    Retourne default_value si la saisie est invalide.
+    """
+    s = (value or "").strip()
+    if not s:
+        return default_value
+    m = _DATE_FR_RE.match(s)
+    if not m:
+        return default_value
+    try:
+        dd = int(m.group(1))
+        mm = int(m.group(2))
+        yyyy = int(m.group(3))
+        return date(yyyy, mm, dd)
+    except Exception:
+        return default_value
 
 
 def _plot_metric_bars_by_match(
@@ -305,6 +677,151 @@ def _plot_metric_bars_by_match(
     return apply_halo_plot_style(fig, height=320)
 
 
+def _plot_multi_metric_bars_by_match(
+    series: list[tuple[str, pd.DataFrame]],
+    *,
+    metric_col: str,
+    title: str,
+    y_axis_title: str,
+    hover_label: str,
+    colors: dict[str, str] | list[str] | None,
+    smooth_window: int = 10,
+    show_smooth_lines: bool = True,
+) -> go.Figure | None:
+    if not series:
+        return None
+
+    prepared: list[tuple[str, pd.DataFrame]] = []
+    all_times: list[pd.Timestamp] = []
+    for name, df_ in series:
+        if df_ is None or df_.empty:
+            continue
+        if metric_col not in df_.columns or "start_time" not in df_.columns:
+            continue
+        d = df_[["start_time", metric_col]].copy()
+        d["start_time"] = pd.to_datetime(d["start_time"], errors="coerce")
+        d = d.dropna(subset=["start_time"]).sort_values("start_time").reset_index(drop=True)
+        if d.empty:
+            continue
+        prepared.append((str(name), d))
+        all_times.extend(d["start_time"].tolist())
+
+    if not prepared or not all_times:
+        return None
+
+    # Axe X commun (timeline de tous les joueurs)
+    uniq = pd.Series(all_times).dropna().drop_duplicates().sort_values()
+    times = uniq.tolist()
+    idx_map = {t: i for i, t in enumerate(times)}
+    labels = [pd.to_datetime(t).strftime("%d/%m %H:%M") for t in times]
+    step = max(1, len(labels) // 10) if labels else 1
+
+    fig = go.Figure()
+    w = int(smooth_window) if smooth_window else 0
+    for i, (name, d) in enumerate(prepared):
+        if isinstance(colors, dict):
+            color = colors.get(name) or "#35D0FF"
+        elif isinstance(colors, list) and colors:
+            color = colors[i % len(colors)]
+        else:
+            color = "#35D0FF"
+        y = pd.to_numeric(d[metric_col], errors="coerce")
+        mask = y.notna()
+        d2 = d.loc[mask].copy()
+        if d2.empty:
+            continue
+        y2 = pd.to_numeric(d2[metric_col], errors="coerce")
+        x = [idx_map.get(t) for t in d2["start_time"].tolist()]
+        x = [xi for xi in x if xi is not None]
+        if not x:
+            continue
+
+        fig.add_trace(
+            go.Bar(
+                x=x,
+                y=y2,
+                name=name,
+                marker_color=color,
+                opacity=0.70,
+                hovertemplate=f"{name}<br>{hover_label}=%{{y}}<extra></extra>",
+                legendgroup=name,
+            )
+        )
+
+        if bool(show_smooth_lines):
+            smooth = y2.rolling(window=max(1, w), min_periods=1).mean() if w and w > 1 else y2
+            fig.add_trace(
+                go.Scatter(
+                    x=x,
+                    y=smooth,
+                    mode="lines",
+                    name=f"{name} — moyenne lissée",
+                    line=dict(width=3, color=color),
+                    opacity=0.95,
+                    hovertemplate=f"{name}<br>moyenne=%{{y:.2f}}<extra></extra>",
+                    legendgroup=name,
+                )
+            )
+
+    if not fig.data:
+        return None
+
+    fig.update_layout(
+        title=title,
+        margin=dict(l=40, r=20, t=40, b=90),
+        hovermode="x unified",
+        legend=get_legend_horizontal_bottom(),
+        barmode="group",
+    )
+    fig.update_yaxes(title_text=y_axis_title, rangemode="tozero")
+    fig.update_xaxes(
+        title_text="Match (chronologique)",
+        tickmode="array",
+        tickvals=list(range(len(labels)))[::step],
+        ticktext=labels[::step],
+        type="category",
+    )
+
+    return apply_halo_plot_style(fig, height=320)
+
+
+def _assign_player_colors(names: list[str]) -> dict[str, str]:
+    palette = HALO_COLORS.as_dict()
+    cycle = [
+        palette["cyan"],
+        palette["violet"],
+        palette["amber"],
+        palette["red"],
+        palette["green"],
+        palette["slate"],
+    ]
+    state_key = "_os_player_colors"
+    persisted = st.session_state.get(state_key)
+    if not isinstance(persisted, dict):
+        persisted = {}
+
+    used = {str(v) for v in persisted.values() if v is not None}
+
+    for n in names:
+        key = str(n)
+        if not key or key in persisted:
+            continue
+
+        chosen = None
+        for c in cycle:
+            if c not in used:
+                chosen = c
+                break
+        if chosen is None:
+            chosen = cycle[len(persisted) % len(cycle)]
+
+        persisted[key] = chosen
+        used.add(chosen)
+
+    st.session_state[state_key] = persisted
+    return {str(n): persisted[str(n)] for n in names if str(n) in persisted}
+
+
 def _compute_session_span_seconds(df_: pd.DataFrame) -> float | None:
     if df_ is None or df_.empty or "start_time" not in df_.columns:
         return None
@@ -321,6 +838,38 @@ def _compute_session_span_seconds(df_: pd.DataFrame) -> float | None:
     if pd.isna(t0) or pd.isna(t1):
         return None
     return float((t1 - t0).total_seconds())
+
+
+def _compute_total_play_seconds(df_: pd.DataFrame) -> float | None:
+    if df_ is None or df_.empty or "time_played_seconds" not in df_.columns:
+        return None
+    s = pd.to_numeric(df_["time_played_seconds"], errors="coerce").dropna()
+    if s.empty:
+        return None
+    return float(s.sum())
+
+
+def _format_duration_dhm(seconds: float | int | None) -> str:
+    if seconds is None or seconds != seconds:
+        return "-"
+    try:
+        total = int(round(float(seconds)))
+    except Exception:
+        return "-"
+    if total < 0:
+        return "-"
+
+    minutes, _s = divmod(total, 60)
+    hours, minutes = divmod(minutes, 60)
+    days, hours = divmod(hours, 24)
+
+    parts: list[str] = []
+    if days:
+        parts.append(f"{days}j")
+    if hours or days:
+        parts.append(f"{hours}h")
+    parts.append(f"{minutes}min")
+    return " ".join(parts)
 
 
 def _avg_match_duration_seconds(df_: pd.DataFrame) -> float | None:
@@ -472,14 +1021,26 @@ def cached_load_match_medals_for_player(
 
 
 @st.cache_data(show_spinner=False)
+def cached_load_highlight_events_for_match(db_path: str, match_id: str, *, db_key: str | None = None):
+    _ = db_key
+    return load_highlight_events_for_match(db_path, match_id)
+
+
+@st.cache_data(show_spinner=False)
+def cached_load_match_player_gamertags(db_path: str, match_id: str, *, db_key: str | None = None):
+    _ = db_key
+    return load_match_player_gamertags(db_path, match_id)
+
+
+@st.cache_data(show_spinner=False)
 def cached_load_top_medals(
     db_path: str,
     xuid: str,
     match_ids: tuple[str, ...],
-    top_n: int,
+    top_n: int | None,
     db_key: tuple[int, int] | None,
 ):
-    return load_top_medals(db_path, xuid, list(match_ids), top_n=int(top_n))
+    return load_top_medals(db_path, xuid, list(match_ids), top_n=(int(top_n) if top_n is not None else None))
 
 
 def _top_medals(
@@ -487,7 +1048,7 @@ def _top_medals(
     xuid: str,
     match_ids: list[str],
     *,
-    top_n: int,
+    top_n: int | None,
     db_key: tuple[int, int] | None,
 ):
     # Évite de stocker d'immenses tuples en cache.
@@ -538,7 +1099,11 @@ def cached_friend_matches_df(
             for r in rows
         ]
     )
-    dfr["start_time"] = pd.to_datetime(dfr["start_time"], utc=True).dt.tz_convert(None)
+    dfr["start_time"] = (
+        pd.to_datetime(dfr["start_time"], utc=True)
+        .dt.tz_convert(PARIS_TZ_NAME)
+        .dt.tz_localize(None)
+    )
     return dfr.sort_values("start_time", ascending=False)
 
 
@@ -557,6 +1122,639 @@ def _aliases_cache_key() -> int | None:
         return int(getattr(st_, "st_mtime_ns", int(st_.st_mtime * 1e9)))
     except OSError:
         return None
+
+
+def _render_settings_page(settings: AppSettings) -> AppSettings:
+    """Rend l'onglet Paramètres et retourne les settings (potentiellement modifiés)."""
+
+    st.subheader("Paramètres")
+
+    with st.expander("Source", expanded=True):
+        default_db = get_default_db_path()
+        render_source_section(
+            default_db,
+            get_local_dbs=cached_list_local_dbs,
+            on_clear_caches=_clear_app_caches,
+        )
+
+    with st.expander("Paramètres avancés", expanded=False):
+        st.toggle(
+            "Inclure Firefight (PvE)",
+            key="include_firefight",
+            value=bool(st.session_state.get("include_firefight", False)),
+            help="Impacte les filtres et tous les onglets basés sur les matchs.",
+        )
+        st.toggle(
+            "Limiter aux playlists (Quick Play / Ranked Slayer / Ranked Arena)",
+            key="restrict_playlists",
+            value=bool(st.session_state.get("restrict_playlists", True)),
+            help="Réduit les playlists/modes/cartes aux valeurs attendues (utile si la DB est hétérogène).",
+        )
+
+    with st.expander("SPNKr (API → DB)", expanded=False):
+        st.caption("Optionnel: recharge les derniers matchs via l'API et met à jour la DB SPNKr.")
+        prefer_spnkr = st.toggle(
+            "Utiliser SPNKr par défaut (si disponible)",
+            value=bool(getattr(settings, "prefer_spnkr_db_if_available", True)),
+        )
+        spnkr_on_start = st.toggle(
+            "Rafraîchir la DB au démarrage (SPNKr)",
+            value=bool(getattr(settings, "spnkr_refresh_on_start", True)),
+        )
+        spnkr_on_refresh = st.toggle(
+            "Le bouton Actualiser rafraîchit aussi la DB (SPNKr)",
+            value=bool(getattr(settings, "spnkr_refresh_on_manual_refresh", True)),
+        )
+        mt = st.selectbox(
+            "Type de matchs",
+            options=["matchmaking", "all", "custom", "local"],
+            index=["matchmaking", "all", "custom", "local"].index(
+                str(getattr(settings, "spnkr_refresh_match_type", "matchmaking") or "matchmaking").strip().lower()
+                if str(getattr(settings, "spnkr_refresh_match_type", "matchmaking") or "matchmaking").strip().lower()
+                in {"matchmaking", "all", "custom", "local"}
+                else "matchmaking"
+            ),
+        )
+        max_matches = st.number_input(
+            "Max matchs (refresh)",
+            min_value=10,
+            max_value=5000,
+            value=int(getattr(settings, "spnkr_refresh_max_matches", 200) or 200),
+            step=10,
+        )
+        rps = st.number_input(
+            "Requêtes / seconde",
+            min_value=1,
+            max_value=20,
+            value=int(getattr(settings, "spnkr_refresh_rps", 3) or 3),
+            step=1,
+        )
+        with_he = st.toggle(
+            "Inclure highlight events (plus long)",
+            value=bool(getattr(settings, "spnkr_refresh_with_highlight_events", False)),
+        )
+
+    with st.expander("Médias", expanded=True):
+        media_enabled = st.toggle("Activer la section Médias", value=bool(settings.media_enabled))
+        media_screens_dir = directory_input(
+            "Dossier captures (images)",
+            value=str(settings.media_screens_dir or ""),
+            key="settings_media_screens_dir",
+            help="Chemin vers un dossier contenant des captures (png/jpg/webp).",
+            placeholder="Ex: C:\\Users\\Guillaume\\Pictures\\Halo",
+        )
+        media_videos_dir = directory_input(
+            "Dossier vidéos",
+            value=str(settings.media_videos_dir or ""),
+            key="settings_media_videos_dir",
+            help="Chemin vers un dossier contenant des vidéos (mp4/webm/mkv).",
+            placeholder="Ex: C:\\Users\\Guillaume\\Videos",
+        )
+        media_tolerance_minutes = st.slider(
+            "Tolérance (minutes) autour du match",
+            min_value=0,
+            max_value=30,
+            value=int(settings.media_tolerance_minutes or 0),
+            step=1,
+        )
+
+    with st.expander("Expérience", expanded=False):
+        refresh_clears_caches = st.toggle(
+            "Le bouton Actualiser vide aussi les caches",
+            value=bool(getattr(settings, "refresh_clears_caches", False)),
+            help="Utile si la DB change en dehors de l'app (NAS / import externe).",
+        )
+
+    with st.expander("Fichiers (avancé)", expanded=False):
+        st.caption("Optionnel: sélectionne les fichiers JSON utilisés par l'app (sinon valeurs par défaut).")
+        aliases_path = file_input(
+            "Fichier d'alias XUID (json)",
+            value=str(getattr(settings, "aliases_path", "") or ""),
+            key="settings_aliases_path",
+            exts=(".json",),
+            help="Override de OPENSPARTAN_ALIASES_PATH. Laisse vide pour utiliser xuid_aliases.json à la racine.",
+            placeholder="Ex: C:\\...\\xuid_aliases.json",
+        )
+        profiles_path = file_input(
+            "Fichier de profils DB (json)",
+            value=str(getattr(settings, "profiles_path", "") or ""),
+            key="settings_profiles_path",
+            exts=(".json",),
+            help="Override de OPENSPARTAN_PROFILES_PATH. Laisse vide pour utiliser db_profiles.json à la racine.",
+            placeholder="Ex: C:\\...\\db_profiles.json",
+        )
+
+
+
+    cols = st.columns(2)
+    if cols[0].button("Enregistrer", width="stretch"):
+        new_settings = AppSettings(
+            media_enabled=bool(media_enabled),
+            media_screens_dir=str(media_screens_dir or "").strip(),
+            media_videos_dir=str(media_videos_dir or "").strip(),
+            media_tolerance_minutes=int(media_tolerance_minutes),
+            refresh_clears_caches=bool(refresh_clears_caches),
+            prefer_spnkr_db_if_available=bool(prefer_spnkr),
+            spnkr_refresh_on_start=bool(spnkr_on_start),
+            spnkr_refresh_on_manual_refresh=bool(spnkr_on_refresh),
+            spnkr_refresh_match_type=str(mt),
+            spnkr_refresh_max_matches=int(max_matches),
+            spnkr_refresh_rps=int(rps),
+            spnkr_refresh_with_highlight_events=bool(with_he),
+            aliases_path=str(aliases_path or "").strip(),
+            profiles_path=str(profiles_path or "").strip(),
+        )
+        ok, err = save_settings(new_settings)
+        if ok:
+            st.success("Paramètres enregistrés.")
+            st.session_state["app_settings"] = new_settings
+            st.rerun()
+        else:
+            st.error(err)
+        return new_settings
+
+    if cols[1].button("Recharger depuis fichier", width="stretch"):
+        reloaded = load_settings()
+        st.session_state["app_settings"] = reloaded
+        st.rerun()
+        return reloaded
+
+    return settings
+
+
+def _request_open_match(match_id: str) -> None:
+    mid = str(match_id or "").strip()
+    if not mid:
+        return
+    _set_query_params(page="Match", match_id=mid)
+    st.session_state["_pending_page"] = "Match"
+    st.session_state["_pending_match_id"] = mid
+    st.rerun()
+
+
+def _safe_dt(v) -> datetime | None:
+    return _to_paris_naive(v)
+
+
+def _match_time_window(row: pd.Series, *, tolerance_minutes: int) -> tuple[datetime | None, datetime | None]:
+    start = _safe_dt(row.get("start_time"))
+    if start is None:
+        return None, None
+
+    dur_s = row.get("time_played_seconds")
+    try:
+        dur = float(dur_s) if dur_s == dur_s else None
+    except Exception:
+        dur = None
+    if dur is None or dur <= 0:
+        end = start + timedelta(minutes=30)
+    else:
+        end = start + timedelta(seconds=float(dur))
+
+    tol = max(0, int(tolerance_minutes))
+    return start - timedelta(minutes=tol), end + timedelta(minutes=tol)
+
+
+@st.cache_data(show_spinner=False, ttl=120)
+def _index_media_dir(dir_path: str, exts: tuple[str, ...]) -> pd.DataFrame:
+    rows: list[dict[str, object]] = []
+    p = str(dir_path or "").strip()
+    if not p or not os.path.isdir(p):
+        return pd.DataFrame(columns=["path", "mtime", "ext"])
+
+    wanted = {e.lower().lstrip(".") for e in (exts or tuple()) if isinstance(e, str) and e.strip()}
+    if not wanted:
+        return pd.DataFrame(columns=["path", "mtime", "ext"])
+
+    max_files = 12000
+    try:
+        for root, _dirs, files in os.walk(p):
+            for fn in files:
+                if len(rows) >= max_files:
+                    break
+                ext = os.path.splitext(fn)[1].lower().lstrip(".")
+                if ext not in wanted:
+                    continue
+                full = os.path.join(root, fn)
+                try:
+                    st_ = os.stat(full)
+                    mtime = float(st_.st_mtime)
+                except Exception:
+                    continue
+                rows.append({"path": full, "mtime": mtime, "ext": ext})
+            if len(rows) >= max_files:
+                break
+    except Exception:
+        return pd.DataFrame(columns=["path", "mtime", "ext"])
+
+    df = pd.DataFrame(rows)
+    if df.empty:
+        return df
+    return df.sort_values("mtime", ascending=False).reset_index(drop=True)
+
+
+def _render_media_section(*, row: pd.Series, settings: AppSettings) -> None:
+    if not bool(getattr(settings, "media_enabled", True)):
+        return
+
+    tol = int(getattr(settings, "media_tolerance_minutes", 0) or 0)
+    t0, t1 = _match_time_window(row, tolerance_minutes=tol)
+    if t0 is None or t1 is None:
+        return
+
+    screens_dir = str(getattr(settings, "media_screens_dir", "") or "").strip()
+    videos_dir = str(getattr(settings, "media_videos_dir", "") or "").strip()
+
+    if not screens_dir and not videos_dir:
+        return
+
+    st.subheader("Médias")
+    st.caption(f"Fenêtre de recherche: {_format_datetime_fr_hm(t0)} → {_format_datetime_fr_hm(t1)}")
+
+    t0_epoch = _paris_epoch_seconds(t0)
+    t1_epoch = _paris_epoch_seconds(t1)
+    if t0_epoch is None or t1_epoch is None:
+        return
+
+    found_any = False
+
+    if screens_dir and os.path.isdir(screens_dir):
+        img_df = _index_media_dir(screens_dir, ("png", "jpg", "jpeg", "webp"))
+        if not img_df.empty:
+            mask = (img_df["mtime"] >= t0_epoch) & (img_df["mtime"] <= t1_epoch)
+            hits = img_df.loc[mask].head(24)
+            if not hits.empty:
+                found_any = True
+                st.caption("Captures")
+                for p in hits["path"].tolist():
+                    try:
+                        st.image(p, caption=str(p))
+                    except Exception:
+                        st.write(str(p))
+
+    if videos_dir and os.path.isdir(videos_dir):
+        vid_df = _index_media_dir(videos_dir, ("mp4", "webm", "mkv", "mov"))
+        if not vid_df.empty:
+            mask = (vid_df["mtime"] >= t0_epoch) & (vid_df["mtime"] <= t1_epoch)
+            hits = vid_df.loc[mask].head(10)
+            if not hits.empty:
+                found_any = True
+                st.caption("Vidéos")
+                # UX/robustesse: embed d'une seule vidéo à la fois.
+                paths = [str(p) for p in hits["path"].tolist() if p]
+                if paths:
+                    labels = [os.path.basename(p) for p in paths]
+                    picked = st.selectbox(
+                        "Vidéo",
+                        options=list(range(len(paths))),
+                        format_func=lambda i: labels[i],
+                        index=0,
+                        key=f"media_video_pick_{row.get('match_id','')}",
+                        label_visibility="collapsed",
+                    )
+                    p = paths[int(picked)]
+                    try:
+                        st.video(p)
+                        st.caption(str(p))
+                    except Exception:
+                        st.write(str(p))
+
+    if not found_any:
+        st.info("Aucun média trouvé pour ce match.")
+
+
+def _render_match_view(
+    *,
+    row: pd.Series,
+    match_id: str,
+    db_path: str,
+    xuid: str,
+    waypoint_player: str,
+    db_key: tuple[int, int] | None,
+    settings: AppSettings,
+) -> None:
+    match_id = str(match_id or "").strip()
+    if not match_id:
+        st.info("MatchId manquant.")
+        return
+
+    last_time = row.get("start_time")
+    last_map = row.get("map_name")
+    last_playlist = row.get("playlist_name")
+    last_pair = row.get("pair_name")
+    last_mode = row.get("game_variant_name")
+    last_outcome = row.get("outcome")
+
+    last_playlist_fr = translate_playlist_name(str(last_playlist)) if last_playlist else None
+    last_pair_fr = translate_pair_name(str(last_pair)) if last_pair else None
+
+    # Résultat + score (pour affichage compact)
+    outcome_map = {2: "Victoire", 3: "Défaite", 1: "Égalité", 4: "Non terminé"}
+    try:
+        outcome_code = int(last_outcome) if last_outcome == last_outcome else None
+    except Exception:
+        outcome_code = None
+    outcome_label = outcome_map.get(outcome_code, "?") if outcome_code is not None else "-"
+
+    colors = HALO_COLORS.as_dict()
+    if outcome_code == OUTCOME_CODES.WIN:
+        outcome_color = colors["green"]
+    elif outcome_code == OUTCOME_CODES.LOSS:
+        outcome_color = colors["red"]
+    elif outcome_code == OUTCOME_CODES.TIE:
+        outcome_color = colors["violet"]
+    elif outcome_code == OUTCOME_CODES.NO_FINISH:
+        outcome_color = colors["violet"]
+    else:
+        outcome_color = colors["slate"]
+
+    last_my_score = row.get("my_team_score")
+    last_enemy_score = row.get("enemy_team_score")
+    score_label = _format_score_label(last_my_score, last_enemy_score)
+    score_color = _score_css_color(last_my_score, last_enemy_score)
+
+    wp = str(waypoint_player or "").strip()
+    match_url = None
+    if wp and match_id and match_id.strip() and match_id.strip() != "-":
+        match_url = f"https://www.halowaypoint.com/halo-infinite/players/{wp}/matches/{match_id.strip()}"
+
+    def _os_card(
+        title: str,
+        kpi: str,
+        sub_html: str | None = None,
+        *,
+        accent: str | None = None,
+        kpi_color: str | None = None,
+        sub_style: str | None = None,
+        min_h: int = 112,
+    ) -> None:
+        t = html.escape(str(title or ""))
+        k = html.escape(str(kpi or "-"))
+        s = "" if not sub_html else str(sub_html)
+        style = "min-height:" + str(int(min_h)) + "px; margin-bottom:10px;"
+        if accent and str(accent).startswith("#"):
+            style += f"border-color:{accent}66;"
+        kpi_style = "" if not (kpi_color and str(kpi_color).startswith("#")) else f" style='color:{kpi_color}'"
+        sub_style_attr = "" if not sub_style else " style=\"" + html.escape(str(sub_style), quote=True) + "\""
+        st.markdown(
+            "<div class='os-card' style='" + style + "'>"
+            f"<div class='os-card-title'>{t}</div>"
+            f"<div class='os-card-kpi'{kpi_style}>{k}</div>"
+            + ("" if not s else f"<div class='os-card-sub'{sub_style_attr}>{s}</div>")
+            + "</div>",
+            unsafe_allow_html=True,
+        )
+
+    top_cols = st.columns(2)
+    with top_cols[0]:
+        _os_card("Date", format_date_fr(last_time))
+    with top_cols[1]:
+        _os_card(
+            "Résultats",
+            str(outcome_label),
+            f"<span style='color:{score_color}; font-weight:800'>{html.escape(str(score_label))}</span>",
+            accent=str(outcome_color),
+            kpi_color=str(outcome_color),
+        )
+
+    last_mode_ui = row.get("mode_ui") or _normalize_mode_label(str(last_pair) if last_pair else None)
+    row_cols = st.columns(3)
+    row_cols[0].metric("Carte", str(last_map) if last_map else "-")
+    row_cols[1].metric(
+        "Playlist",
+        str(last_playlist_fr or last_playlist) if (last_playlist_fr or last_playlist) else "-",
+    )
+    row_cols[2].metric(
+        "Mode",
+        str(last_mode_ui or last_pair_fr or last_pair or last_mode)
+        if (last_mode_ui or last_pair_fr or last_pair or last_mode)
+        else "-",
+    )
+
+    with st.spinner("Lecture des stats détaillées (attendu vs réel, médailles)…"):
+        pm = cached_load_player_match_result(db_path, match_id, xuid.strip(), db_key=db_key)
+        medals_last = cached_load_match_medals_for_player(db_path, match_id, xuid.strip(), db_key=db_key)
+
+    if not pm:
+        st.info("Stats détaillées indisponibles pour ce match (PlayerMatchStats manquant ou format inattendu).")
+    else:
+        team_mmr = pm.get("team_mmr")
+        enemy_mmr = pm.get("enemy_mmr")
+        delta_mmr = (team_mmr - enemy_mmr) if (team_mmr is not None and enemy_mmr is not None) else None
+
+        mmr_cols = st.columns(3)
+        with mmr_cols[0]:
+            _os_card("MMR d'équipe", f"{team_mmr:.1f}" if team_mmr is not None else "-")
+        with mmr_cols[1]:
+            _os_card("MMR adverse", f"{enemy_mmr:.1f}" if enemy_mmr is not None else "-")
+        with mmr_cols[2]:
+            if delta_mmr is None:
+                _os_card("Écart MMR", "-")
+            else:
+                dm = float(delta_mmr)
+                col = colors["green"] if dm > 0 else (colors["red"] if dm < 0 else colors["violet"])
+                _os_card("Écart MMR", f"{dm:+.1f}", "équipe - adverse", accent=col, kpi_color=col)
+        def _ev_card(title: str, perf: dict, *, mode: str) -> None:
+            count = perf.get("count")
+            expected = perf.get("expected")
+            if count is None or expected is None:
+                _os_card(title, "-", "")
+                return
+
+            delta = float(count) - float(expected)
+
+            # Couleurs: comme st.metric(delta_color=...)
+            # - normal: vert si delta>0, rouge si delta<0
+            # - inverse: rouge si delta>0, vert si delta<0
+            if delta == 0:
+                col = colors["violet"]
+            else:
+                good = delta > 0
+                if mode == "inverse":
+                    good = not good
+                col = colors["green"] if good else colors["red"]
+
+            arrow = "↑" if delta > 0 else ("↓" if delta < 0 else "→")
+            sub = f"<span style='color:{col}; font-weight:900; font-size:14px'>{arrow} {delta:+.1f}</span>"
+            _os_card(title, f"{float(count):.0f} vs {float(expected):.1f}", sub)
+
+        perf_k = pm.get("kills") or {}
+        perf_d = pm.get("deaths") or {}
+        perf_a = pm.get("assists") or {}
+
+        st.subheader("Réel vs attendu")
+        av_cols = st.columns(3)
+        with av_cols[0]:
+            _ev_card("Frags", perf_k, mode="normal")
+        with av_cols[1]:
+            _ev_card("Morts", perf_d, mode="inverse")
+        with av_cols[2]:
+            avg_life_last = row.get("average_life_seconds")
+            _os_card("Durée de vie moyenne", format_mmss(avg_life_last), "")
+
+    st.subheader("Médailles")
+    if not medals_last:
+        st.info("Médailles indisponibles pour ce match (ou aucune médaille).")
+    else:
+        md_df = pd.DataFrame(medals_last)
+        md_df["label"] = md_df["name_id"].apply(lambda x: medal_label(int(x)))
+        md_df = md_df.sort_values(["count", "label"], ascending=[False, True])
+        render_medals_grid(md_df[["name_id", "count"]].to_dict(orient="records"), cols_per_row=8)
+
+    st.subheader("Némésis / Souffre-douleur")
+    if not (match_id and match_id.strip() and has_table(db_path, "HighlightEvents")):
+        st.caption(
+            "Indisponible: la DB ne contient pas les highlight events. "
+            "Si tu utilises une DB SPNKr, relance l'import avec `--with-highlight-events`."
+        )
+    else:
+        with st.spinner("Chargement des highlight events (film)…"):
+            he = cached_load_highlight_events_for_match(db_path, match_id.strip(), db_key=db_key)
+
+        # Mapping plus fiable que les gamertags des highlight events
+        match_gt_map = cached_load_match_player_gamertags(db_path, match_id.strip(), db_key=db_key)
+
+        pairs = compute_killer_victim_pairs(he, tolerance_ms=5)
+        if not pairs:
+            st.info("Aucune paire kill/death trouvée (ou match sans timeline exploitable).")
+        else:
+            kv_long = killer_victim_counts_long(pairs)
+
+            me_xuid = str(xuid).strip()
+            killed_me = kv_long[kv_long["victim_xuid"].astype(str) == me_xuid]
+            i_killed = kv_long[kv_long["killer_xuid"].astype(str) == me_xuid]
+
+            def _display_name_from_kv(xuid_value, gamertag_value) -> str:
+                """Retourne un nom lisible pour l'UI.
+
+                Les highlight events SPNKr peuvent ne pas contenir de gamertag.
+                Dans ce cas, on retombe sur un alias local basé sur le XUID.
+                """
+                gt = str(gamertag_value or "").strip()
+                xu_raw = str(xuid_value or "").strip()
+                xu = parse_xuid_input(xu_raw) or xu_raw
+
+                # Si on connait le gamertag depuis MatchStats, on le préfère.
+                xu_key = str(xu).strip() if xu is not None else ""
+                if xu_key and isinstance(match_gt_map, dict):
+                    mapped = match_gt_map.get(xu_key)
+                    if isinstance(mapped, str) and mapped.strip():
+                        return mapped.strip()
+
+                # Si le gamertag ressemble à un XUID / placeholder, on l'ignore.
+                if (not gt) or gt == "?" or gt.isdigit() or gt.lower().startswith("xuid("):
+                    if xu:
+                        return display_name_from_xuid(str(xu).strip())
+                    return "-"
+                return gt
+
+            nemesis_name = "-"
+            nemesis_kills = None
+            if not killed_me.empty:
+                top = (
+                    killed_me[["killer_xuid", "killer_gamertag", "count"]]
+                    .rename(columns={"count": "Kills"})
+                    .sort_values(["Kills"], ascending=[False])
+                    .iloc[0]
+                )
+                nemesis_name = _display_name_from_kv(top.get("killer_xuid"), top.get("killer_gamertag"))
+                nemesis_kills = int(top.get("Kills")) if top.get("Kills") is not None else None
+
+            bully_name = "-"
+            bully_kills = None
+            if not i_killed.empty:
+                top = (
+                    i_killed[["victim_xuid", "victim_gamertag", "count"]]
+                    .rename(columns={"count": "Kills"})
+                    .sort_values(["Kills"], ascending=[False])
+                    .iloc[0]
+                )
+                bully_name = _display_name_from_kv(top.get("victim_xuid"), top.get("victim_gamertag"))
+                bully_kills = int(top.get("Kills")) if top.get("Kills") is not None else None
+
+            def _clean_name(v: str) -> str:
+                s = str(v or "")
+                s = s.replace("\ufffd", "")
+                s = re.sub(r"[\x00-\x1f\x7f]", "", s)
+                s = re.sub(r"\s+", " ", s).strip()
+                return s or "-"
+
+            nemesis_name = _clean_name(nemesis_name)
+            bully_name = _clean_name(bully_name)
+
+            # Cross-counts pour affichage (m'a tué vs je l'ai tué)
+            def _count_kills(df_: pd.DataFrame, *, col: str, xuid_value: str) -> int | None:
+                if df_ is None or df_.empty:
+                    return None
+                if not xuid_value:
+                    return None
+                try:
+                    mask = df_[col].astype(str) == str(xuid_value)
+                    hit = df_.loc[mask]
+                    if hit.empty:
+                        return None
+                    return int(hit["count"].iloc[0])
+                except Exception:
+                    return None
+
+            nemesis_xu = ""
+            bully_xu = ""
+            if not killed_me.empty:
+                try:
+                    nemesis_xu = str(killed_me.sort_values(["count"], ascending=[False]).iloc[0].get("killer_xuid") or "").strip()
+                except Exception:
+                    nemesis_xu = ""
+            if not i_killed.empty:
+                try:
+                    bully_xu = str(i_killed.sort_values(["count"], ascending=[False]).iloc[0].get("victim_xuid") or "").strip()
+                except Exception:
+                    bully_xu = ""
+
+            nemesis_killed_me = nemesis_kills
+            me_killed_nemesis = _count_kills(i_killed, col="victim_xuid", xuid_value=nemesis_xu)
+
+            me_killed_bully = bully_kills
+            bully_killed_me = _count_kills(killed_me, col="killer_xuid", xuid_value=bully_xu)
+
+            def _cmp_color(deaths_: int | None, kills_: int | None) -> str:
+                if deaths_ is None or kills_ is None:
+                    return colors["slate"]
+                if int(deaths_) > int(kills_):
+                    return colors["red"]
+                if int(deaths_) < int(kills_):
+                    return colors["green"]
+                return colors["violet"]
+
+            def _fmt_two_lines(deaths_: int | None, kills_: int | None) -> str:
+                d = "-" if deaths_ is None else f"{int(deaths_)} morts"
+                k = "-" if kills_ is None else f"Tué {int(kills_)} fois"
+                return html.escape(d) + "<br/>" + html.escape(k)
+
+            c = st.columns(2)
+            with c[0]:
+                _os_card(
+                    "Némésis",
+                    nemesis_name,
+                    _fmt_two_lines(nemesis_killed_me, me_killed_nemesis),
+                    accent=_cmp_color(nemesis_killed_me, me_killed_nemesis),
+                    sub_style="color: rgba(245, 248, 255, 0.92); font-weight: 800; font-size: 16px; line-height: 1.15;",
+                    min_h=110,
+                )
+            with c[1]:
+                # même règle couleur: rouge si il m'a tué plus que je ne l'ai tué
+                _os_card(
+                    "Souffre-douleur",
+                    bully_name,
+                    _fmt_two_lines(bully_killed_me, me_killed_bully),
+                    accent=_cmp_color(bully_killed_me, me_killed_bully),
+                    sub_style="color: rgba(245, 248, 255, 0.92); font-weight: 800; font-size: 16px; line-height: 1.15;",
+                    min_h=110,
+                )
+
+    _render_media_section(row=row, settings=settings)
+
+    if match_url:
+        st.link_button("Ouvrir sur HaloWaypoint", match_url, width="stretch")
 
 
 # =============================================================================
@@ -595,7 +1793,11 @@ def load_df(db_path: str, xuid: str, db_key: tuple[int, int] | None = None) -> p
         }
     )
     # Facilite les filtres date
-    df["start_time"] = pd.to_datetime(df["start_time"], utc=True).dt.tz_convert(None)
+    df["start_time"] = (
+        pd.to_datetime(df["start_time"], utc=True)
+        .dt.tz_convert(PARIS_TZ_NAME)
+        .dt.tz_localize(None)
+    )
     df["date"] = df["start_time"].dt.date
 
     # Stats par minute
@@ -641,6 +1843,38 @@ def _build_friends_opts_map(
     db_key: tuple[int, int] | None,
     aliases_key: int | None,
 ) -> tuple[dict[str, str], list[str]]:
+    def _load_local_friends_defaults() -> dict[str, list[str]]:
+        """Charge un mapping local {self_xuid: [friend1, friend2, ...]}.
+
+        Fichier local (ignoré git): .streamlit/friends_defaults.json
+        Valeurs: gamertags OU XUIDs.
+        """
+        try:
+            p = Path(__file__).resolve().parent / ".streamlit" / "friends_defaults.json"
+            if not p.exists():
+                return {}
+            with open(p, "r", encoding="utf-8") as f:
+                obj = json.load(f) or {}
+        except Exception:
+            return {}
+
+        if not isinstance(obj, dict):
+            return {}
+
+        out: dict[str, list[str]] = {}
+        for k, v in obj.items():
+            if not isinstance(k, str) or not k.strip():
+                continue
+            if not isinstance(v, list):
+                continue
+            vals: list[str] = []
+            for it in v:
+                if isinstance(it, str) and it.strip():
+                    vals.append(it.strip())
+            if vals:
+                out[k.strip()] = vals
+        return out
+
     top = cached_list_top_teammates(db_path, self_xuid, db_key=db_key, limit=20)
     default_two = [t[0] for t in top[:2]]
     all_other = cached_list_other_xuids(db_path, self_xuid, db_key=db_key, limit=500)
@@ -657,7 +1891,36 @@ def _build_friends_opts_map(
             seen.add(xx)
 
     opts_map = build_xuid_option_map(ordered, display_name_fn=display_name_from_xuid)
-    default_labels = [k for k, v in opts_map.items() if v in default_two]
+
+    # Defaults: top 2, ou override local.
+    default_xuids = list(default_two)
+    try:
+        overrides = _load_local_friends_defaults().get(str(self_xuid).strip())
+        if overrides:
+            name_to_xuid = {
+                str(display_name_from_xuid(xu) or "").strip().casefold(): str(xu).strip() for xu in ordered
+            }
+            ordered_xuids = [str(xu).strip() for xu in ordered]
+
+            chosen: list[str] = []
+            for ident in overrides:
+                s = str(ident or "").strip()
+                if not s:
+                    continue
+                if s.isdigit() and s in ordered_xuids:
+                    chosen.append(s)
+                    continue
+                xu = name_to_xuid.get(s.casefold())
+                if xu:
+                    chosen.append(xu)
+            chosen = [x for x in chosen if x]
+            if len(chosen) >= 2:
+                default_xuids = chosen[:2]
+    except Exception:
+        pass
+
+    label_by_xuid = {v: k for k, v in opts_map.items()}
+    default_labels = [label_by_xuid[x] for x in default_xuids if x in label_by_xuid]
     return opts_map, default_labels
 
 
@@ -674,58 +1937,188 @@ def main() -> None:
     with perf_section("css"):
         st.markdown(load_css(), unsafe_allow_html=True)
 
+    # IMPORTANT: aucun accès réseau implicite.
+    # La génération du référentiel Citations doit être explicite (opt-in via env).
+    if str(os.environ.get("OPENSPARTAN_CITATIONS_AUTOGEN") or "").strip() in {"1", "true", "True"}:
+        _ensure_h5g_commendations_repo()
+
+    # Paramètres (persistés)
+    settings: AppSettings = load_settings()
+    st.session_state["app_settings"] = settings
+
+    # Propage les defaults depuis secrets vers l'env.
+    # Utile notamment pour résoudre un XUID quand la DB SPNKr ne contient pas les gamertags.
+    try:
+        xuid_or_gt, xuid_fallback, wp = _default_identity_from_secrets()
+        if xuid_or_gt and not str(xuid_or_gt).strip().isdigit() and xuid_fallback:
+            if not str(os.environ.get("OPENSPARTAN_DEFAULT_GAMERTAG") or "").strip():
+                os.environ["OPENSPARTAN_DEFAULT_GAMERTAG"] = str(xuid_or_gt).strip()
+            if not str(os.environ.get("OPENSPARTAN_DEFAULT_XUID") or "").strip():
+                os.environ["OPENSPARTAN_DEFAULT_XUID"] = str(xuid_fallback).strip()
+        if wp and not str(os.environ.get("OPENSPARTAN_DEFAULT_WAYPOINT_PLAYER") or "").strip():
+            os.environ["OPENSPARTAN_DEFAULT_WAYPOINT_PLAYER"] = str(wp).strip()
+    except Exception:
+        pass
+
+    # Applique les overrides de chemins (avant que l'app lise les fichiers).
+    try:
+        aliases_override = str(getattr(settings, "aliases_path", "") or "").strip()
+        if aliases_override:
+            os.environ["OPENSPARTAN_ALIASES_PATH"] = aliases_override
+        else:
+            os.environ.pop("OPENSPARTAN_ALIASES_PATH", None)
+    except Exception:
+        pass
+    try:
+        profiles_override = str(getattr(settings, "profiles_path", "") or "").strip()
+        if profiles_override:
+            os.environ["OPENSPARTAN_PROFILES_PATH"] = profiles_override
+        else:
+            os.environ.pop("OPENSPARTAN_PROFILES_PATH", None)
+    except Exception:
+        pass
+
     # ==========================================================================
-    # Sidebar - Configuration
+    # Source (persistée via session_state) — UI dans l'onglet Paramètres
     # ==========================================================================
-    
+
     DEFAULT_DB = get_default_db_path()
+    _init_source_state(DEFAULT_DB, settings)
+
+    # Support liens internes via query params (?page=...&match_id=...)
+    try:
+        qp = dict(st.query_params)
+        qp_page = _qp_first(qp.get("page"))
+        qp_mid = _qp_first(qp.get("match_id"))
+    except Exception:
+        qp_page = None
+        qp_mid = None
+    qp_token = (str(qp_page or "").strip(), str(qp_mid or "").strip())
+    if any(qp_token) and st.session_state.get("_consumed_query_params") != qp_token:
+        st.session_state["_consumed_query_params"] = qp_token
+        if qp_token[0]:
+            st.session_state["_pending_page"] = qp_token[0]
+        if qp_token[1]:
+            st.session_state["_pending_match_id"] = qp_token[1]
+        # Nettoie l'URL après consommation pour ne pas forcer la page en boucle.
+        try:
+            st.query_params.clear()
+        except Exception:
+            try:
+                st.experimental_set_query_params()
+            except Exception:
+                pass
+
+    db_path = str(st.session_state.get("db_path", "") or "").strip()
+    xuid = str(st.session_state.get("xuid_input", "") or "").strip()
+    waypoint_player = str(st.session_state.get("waypoint_player", "") or "").strip()
 
     with st.sidebar:
         render_perf_panel(location="sidebar")
         st.markdown("<div class='os-sidebar-brand'>OpenSpartan Graphs</div>", unsafe_allow_html=True)
         st.markdown("<div class='os-sidebar-divider'></div>", unsafe_allow_html=True)
 
-        with perf_section("sidebar/source"):
-            with st.expander("Source", expanded=False):
-                db_path, xuid, waypoint_player = render_source_section(
-                    DEFAULT_DB,
-                    get_local_dbs=cached_list_local_dbs,
-                    on_clear_caches=_clear_app_caches,
-                )
+        # Toujours visible
+        if st.button(
+            "Actualiser",
+            width="stretch",
+            help="Relance l'app (optionnellement en vidant les caches selon Paramètres).",
+        ):
+            if bool(getattr(settings, "refresh_clears_caches", False)):
+                _clear_app_caches()
+                try:
+                    getattr(cached_list_local_dbs, "clear")()
+                except Exception:
+                    pass
+            st.rerun()
 
-        with perf_section("sidebar/openspartan"):
-            render_openspartan_tools()
+    # Validation légère (non bloquante)
+    from src.db import resolve_xuid_from_db
 
-        with perf_section("sidebar/validate"):
-            if not db_path.strip():
-                st.error(
-                    "Aucun .db détecté automatiquement. "
-                    "Vérifie que OpenSpartan Workshop est installé."
-                )
-                st.stop()
-            if not os.path.exists(db_path):
-                st.error("Le fichier .db n'existe pas à ce chemin.")
-                st.stop()
-            if not xuid.strip().isdigit():
-                st.error("XUID invalide (doit être numérique).")
-                st.stop()
+    if db_path and not os.path.exists(db_path):
+        db_path = ""
 
-    me_name = display_name_from_xuid(xuid.strip())
+    # Si la DB existe mais est vide (0 octet), on tente un fallback automatique.
+    if db_path and os.path.exists(db_path):
+        try:
+            if os.path.getsize(db_path) <= 0:
+                st.warning("La base sélectionnée est vide (0 octet). Basculement automatique vers une DB valide si possible.")
+                fallback = ""
+                if _is_spnkr_db_path(db_path):
+                    fallback = _pick_latest_spnkr_db_if_any()
+                    if fallback and os.path.exists(fallback) and os.path.getsize(fallback) <= 0:
+                        fallback = ""
+                if not fallback:
+                    fallback = str(DEFAULT_DB or "").strip()
+                    if not (fallback and os.path.exists(fallback)):
+                        fallback = ""
+                if fallback and fallback != db_path:
+                    st.info(f"DB utilisée: {fallback}")
+                    st.session_state["db_path"] = fallback
+                    db_path = fallback
+                else:
+                    db_path = ""
+        except Exception:
+            pass
+
+    xraw = (xuid or "").strip()
+    xuid_resolved = parse_xuid_input(xraw) or ""
+    if not xuid_resolved and xraw and not xraw.isdigit() and db_path:
+        xuid_resolved = resolve_xuid_from_db(db_path, xraw) or ""
+        # Fallback: si la DB ne permet pas de résoudre (pas de gamertags),
+        # utilise les defaults secrets/env quand l'entrée correspond au gamertag par défaut.
+        if not xuid_resolved:
+            try:
+                xuid_or_gt, xuid_fallback, _wp = _default_identity_from_secrets()
+                if (
+                    xuid_or_gt
+                    and xuid_fallback
+                    and (not str(xuid_or_gt).strip().isdigit())
+                    and str(xuid_or_gt).strip().casefold() == str(xraw).strip().casefold()
+                ):
+                    xuid_resolved = str(xuid_fallback).strip()
+            except Exception:
+                pass
+    if not xuid_resolved and not xraw and db_path:
+        xuid_or_gt, xuid_fallback, _wp = _default_identity_from_secrets()
+        if xuid_or_gt and not xuid_or_gt.isdigit():
+            xuid_resolved = resolve_xuid_from_db(db_path, xuid_or_gt) or xuid_fallback
+        else:
+            xuid_resolved = xuid_or_gt or xuid_fallback
+
+    xuid = xuid_resolved or ""
+
+    me_name = display_name_from_xuid(xuid.strip()) if str(xuid or "").strip() else "(joueur)"
     aliases_key = _aliases_cache_key()
 
     # ==========================================================================
     # Chargement des données
     # ==========================================================================
     
-    db_key = _db_cache_key(db_path)
-    with perf_section("db/load_df"):
-        df = load_df(db_path, xuid.strip(), db_key=db_key)
-    if df.empty:
-        st.warning("Aucun match trouvé.")
-        st.stop()
+    df = pd.DataFrame()
+    db_key = _db_cache_key(db_path) if db_path else None
+    if db_path and os.path.exists(db_path) and str(xuid or "").strip():
+        with perf_section("db/load_df"):
+            df = load_df(db_path, xuid.strip(), db_key=db_key)
+        if df.empty:
+            st.warning("Aucun match trouvé.")
+    else:
+        st.info("Configure une DB et un joueur dans Paramètres.")
 
-    with perf_section("analysis/mark_firefight"):
-        df = mark_firefight(df)
+    if not df.empty:
+        with perf_section("analysis/mark_firefight"):
+            df = mark_firefight(df)
+
+    if df.empty:
+        st.radio(
+            "Navigation",
+            options=["Paramètres"],
+            horizontal=True,
+            key="page",
+            label_visibility="collapsed",
+        )
+        _render_settings_page(settings)
+        return
 
     # ==========================================================================
     # Sidebar - Filtres
@@ -791,9 +2184,47 @@ def main() -> None:
         if filter_mode == "Période":
             cols = st.columns(2)
             with cols[0]:
-                start_d = st.date_input("Début", value=dmin, min_value=dmin, max_value=dmax)
+                start_default = pd.to_datetime(dmin, errors="coerce")
+                if pd.isna(start_default):
+                    start_default = pd.Timestamp.today().normalize()
+                start_default_date = start_default.date()
+                end_limit = pd.to_datetime(dmax, errors="coerce")
+                if pd.isna(end_limit):
+                    end_limit = start_default
+                end_limit_date = end_limit.date()
+                start_value = st.session_state.get("start_date_cal", start_default_date)
+                if not isinstance(start_value, date) or start_value < start_default_date or start_value > end_limit_date:
+                    start_value = start_default_date
+                start_date = st.date_input(
+                    "Début",
+                    value=start_value,
+                    min_value=start_default_date,
+                    max_value=end_limit_date,
+                    format="DD/MM/YYYY",
+                    key="start_date_cal",
+                )
+                start_d = start_date
             with cols[1]:
-                end_d = st.date_input("Fin", value=dmax, min_value=dmin, max_value=dmax)
+                end_default = pd.to_datetime(dmax, errors="coerce")
+                if pd.isna(end_default):
+                    end_default = pd.Timestamp.today().normalize()
+                end_default_date = end_default.date()
+                start_limit = pd.to_datetime(dmin, errors="coerce")
+                if pd.isna(start_limit):
+                    start_limit = end_default
+                start_limit_date = start_limit.date()
+                end_value = st.session_state.get("end_date_cal", end_default_date)
+                if not isinstance(end_value, date) or end_value < start_limit_date or end_value > end_default_date:
+                    end_value = end_default_date
+                end_date = st.date_input(
+                    "Fin",
+                    value=end_value,
+                    min_value=start_limit_date,
+                    max_value=end_default_date,
+                    format="DD/MM/YYYY",
+                    key="end_date_cal",
+                )
+                end_d = end_date
             if start_d > end_d:
                 st.warning("La date de début est après la date de fin.")
         else:
@@ -820,8 +2251,6 @@ def main() -> None:
             )
             options_ui = session_labels_ui["session_label"].tolist()
             st.session_state["_latest_session_label"] = options_ui[0] if options_ui else None
-
-            compare_multi = st.toggle("Comparer plusieurs sessions", value=False)
 
             def _set_session_selection(label: str) -> None:
                 st.session_state.picked_session_label = label
@@ -907,12 +2336,8 @@ def main() -> None:
             else:
                 st.caption(f"Trio : {trio_label}")
 
-            if compare_multi:
-                picked = st.multiselect("Sessions", options=options_ui, key="picked_sessions")
-                picked_session_labels = picked if picked else None
-            else:
-                picked_one = st.selectbox("Session", options=["(toutes)"] + options_ui, key="picked_session_label")
-                picked_session_labels = None if picked_one == "(toutes)" else [picked_one]
+            picked_one = st.selectbox("Session", options=["(toutes)"] + options_ui, key="picked_session_label")
+            picked_session_labels = None if picked_one == "(toutes)" else [picked_one]
 
         # ------------------------------------------------------------------
         # Filtres en cascade (ne montrent que les valeurs réellement jouées)
@@ -963,13 +2388,7 @@ def main() -> None:
 
         last_n_acc = st.slider("Précision: derniers matchs", 5, 50, 20, step=1)
 
-        with st.expander("Paramètres avancés", expanded=False):
-            st.toggle("Inclure Firefight (PvE)", key="include_firefight", value=False)
-            st.toggle(
-                "Limiter aux playlists (Quick Play / Ranked Slayer / Ranked Arena)",
-                key="restrict_playlists",
-                value=True,
-            )
+        # Paramètres avancés déplacés dans l'onglet Paramètres.
 
     # ==========================================================================
     # Application des filtres
@@ -1037,350 +2456,220 @@ def main() -> None:
         avg_life = dff["average_life_seconds"].dropna().mean() if not dff.empty else None
 
     # ------------------------------------------------------------------
-    # Bandeau résumé (en haut du site)
+    # Bandeau résumé (en haut du site) — regroupé
     # ------------------------------------------------------------------
-    _render_top_summary(len(dff), rates)
-
     avg_match_seconds = _avg_match_duration_seconds(dff)
-    span_seconds = _compute_session_span_seconds(dff)
+    total_play_seconds = _compute_total_play_seconds(dff)
     avg_match_txt = _format_duration_hms(avg_match_seconds)
-    span_txt = _format_duration_hms(span_seconds)
-    st.markdown(
-        "<div class='os-top-kpis'>"
-        "  <div class='os-top-kpi'>"
-        "    <div class='os-top-kpi__label'>Durée moyenne / match</div>"
-        f"    <div class='os-top-kpi__value'>{avg_match_txt}</div>"
-        "  </div>"
-        "  <div class='os-top-kpi'>"
-        "    <div class='os-top-kpi__label'>Durée totale</div>"
-        f"    <div class='os-top-kpi__value'>{span_txt}</div>"
-        "  </div>"
-        "</div>",
-        unsafe_allow_html=True,
-    )
+    total_play_txt = _format_duration_dhm(total_play_seconds)
+
+    # Stats par minute / totaux
+    stats = compute_aggregated_stats(dff)
 
     # Moyennes par partie
     kpg = dff["kills"].mean() if not dff.empty else None
     dpg = dff["deaths"].mean() if not dff.empty else None
     apg = dff["assists"].mean() if not dff.empty else None
 
+    st.subheader("Parties")
+    _render_top_summary(len(dff), rates)
     _render_kpi_cards(
         [
-            ("Frags par partie", f"{kpg:.2f}" if (kpg is not None and pd.notna(kpg)) else "-"),
-            ("Morts par partie", f"{dpg:.2f}" if (dpg is not None and pd.notna(dpg)) else "-"),
-            ("Assistances par partie", f"{apg:.2f}" if (apg is not None and pd.notna(apg)) else "-"),
+            ("Durée moyenne / match", avg_match_txt),
+            ("Durée totale", total_play_txt),
         ]
     )
 
-    # Stats par minute
-    stats = compute_aggregated_stats(dff)
-
+    st.subheader("Carrière")
+    _render_kpi_cards(
+        [
+            ("Durée moyenne / match", avg_match_txt),
+            ("Frags par partie", f"{kpg:.2f}" if (kpg is not None and pd.notna(kpg)) else "-"),
+            ("Morts par partie", f"{dpg:.2f}" if (dpg is not None and pd.notna(dpg)) else "-"),
+            ("Assistances par partie", f"{apg:.2f}" if (apg is not None and pd.notna(apg)) else "-"),
+        ],
+        dense=False,
+    )
     _render_kpi_cards(
         [
             ("Frags / min", f"{stats.kills_per_minute:.2f}" if stats.kills_per_minute else "-"),
             ("Morts / min", f"{stats.deaths_per_minute:.2f}" if stats.deaths_per_minute else "-"),
             ("Assistances / min", f"{stats.assists_per_minute:.2f}" if stats.assists_per_minute else "-"),
-        ]
-    )
-
-    _render_kpi_cards(
-        [
             ("Précision moyenne", f"{avg_acc:.2f}%" if avg_acc is not None else "-"),
+            ("Durée de vie moyenne", format_mmss(avg_life)),
             ("Taux de victoire", f"{win_rate*100:.1f}%" if rates.total else "-"),
             ("Taux de défaite", f"{loss_rate*100:.1f}%" if rates.total else "-"),
-            ("Ratio global", f"{global_ratio:.2f}" if global_ratio is not None else "-"),
-            ("Durée de vie moyenne", format_mmss(avg_life)),
-        ]
+            ("Ratio", f"{global_ratio:.2f}" if global_ratio is not None else "-"),
+        ],
+        dense=False,
     )
 
     # (Résumé déplacé en haut du site)
 
     # ==========================================================================
-    # Onglets
+    # Pages (navigation)
     # ==========================================================================
-    
-    tab_series, tab_last, tab_medals, tab_mom, tab_teammates, tab_table = st.tabs(
-        [
-            "Séries temporelles",
-            "Dernier match",
-            "Médailles (Top 25)",
-            "Victoires/Défaites",
-            "Mes coéquipiers",
-            "Historique des parties",
-        ]
+
+    pages = [
+        "Séries temporelles",
+        "Dernier match",
+        "Match",
+        "Citations",
+        "Victoires/Défaites",
+        "Mes coéquipiers",
+        "Historique des parties",
+        "Paramètres",
+    ]
+
+    pending_page = st.session_state.pop("_pending_page", None)
+    if isinstance(pending_page, str) and pending_page in pages:
+        st.session_state["page"] = pending_page
+    if "page" not in st.session_state:
+        st.session_state["page"] = "Séries temporelles"
+
+    pending_mid = st.session_state.pop("_pending_match_id", None)
+    if isinstance(pending_mid, str) and pending_mid.strip():
+        st.session_state["match_id_input"] = pending_mid.strip()
+
+    page = st.segmented_control(
+        "Onglets",
+        options=pages,
+        key="page",
+        label_visibility="collapsed",
     )
 
     # --------------------------------------------------------------------------
-    # Tab: Dernier match
+    # Page: Dernier match
     # --------------------------------------------------------------------------
-    with tab_last:
+    if page == "Dernier match":
         st.caption("Dernière partie selon la sélection/filtres actuels.")
-
         if dff.empty:
             st.info("Aucun match disponible avec les filtres actuels.")
         else:
             last_row = dff.sort_values("start_time").iloc[-1]
-            last_match_id = str(last_row.get("match_id", ""))
-            last_time = last_row.get("start_time")
-            last_map = last_row.get("map_name")
-            last_playlist = last_row.get("playlist_name")
-            last_pair = last_row.get("pair_name")
-            last_mode = last_row.get("game_variant_name")
-            last_outcome = last_row.get("outcome")
-
-            last_playlist_fr = translate_playlist_name(str(last_playlist)) if last_playlist else None
-            last_pair_fr = translate_pair_name(str(last_pair)) if last_pair else None
-
-            # Résultat + score (pour affichage compact)
-            outcome_map = {2: "Victoire", 3: "Défaite", 1: "Égalité", 4: "Non terminé"}
-            try:
-                outcome_code = int(last_outcome) if last_outcome == last_outcome else None
-            except Exception:
-                outcome_code = None
-            outcome_label = outcome_map.get(outcome_code, "?") if outcome_code is not None else "-"
-
-            colors = HALO_COLORS.as_dict()
-            if outcome_code == OUTCOME_CODES.WIN:
-                outcome_color = colors["green"]
-            elif outcome_code == OUTCOME_CODES.LOSS:
-                outcome_color = colors["red"]
-            elif outcome_code == OUTCOME_CODES.TIE:
-                outcome_color = colors["violet"]
-            else:
-                outcome_color = colors["slate"]
-
-            last_my_score = last_row.get("my_team_score")
-            last_enemy_score = last_row.get("enemy_team_score")
-            score_label = _format_score_label(last_my_score, last_enemy_score)
-            score_color = _score_css_color(last_my_score, last_enemy_score)
-
-            wp = str(waypoint_player or "").strip()
-            match_url = None
-            if wp and last_match_id and last_match_id.strip() and last_match_id.strip() != "-":
-                match_url = f"https://www.halowaypoint.com/halo-infinite/players/{wp}/matches/{last_match_id.strip()}"
-
-            top_cols = st.columns([2, 3])
-            with top_cols[0]:
-                top_cols_0 = st.columns([2, 3])
-                with top_cols_0[0]:
-                    st.metric("Date", format_date_fr(last_time))
-                with top_cols_0[1]:
-                    st.markdown(
-                        "<div style='border:1px solid rgba(255,255,255,0.12); border-radius:12px; padding:10px 12px; background: rgba(255,255,255,0.03)'>"
-                        "<div style='display:flex; align-items:baseline; gap:10px; justify-content:space-between'>"
-                        f"<div style='font-weight:900; font-size:1.05rem; color:{outcome_color}'>{outcome_label}</div>"
-                        f"<div style='font-weight:900; font-size:1.05rem; color:{score_color}'>{score_label}</div>"
-                        "</div>"
-                        "</div>",
-                        unsafe_allow_html=True,
-                    )
-
-            # Carte + Playlist + Mode sur la même ligne
-            last_mode_ui = last_row.get("mode_ui") or _normalize_mode_label(str(last_pair) if last_pair else None)
-            row_cols = st.columns(3)
-            row_cols[0].metric("Carte", str(last_map) if last_map else "-")
-            row_cols[1].metric(
-                "Playlist",
-                str(last_playlist_fr or last_playlist) if (last_playlist_fr or last_playlist) else "-",
-            )
-            row_cols[2].metric(
-                "Mode",
-                str(last_mode_ui or last_pair_fr or last_pair or last_mode)
-                if (last_mode_ui or last_pair_fr or last_pair or last_mode)
-                else "-",
+            last_match_id = str(last_row.get("match_id", "")).strip()
+            _render_match_view(
+                row=last_row,
+                match_id=last_match_id,
+                db_path=db_path,
+                xuid=xuid,
+                waypoint_player=waypoint_player,
+                db_key=db_key,
+                settings=settings,
             )
 
-            with st.spinner("Lecture des stats détaillées (attendu vs réel, médailles)…"):
-                pm = cached_load_player_match_result(db_path, last_match_id, xuid.strip(), db_key=db_key)
-                medals_last = cached_load_match_medals_for_player(
-                    db_path, last_match_id, xuid.strip(), db_key=db_key
-                )
+    # --------------------------------------------------------------------------
+    # Page: Match (recherche)
+    # --------------------------------------------------------------------------
+    elif page == "Match":
+        st.caption("Afficher un match précis via un MatchId, une date/heure, ou une sélection.")
 
-            # (Le résultat + score est affiché en haut, compact, près de la date.)
+        # Entrée MatchId
+        match_id_input = st.text_input("MatchId", key="match_id_input")
 
-            if not pm:
-                st.info(
-                    "Stats détaillées indisponibles pour ce match (PlayerMatchStats manquant ou format inattendu)."
-                )
-            else:
-                team_mmr = pm.get("team_mmr")
-                enemy_mmr = pm.get("enemy_mmr")
-                delta_mmr = (team_mmr - enemy_mmr) if (team_mmr is not None and enemy_mmr is not None) else None
+        # Sélection rapide (sur les filtres actuels, triés du plus récent au plus ancien)
+        quick_df = dff.sort_values("start_time", ascending=False).head(200).copy()
+        quick_df["start_time_fr"] = quick_df["start_time"].apply(_format_datetime_fr_hm)
+        if "mode_ui" not in quick_df.columns:
+            quick_df["mode_ui"] = quick_df["pair_name"].apply(_normalize_mode_label)
+        quick_df["label"] = (
+            quick_df["start_time_fr"].astype(str)
+            + " — "
+            + quick_df["map_name"].astype(str)
+            + " — "
+            + quick_df["mode_ui"].astype(str)
+        )
+        opts = {r["label"]: str(r["match_id"]) for _, r in quick_df.iterrows()}
+        st.selectbox(
+            "Sélection rapide (filtres actuels)",
+            options=["(aucun)"] + list(opts.keys()),
+            index=0,
+            key="match_quick_pick_label",
+        )
 
-                mmr_cols = st.columns(3)
-                mmr_cols[0].metric("MMR d'équipe", f"{team_mmr:.1f}" if team_mmr is not None else "-")
-                mmr_cols[1].metric("MMR adverse", f"{enemy_mmr:.1f}" if enemy_mmr is not None else "-")
-                if delta_mmr is None:
-                    mmr_cols[2].metric("Écart MMR", "-")
+        def _on_use_quick_match() -> None:
+            picked = st.session_state.get("match_quick_pick_label")
+            if isinstance(picked, str) and picked in opts:
+                st.session_state["match_id_input"] = opts[picked]
+
+        st.button("Utiliser ce match", width="stretch", on_click=_on_use_quick_match)
+
+        # Recherche par date/heure
+        with st.expander("Recherche par date/heure", expanded=False):
+            dd = st.date_input("Date", value=date.today(), format="DD/MM/YYYY")
+            tt = st.time_input("Heure", value=time(20, 0))
+            tol_min = st.slider("Tolérance (minutes)", 0, 30, 10, 1)
+
+            def _on_search_by_datetime() -> None:
+                target = datetime.combine(dd, tt)
+                all_df = df.copy()
+                all_df["_dt"] = pd.to_datetime(all_df["start_time"], errors="coerce")
+                all_df = all_df.dropna(subset=["_dt"]).copy()
+                if all_df.empty:
+                    st.warning("Aucune date exploitable dans la DB.")
+                    return
+
+                all_df["_diff"] = (all_df["_dt"] - target).abs()
+                best = all_df.sort_values("_diff").iloc[0]
+                diff_min = float(best["_diff"].total_seconds() / 60.0)
+                if diff_min <= float(tol_min):
+                    st.session_state["match_id_input"] = str(best.get("match_id") or "").strip()
                 else:
-                    mmr_cols[2].metric(
-                        "Écart MMR (équipe - adverse)",
-                        "-",
-                        f"{float(delta_mmr):+.1f}",
-                        delta_color="normal",
-                    )
+                    st.warning(f"Aucun match trouvé dans ±{tol_min} min (le plus proche est à {diff_min:.1f} min).")
 
-                if match_url:
-                    with mmr_cols[2]:
-                        st.link_button("Ouvrir sur HaloWaypoint", match_url, width="stretch")
+            st.button("Rechercher", width="stretch", on_click=_on_search_by_datetime)
 
-                # Attendu vs réel (K / D) + ratios (match uniquement)
-                def _metric_expected_vs_actual(title: str, perf: dict, delta_color: str) -> None:
-                    count = perf.get("count")
-                    expected = perf.get("expected")
-                    if count is None or expected is None:
-                        st.metric(title, "-")
-                        return
-                    delta = float(count) - float(expected)
-                    st.metric(title, f"{count:.0f} vs {expected:.1f}", f"{delta:+.1f}", delta_color=delta_color)
-
-                perf_k = pm.get("kills") or {}
-                perf_d = pm.get("deaths") or {}
-                perf_a = pm.get("assists") or {}
-
-                st.subheader("Réel vs attendu")
-                av_cols = st.columns(3)
-                with av_cols[0]:
-                    _metric_expected_vs_actual("Frags", perf_k, delta_color="normal")
-                with av_cols[1]:
-                    _metric_expected_vs_actual("Morts", perf_d, delta_color="inverse")
-                with av_cols[2]:
-                    avg_life_last = last_row.get("average_life_seconds")
-                    st.metric("Durée de vie moyenne", format_mmss(avg_life_last))
-
-                labels = ["F", "D", "A"]
-                actual_vals = [
-                    float(last_row.get("kills") or 0.0),
-                    float(last_row.get("deaths") or 0.0),
-                    float(last_row.get("assists") or 0.0),
-                ]
-                exp_vals = [
-                    perf_k.get("expected"),
-                    perf_d.get("expected"),
-                    perf_a.get("expected"),
-                ]
-
-                show_expected_ratio = all(v is not None for v in exp_vals)
-
-                real_ratio = last_row.get("ratio")
-                try:
-                    real_ratio_f = float(real_ratio) if real_ratio == real_ratio else None
-                except Exception:
-                    real_ratio_f = None
-                if real_ratio_f is None:
-                    denom = max(1.0, float(last_row.get("deaths") or 0.0))
-                    real_ratio_f = (float(last_row.get("kills") or 0.0) + float(last_row.get("assists") or 0.0)) / denom
-
-                exp_ratio_f = None
-                if show_expected_ratio:
-                    denom_e = max(1e-9, float(exp_vals[1] or 0.0))
-                    exp_ratio_f = (float(exp_vals[0] or 0.0) + float(exp_vals[2] or 0.0)) / denom_e
-
-                exp_fig = make_subplots(specs=[[{"secondary_y": True}]])
-
-                bar_colors = [HALO_COLORS.green, HALO_COLORS.red, HALO_COLORS.cyan]
-                exp_fig.add_trace(
-                    go.Bar(
-                        x=labels,
-                        y=exp_vals,
-                        name="Attendu",
-                        marker=dict(
-                            color=bar_colors,
-                            pattern=dict(shape="/", fgcolor="rgba(255,255,255,0.75)", solidity=0.22),
-                        ),
-                        opacity=0.50,
-                        hovertemplate="%{x} (attendu): %{y:.1f}<extra></extra>",
-                    ),
-                    secondary_y=False,
-                )
-                exp_fig.add_trace(
-                    go.Bar(
-                        x=labels,
-                        y=actual_vals,
-                        name="Réel",
-                        marker_color=bar_colors,
-                        opacity=0.90,
-                        hovertemplate="%{x} (réel): %{y:.0f}<extra></extra>",
-                    ),
-                    secondary_y=False,
-                )
-                exp_fig.add_trace(
-                    go.Scatter(
-                        x=labels,
-                        y=[real_ratio_f] * len(labels),
-                        mode="lines+markers",
-                        name="Ratio réel",
-                        line=dict(color=HALO_COLORS.amber, width=4),
-                        marker=dict(size=7),
-                        hovertemplate="ratio (réel): %{y:.2f}<extra></extra>",
-                    ),
-                    secondary_y=True,
-                )
-                if exp_ratio_f is not None:
-                    exp_fig.add_trace(
-                        go.Scatter(
-                            x=labels,
-                            y=[exp_ratio_f] * len(labels),
-                            mode="lines+markers",
-                            name="Ratio attendu",
-                            line=dict(color=HALO_COLORS.violet, width=3, dash="dot"),
-                            marker=dict(size=6),
-                            hovertemplate="ratio (attendu): %{y:.2f}<extra></extra>",
-                        ),
-                        secondary_y=True,
-                    )
-                else:
-                    st.caption("Ratio attendu indisponible (Assists attendues manquantes dans PlayerMatchStats).")
-
-                exp_fig.update_layout(
-                    barmode="group",
-                    height=360,
-                    margin=dict(l=40, r=20, t=30, b=90),
-                    legend=get_legend_horizontal_bottom(),
-                )
-                exp_fig.update_yaxes(title_text="F / D / A", rangemode="tozero", secondary_y=False)
-                exp_fig.update_yaxes(title_text="Ratio", secondary_y=True)
-                st.plotly_chart(exp_fig, width="stretch")
-
-            # Médailles (match)
-            st.subheader("Médailles")
-            if not medals_last:
-                st.info("Médailles indisponibles pour ce match (ou aucune médaille).")
+        mid = str(match_id_input or "").strip()
+        if not mid:
+            st.info("Renseigne un MatchId ou utilise la sélection/recherche ci-dessus.")
+        else:
+            rows = df.loc[df["match_id"].astype(str) == mid]
+            if rows.empty:
+                st.warning("MatchId introuvable dans la DB actuelle.")
             else:
-                md_df = pd.DataFrame(medals_last)
-                md_df["label"] = md_df["name_id"].apply(lambda x: medal_label(int(x)))
-                md_df = md_df.sort_values(["count", "label"], ascending=[False, True])
-                render_medals_grid(md_df[["name_id", "count"]].to_dict(orient="records"), cols_per_row=8)
-
-
+                match_row = rows.sort_values("start_time").iloc[-1]
+                _render_match_view(
+                    row=match_row,
+                    match_id=mid,
+                    db_path=db_path,
+                    xuid=xuid,
+                    waypoint_player=waypoint_player,
+                    db_key=db_key,
+                    settings=settings,
+                )
 
     # --------------------------------------------------------------------------
-    # Tab: Médailles (Top 25)
+    # Page: Citations (ex Médailles)
     # --------------------------------------------------------------------------
-    with tab_medals:
-        st.caption("Top 25 des médailles sur la sélection/filtres actuels.")
+    elif page == "Citations":
+        # 1) Commendations Halo 5 (référentiel offline)
+        render_h5g_commendations_section()
+        st.divider()
 
+        # 2) Médailles (Halo Infinite) sur la sélection/filtres actuels
+        st.caption("Médailles sur la sélection/filtres actuels (non limitées).")
         if dff.empty:
             st.info("Aucun match disponible avec les filtres actuels.")
         else:
-            match_ids = [str(x) for x in dff["match_id"].dropna().astype(str).tolist()]
+            show_all = st.toggle("Afficher toutes les médailles (peut être lent)", value=False)
+            top_n = None if show_all else int(st.slider("Nombre de médailles", 25, 500, 100, 25))
 
+            match_ids = [str(x) for x in dff["match_id"].dropna().astype(str).tolist()]
             with st.spinner("Agrégation des médailles…"):
-                top = _top_medals(db_path, xuid.strip(), match_ids, top_n=25, db_key=db_key)
+                top = _top_medals(db_path, xuid.strip(), match_ids, top_n=top_n, db_key=db_key)
 
             if not top:
                 st.info("Aucune médaille trouvée (ou payload médailles absent).")
             else:
                 md = pd.DataFrame(top, columns=["name_id", "count"])
-
                 md["label"] = md["name_id"].apply(lambda x: medal_label(int(x)))
                 md_desc = md.sort_values("count", ascending=False)
                 render_medals_grid(md_desc[["name_id", "count"]].to_dict(orient="records"), cols_per_row=8)
 
     # --------------------------------------------------------------------------
-    # Tab: Séries temporelles
+    # Page: Séries temporelles
     # --------------------------------------------------------------------------
-    with tab_series:
+    elif page == "Séries temporelles":
         with st.spinner("Génération des graphes…"):
             fig = plot_timeseries(dff, title=f"{me_name}")
             st.plotly_chart(fig, width="stretch")
@@ -1391,8 +2680,7 @@ def main() -> None:
                 st.info("FDA indisponible sur ce filtre.")
             else:
                 m = st.columns(1)
-                m[0].metric("Moyenne FDA", f"{valid['kda'].mean():.2f}")
-                st.caption("Densité (KDE) + rug : forme de la distribution + position des matchs.")
+                m[0].metric("KDA moyen", f"{valid['kda'].mean():.2f}", label_visibility="collapsed")
                 st.plotly_chart(plot_kda_distribution(dff), width="stretch")
 
             st.subheader("Assistances")
@@ -1414,9 +2702,9 @@ def main() -> None:
             st.plotly_chart(plot_spree_headshots_accuracy(dff), width="stretch")
 
     # --------------------------------------------------------------------------
-    # Tab: Victoires/Défaites
+    # Page: Victoires/Défaites
     # --------------------------------------------------------------------------
-    with tab_mom:
+    elif page == "Victoires/Défaites":
         with st.spinner("Calcul des victoires/défaites…"):
             # En mode Sessions, si on a sélectionné une ou plusieurs sessions on raisonne "session".
             # Si on est sur "(toutes)", on revient au bucket temporel normal (jour/semaine/mois...).
@@ -1427,10 +2715,9 @@ def main() -> None:
                 f"Par **{bucket_label}** : on regroupe les parties par {bucket_label} et on compte le nombre de "
                 "victoires/défaites (et autres statuts) pour suivre l'évolution."
             )
-            st.caption("Basé sur Players[].Outcome (2=victoire, 3=défaite, 1=égalité, 4=non terminé).")
             st.plotly_chart(fig_out, width="stretch")
 
-            st.subheader("Tableau — par période")
+            st.subheader("Par période")
             d = dff.dropna(subset=["outcome"]).copy()
             if d.empty:
                 st.info("Aucune donnée pour construire le tableau.")
@@ -1460,10 +2747,6 @@ def main() -> None:
                     else:
                         d["bucket"] = d["start_time"].dt.to_period("M").astype(str)
 
-                d["my_score"] = pd.to_numeric(d.get("my_team_score"), errors="coerce")
-                d["enemy_score"] = pd.to_numeric(d.get("enemy_team_score"), errors="coerce")
-                d["score_diff"] = d["my_score"] - d["enemy_score"]
-
                 pivot = (
                     d.pivot_table(index="bucket", columns="outcome", values="match_id", aggfunc="count")
                     .fillna(0)
@@ -1476,13 +2759,10 @@ def main() -> None:
                 out_tbl["Égalités"] = pivot[1] if 1 in pivot.columns else 0
                 out_tbl["Non terminés"] = pivot[4] if 4 in pivot.columns else 0
                 out_tbl["Total"] = out_tbl[["Victoires", "Défaites", "Égalités", "Non terminés"]].sum(axis=1)
-                out_tbl["Win rate"] = (
+                out_tbl["Taux de victoires"] = (
                     100.0
                     * (out_tbl["Victoires"] / out_tbl["Total"].where(out_tbl["Total"] > 0))
                 ).fillna(0.0)
-
-                score_diff_avg = d.groupby("bucket")["score_diff"].mean(numeric_only=True)
-                out_tbl["Diff score moy."] = score_diff_avg
 
                 out_tbl = out_tbl.reset_index().rename(columns={"bucket": bucket_label.capitalize()})
 
@@ -1493,14 +2773,13 @@ def main() -> None:
                         return ""
                     return "color: #E0E0E0; font-weight: 700;"
 
-                out_styled = out_tbl.style.map(_style_pct, subset=["Win rate"]).map(_style_signed_number, subset=["Diff score moy."])
+                out_styled = _styler_map(out_tbl.style, _style_pct, subset=["Win rate"])
                 st.dataframe(
                     out_styled,
                     width="stretch",
                     hide_index=True,
                     column_config={
                         "Win rate": st.column_config.NumberColumn("Win rate", format="%.1f%%"),
-                        "Diff score moy.": st.column_config.NumberColumn("Diff score moy.", format="%.2f"),
                     },
                 )
 
@@ -1559,7 +2838,7 @@ def main() -> None:
                     "Métrique",
                     options=[
                         ("ratio_global", "Ratio Victoire/défaite"),
-                        ("win_rate", "Win rate"),
+                        ("win_rate", "Taux de victoires"),
                         ("accuracy_avg", "Précision moyenne"),
                     ],
                     format_func=lambda x: x[1],
@@ -1635,15 +2914,71 @@ def main() -> None:
                     "Ratio global",
                 ]
                 tbl_disp = tbl_disp[[c for c in ordered_cols if c in tbl_disp.columns]]
-                st.dataframe(tbl_disp, width="stretch", hide_index=True)
+
+                # Style: vert/rouge selon l'avantage (win% vs loss%), et violet si égalité.
+                # Ratio: >1 vert, <1 rouge, ==1 violet (8E6CFF).
+                def _to_float(v: object) -> Optional[float]:
+                    try:
+                        if v is None:
+                            return None
+                        x = float(v)
+                        return x if x == x else None
+                    except Exception:
+                        return None
+
+                def _style_map_table_row(row: pd.Series) -> pd.Series:
+                    green = str(getattr(HALO_COLORS, "green", "#2ECC71"))
+                    red = str(getattr(HALO_COLORS, "red", "#E74C3C"))
+                    violet = "#8E6CFF"
+
+                    w = _to_float(row.get("Taux victoire (%)"))
+                    l = _to_float(row.get("Taux défaite (%)"))
+                    r = _to_float(row.get("Ratio global"))
+
+                    styles: dict[str, str] = {str(c): "" for c in row.index}
+
+                    if w is not None and l is not None:
+                        if w > l:
+                            styles["Taux victoire (%)"] = f"color: {green}; font-weight: 800;"
+                            styles["Taux défaite (%)"] = f"color: {red}; font-weight: 800;"
+                        elif w < l:
+                            styles["Taux victoire (%)"] = f"color: {red}; font-weight: 800;"
+                            styles["Taux défaite (%)"] = f"color: {green}; font-weight: 800;"
+                        else:
+                            styles["Taux victoire (%)"] = f"color: {violet}; font-weight: 800;"
+                            styles["Taux défaite (%)"] = f"color: {violet}; font-weight: 800;"
+
+                    if r is not None:
+                        if r > 1.0:
+                            styles["Ratio global"] = f"color: {green}; font-weight: 800;"
+                        elif r < 1.0:
+                            styles["Ratio global"] = f"color: {red}; font-weight: 800;"
+                        else:
+                            styles["Ratio global"] = f"color: {violet}; font-weight: 800;"
+
+                    return pd.Series(styles)
+
+                tbl_styled = tbl_disp.style.apply(_style_map_table_row, axis=1)
+                st.dataframe(
+                    tbl_styled,
+                    width="stretch",
+                    hide_index=True,
+                    column_config={
+                        "Parties": st.column_config.NumberColumn("Parties", format="%d"),
+                        "Précision moy. (%)": st.column_config.NumberColumn("Précision moy. (%)", format="%.2f"),
+                        "Taux victoire (%)": st.column_config.NumberColumn("Taux victoire (%)", format="%.1f"),
+                        "Taux défaite (%)": st.column_config.NumberColumn("Taux défaite (%)", format="%.1f"),
+                        "Ratio global": st.column_config.NumberColumn("Ratio global", format="%.2f"),
+                    },
+                )
 
             # (Le graphique "Net victoires/défaites" a été retiré :
             #  l'onglet se concentre sur le graphe Victoires au-dessus / Défaites en dessous.)
 
     # --------------------------------------------------------------------------
-    # Tab: Mes coéquipiers (fusion)
+    # Page: Mes coéquipiers (fusion)
     # --------------------------------------------------------------------------
-    with tab_teammates:
+    elif page == "Mes coéquipiers":
         st.caption("Vue dédiée aux matchs joués avec tes coéquipiers (XUID rencontrés / alias).")
 
         apply_current_filters_teammates = st.toggle(
@@ -1652,6 +2987,13 @@ def main() -> None:
             key="apply_current_filters_teammates",
         )
         same_team_only_teammates = st.checkbox("Même équipe", value=True, key="teammates_same_team_only")
+
+        show_smooth_teammates = st.toggle(
+            "Afficher les courbes lissées",
+            value=bool(st.session_state.get("teammates_show_smooth", True)),
+            key="teammates_show_smooth",
+            help="Active/désactive les courbes de moyenne lissée sur les graphes de cette section.",
+        )
 
         opts_map, default_labels = _build_friends_opts_map(db_path, xuid.strip(), db_key, aliases_key)
         picked_labels = st.multiselect(
@@ -1746,7 +3088,11 @@ def main() -> None:
 
                         c1, c2 = st.columns(2)
                         with c1:
-                            st.plotly_chart(plot_timeseries(sub, title=f"{me_name} — matchs avec {name}"), width="stretch")
+                            st.plotly_chart(
+                                plot_timeseries(sub, title=f"{me_name} — matchs avec {name}"),
+                                width="stretch",
+                                key=f"friend_ts_me_{friend_xuid}",
+                            )
                         with c2:
                             if friend_sub.empty:
                                 st.warning("Impossible de charger les stats du coéquipier sur les matchs partagés.")
@@ -1754,6 +3100,7 @@ def main() -> None:
                                 st.plotly_chart(
                                     plot_timeseries(friend_sub, title=f"{name} — matchs avec {me_name}"),
                                     width="stretch",
+                                    key=f"friend_ts_fr_{friend_xuid}",
                                 )
 
                         c3, c4 = st.columns(2)
@@ -1761,6 +3108,7 @@ def main() -> None:
                             st.plotly_chart(
                                 plot_per_minute_timeseries(sub, title=f"{me_name} — stats/min (avec {name})"),
                                 width="stretch",
+                                key=f"friend_pm_me_{friend_xuid}",
                             )
                         with c4:
                             if not friend_sub.empty:
@@ -1770,6 +3118,7 @@ def main() -> None:
                                         title=f"{name} — stats/min (avec {me_name})",
                                     ),
                                     width="stretch",
+                                    key=f"friend_pm_fr_{friend_xuid}",
                                 )
 
                         c5, c6 = st.columns(2)
@@ -1778,76 +3127,53 @@ def main() -> None:
                                 st.plotly_chart(
                                     plot_average_life(sub, title=f"{me_name} — Durée de vie (avec {name})"),
                                     width="stretch",
+                                    key=f"friend_life_me_{friend_xuid}",
                                 )
                         with c6:
                             if not friend_sub.empty and not friend_sub.dropna(subset=["average_life_seconds"]).empty:
                                 st.plotly_chart(
                                     plot_average_life(friend_sub, title=f"{name} — Durée de vie (avec {me_name})"),
                                     width="stretch",
+                                    key=f"friend_life_fr_{friend_xuid}",
                                 )
+                        # Folie meurtrière / Tirs à la tête (tout en bas, avant les médailles) — 1 graphe par ligne.
+                        series = [(me_name, sub)]
+                        if not friend_sub.empty:
+                            series.append((name, friend_sub))
+                        colors_by_name = _assign_player_colors([n for n, _ in series])
 
-                        # Avant-dernier: Folie meurtrière / Tirs à la tête (style barres + moyenne lissée) puis médailles.
-                        st.subheader("Folie meurtrière (max) & tirs à la tête")
-                        colors = HALO_COLORS.as_dict()
-                        s1, s2 = st.columns(2)
-                        with s1:
-                            st.caption(f"{me_name}")
-                            fig_spree_me = _plot_metric_bars_by_match(
-                                sub,
-                                metric_col="max_killing_spree",
-                                title="Folie meurtrière (max)",
-                                y_axis_title="Folie meurtrière (max)",
-                                hover_label="folie meurtrière",
-                                bar_color=colors["amber"],
-                                smooth_color=colors["green"],
-                                smooth_window=10,
-                            )
-                            if fig_spree_me is not None:
-                                st.plotly_chart(fig_spree_me, width="stretch")
-                            fig_hs_me = _plot_metric_bars_by_match(
-                                sub,
-                                metric_col="headshot_kills",
-                                title="Tirs à la tête",
-                                y_axis_title="Tirs à la tête",
-                                hover_label="tirs à la tête",
-                                bar_color=colors["red"],
-                                smooth_color=colors["green"],
-                                smooth_window=10,
-                            )
-                            if fig_hs_me is not None:
-                                st.plotly_chart(fig_hs_me, width="stretch")
+                        fig_spree = _plot_multi_metric_bars_by_match(
+                            series,
+                            metric_col="max_killing_spree",
+                            title="Folie meurtrière (max)",
+                            y_axis_title="Folie meurtrière (max)",
+                            hover_label="folie meurtrière",
+                            colors=colors_by_name,
+                            smooth_window=10,
+                            show_smooth_lines=show_smooth_teammates,
+                        )
+                        if fig_spree is None:
+                            st.info("Aucune donnée de folie meurtrière (max) sur ces matchs.")
+                        else:
+                            st.plotly_chart(fig_spree, width="stretch", key=f"friend_spree_multi_{friend_xuid}")
 
-                        with s2:
-                            st.caption(f"{name}")
-                            if friend_sub.empty:
-                                st.info("Stats du coéquipier indisponibles pour ces matchs.")
-                            else:
-                                fig_spree_fr = _plot_metric_bars_by_match(
-                                    friend_sub,
-                                    metric_col="max_killing_spree",
-                                    title="Folie meurtrière (max)",
-                                    y_axis_title="Folie meurtrière (max)",
-                                    hover_label="folie meurtrière",
-                                    bar_color=colors["amber"],
-                                    smooth_color=colors["green"],
-                                    smooth_window=10,
-                                )
-                                if fig_spree_fr is not None:
-                                    st.plotly_chart(fig_spree_fr, width="stretch")
-                                fig_hs_fr = _plot_metric_bars_by_match(
-                                    friend_sub,
-                                    metric_col="headshot_kills",
-                                    title="Tirs à la tête",
-                                    y_axis_title="Tirs à la tête",
-                                    hover_label="tirs à la tête",
-                                    bar_color=colors["red"],
-                                    smooth_color=colors["green"],
-                                    smooth_window=10,
-                                )
-                                if fig_hs_fr is not None:
-                                    st.plotly_chart(fig_hs_fr, width="stretch")
+                        fig_hs = _plot_multi_metric_bars_by_match(
+                            series,
+                            metric_col="headshot_kills",
+                            title="Tirs à la tête",
+                            y_axis_title="Tirs à la tête",
+                            hover_label="tirs à la tête",
+                            colors=colors_by_name,
+                            smooth_window=10,
+                            show_smooth_lines=show_smooth_teammates,
+                        )
+                        if fig_hs is None:
+                            st.info("Aucune donnée de tirs à la tête sur ces matchs.")
+                        else:
+                            st.plotly_chart(fig_hs, width="stretch", key=f"friend_hs_multi_{friend_xuid}")
 
                         st.subheader("Médailles (matchs partagés)")
+
                         shared_list = sorted({str(x) for x in shared_ids if str(x).strip()})
                         if not shared_list:
                             st.info("Aucun match partagé pour calculer les médailles.")
@@ -1917,54 +3243,23 @@ def main() -> None:
                     base_for_friends_all["match_id"].astype(str).isin(all_match_ids)
                 ].copy()
 
-                # Graphes demandés: style identique (barres + moyenne lissée), un sous-onglet par coéquipier.
-                st.subheader("Folie meurtrière (max) & tirs à la tête")
-                colors = HALO_COLORS.as_dict()
-                tab_labels = [display_name_from_xuid(fx) for fx in picked_xuids]
-                max_tabs = 8
-                if len(tab_labels) > max_tabs:
-                    st.warning(f"Beaucoup de coéquipiers sélectionnés : affichage limité aux {max_tabs} premiers pour garder l'UI lisible.")
-                use_xuids = picked_xuids[:max_tabs]
-                use_tabs = tab_labels[:max_tabs]
-                friend_tabs = st.tabs(use_tabs)
-                for tab_obj, fx in zip(friend_tabs, use_xuids):
-                    with tab_obj:
-                        ids = per_friend_ids.get(str(fx), set())
-                        sub_fx = base_for_friends_all.loc[
-                            base_for_friends_all["match_id"].astype(str).isin(ids)
-                        ].copy()
-                        g1, g2 = st.columns(2)
-                        with g1:
-                            fig_spree = _plot_metric_bars_by_match(
-                                sub_fx,
-                                metric_col="max_killing_spree",
-                                title="Folie meurtrière (max)",
-                                y_axis_title="Folie meurtrière (max)",
-                                hover_label="folie meurtrière",
-                                bar_color=colors["amber"],
-                                smooth_color=colors["green"],
-                                smooth_window=10,
-                            )
-                            if fig_spree is None:
-                                st.info("Aucune donnée de folie meurtrière (max) sur ces matchs.")
-                            else:
-                                st.plotly_chart(fig_spree, width="stretch")
+                use_xuids = picked_xuids
 
-                        with g2:
-                            fig_hs = _plot_metric_bars_by_match(
-                                sub_fx,
-                                metric_col="headshot_kills",
-                                title="Tirs à la tête",
-                                y_axis_title="Tirs à la tête",
-                                hover_label="tirs à la tête",
-                                bar_color=colors["red"],
-                                smooth_color=colors["green"],
-                                smooth_window=10,
-                            )
-                            if fig_hs is None:
-                                st.info("Aucune donnée de tirs à la tête sur ces matchs.")
-                            else:
-                                st.plotly_chart(fig_hs, width="stretch")
+                series: list[tuple[str, pd.DataFrame]] = [(me_name, sub_all)]
+                with st.spinner("Chargement des stats des coéquipiers…"):
+                    for fx in use_xuids:
+                        ids = per_friend_ids.get(str(fx), set())
+                        if not ids:
+                            continue
+                        try:
+                            fr_df = load_df(db_path, str(fx), db_key=db_key)
+                        except Exception:
+                            continue
+                        fr_sub = fr_df.loc[fr_df["match_id"].astype(str).isin(ids)].copy()
+                        if fr_sub.empty:
+                            continue
+                        series.append((display_name_from_xuid(str(fx)), fr_sub))
+                colors_by_name = _assign_player_colors([n for n, _ in series])
 
                 breakdown_all = compute_map_breakdown(sub_all)
                 breakdown_all = breakdown_all.loc[breakdown_all["matches"] >= int(min_matches_maps_friends)].copy()
@@ -1976,7 +3271,7 @@ def main() -> None:
                     title = f"Ratio global par carte — avec mes coéquipiers (min {min_matches_maps_friends} matchs)"
                     st.plotly_chart(plot_map_ratio_with_winloss(view_all, title=title), width="stretch")
 
-                st.subheader("Historique — matchs avec mes coéquipiers")
+                    st.subheader("Historique — matchs avec mes coéquipiers")
                 if sub_all.empty:
                     st.info("Aucun match trouvé avec tes coéquipiers (selon le filtre actuel).")
                 else:
@@ -2000,6 +3295,23 @@ def main() -> None:
                     friends_table["score"] = friends_table.apply(
                         lambda r: _format_score_label(r.get("my_team_score"), r.get("enemy_team_score")), axis=1
                     )
+
+                    # MMR équipe/adverse : même source que l'onglet "Dernier match" (PlayerMatchStats).
+                    def _mmr_tuple(match_id: str):
+                        pm = cached_load_player_match_result(db_path, str(match_id), xuid.strip(), db_key=db_key)
+                        if not isinstance(pm, dict):
+                            return (None, None)
+                        return (pm.get("team_mmr"), pm.get("enemy_mmr"))
+
+                    mmr_pairs = friends_table["match_id"].astype(str).apply(_mmr_tuple)
+                    friends_table["team_mmr"] = mmr_pairs.apply(lambda t: t[0])
+                    friends_table["enemy_mmr"] = mmr_pairs.apply(lambda t: t[1])
+                    friends_table["delta_mmr"] = friends_table.apply(
+                        lambda r: (float(r.get("team_mmr")) - float(r.get("enemy_mmr")))
+                        if (r.get("team_mmr") is not None and r.get("enemy_mmr") is not None)
+                        else None,
+                        axis=1,
+                    )
                     wp = str(waypoint_player or "").strip()
                     if wp:
                         friends_table["match_url"] = (
@@ -2011,49 +3323,98 @@ def main() -> None:
                     else:
                         friends_table["match_url"] = ""
 
-                    friends_show = [
-                        "match_url",
-                        "start_time_fr",
-                        "map_name",
-                        "playlist_fr",
-                        "mode",
-                        "outcome_label",
-                        "score",
-                        "kda",
-                        "kills",
-                        "deaths",
-                        "assists",
-                        "accuracy",
+                    # Table HTML: colonne "Match" ouvre dans l'onglet Match (même onglet navigateur).
+                    view = friends_table.sort_values("start_time", ascending=False).head(250).reset_index(drop=True)
+
+                    def _fmt(v) -> str:
+                        if v is None:
+                            return "-"
+                        try:
+                            if v != v:  # NaN
+                                return "-"
+                        except Exception:
+                            pass
+                        s = str(v)
+                        return s if s.strip() else "-"
+
+                    def _fmt_mmr_int(v) -> str:
+                        if v is None:
+                            return "-"
+                        try:
+                            if v != v:  # NaN
+                                return "-"
+                        except Exception:
+                            pass
+                        try:
+                            return str(int(round(float(v))))
+                        except Exception:
+                            return _fmt(v)
+
+                    colors = HALO_COLORS.as_dict()
+
+                    def _outcome_style(label: str) -> str:
+                        v = str(label or "").strip().casefold()
+                        if v.startswith("victoire"):
+                            return f"color:{colors['green']}; font-weight:800"
+                        if v.startswith("défaite") or v.startswith("defaite"):
+                            return f"color:{colors['red']}; font-weight:800"
+                        if v.startswith("égalité") or v.startswith("egalite"):
+                            return f"color:{colors['violet']}; font-weight:800"
+                        if v.startswith("non"):
+                            return f"color:{colors['violet']}; font-weight:800"
+                        return "opacity:0.92"
+
+                    cols = [
+                        ("Match", "_app"),
+                        ("HaloWaypoint", "match_url"),
+                        ("Date", "start_time_fr"),
+                        ("Carte", "map_name"),
+                        ("Playlist", "playlist_fr"),
+                        ("Mode", "mode"),
+                        ("Résultat", "outcome_label"),
+                        ("Score", "score"),
+                        ("MMR équipe", "team_mmr"),
+                        ("MMR adverse", "enemy_mmr"),
+                        ("Écart MMR", "delta_mmr"),
                     ]
-                    friends_view = (
-                        friends_table.sort_values("start_time", ascending=False)[friends_show]
-                        .reset_index(drop=True)
+
+                    head = "".join(f"<th>{html.escape(h)}</th>" for h, _ in cols)
+                    body_rows: list[str] = []
+                    for _, r in view.iterrows():
+                        mid = str(r.get("match_id") or "").strip()
+                        app = _app_url("Match", match_id=mid)
+                        match_link = f"<a href='{html.escape(app)}' target='_self'>Ouvrir</a>" if mid else "-"
+                        hw = str(r.get("match_url") or "").strip()
+                        hw_link = f"<a href='{html.escape(hw)}' target='_blank' rel='noopener'>Ouvrir</a>" if hw else "-"
+
+                        tds: list[str] = []
+                        for _h, key in cols:
+                            if key == "_app":
+                                tds.append(f"<td>{match_link}</td>")
+                            elif key == "match_url":
+                                tds.append(f"<td>{hw_link}</td>")
+                            elif key == "outcome_label":
+                                val = _fmt(r.get(key))
+                                tds.append(f"<td style='{_outcome_style(val)}'>{html.escape(val)}</td>")
+                            elif key in ("team_mmr", "enemy_mmr", "delta_mmr"):
+                                val = _fmt_mmr_int(r.get(key))
+                                tds.append(f"<td>{html.escape(val)}</td>")
+                            else:
+                                val = _fmt(r.get(key))
+                                tds.append(f"<td>{html.escape(val)}</td>")
+                        body_rows.append("<tr>" + "".join(tds) + "</tr>")
+
+                    st.markdown(
+                        "<div class='os-table-wrap'><table class='os-table'><thead><tr>"
+                        + head
+                        + "</tr></thead><tbody>"
+                        + "".join(body_rows)
+                        + "</tbody></table></div>",
+                        unsafe_allow_html=True,
                     )
-                    friends_styled = (
-                        friends_view.style
-                        .map(_style_outcome_text, subset=["outcome_label"])
-                        .map(_style_score_label, subset=["score"])
-                        .map(_style_signed_number, subset=["kda"])
-                    )
-                    st.dataframe(
-                        friends_styled,
-                        width="stretch",
-                        hide_index=True,
-                        column_config={
-                            "match_url": st.column_config.LinkColumn("HaloWaypoint", display_text="Ouvrir"),
-                            "start_time_fr": st.column_config.TextColumn("Date"),
-                            "map_name": st.column_config.TextColumn("Carte"),
-                            "playlist_fr": st.column_config.TextColumn("Playlist"),
-                            "mode": st.column_config.TextColumn("Mode"),
-                            "outcome_label": st.column_config.TextColumn("Résultat"),
-                            "score": st.column_config.TextColumn("Score"),
-                            "kda": st.column_config.NumberColumn("FDA", format="%.2f"),
-                            "kills": st.column_config.NumberColumn("Frags"),
-                            "deaths": st.column_config.NumberColumn("Morts"),
-                            "assists": st.column_config.NumberColumn("Assistances"),
-                            "accuracy": st.column_config.NumberColumn("Précision (%)", format="%.2f"),
-                        },
-                    )
+
+                # Graphes : on les rendra tout en bas (idéalement juste avant les médailles).
+                rendered_bottom_charts = False
 
             # Vue trio (moi + 2 coéquipiers) : uniquement si on a au moins deux personnes.
             if len(picked_xuids) >= 2:
@@ -2182,27 +3543,66 @@ def main() -> None:
                         st.plotly_chart(
                             plot_trio_metric(d_self, d_f1, d_f2, metric="kills", names=names, title="Frags", y_title="Frags"),
                             width="stretch",
+                            key=f"trio_kills_{f1_xuid}_{f2_xuid}",
                         )
                         st.plotly_chart(
                             plot_trio_metric(d_self, d_f1, d_f2, metric="deaths", names=names, title="Morts", y_title="Morts"),
                             width="stretch",
+                            key=f"trio_deaths_{f1_xuid}_{f2_xuid}",
                         )
                         st.plotly_chart(
                             plot_trio_metric(d_self, d_f1, d_f2, metric="assists", names=names, title="Assistances", y_title="Assists"),
                             width="stretch",
+                            key=f"trio_assists_{f1_xuid}_{f2_xuid}",
                         )
                         st.plotly_chart(
                             plot_trio_metric(d_self, d_f1, d_f2, metric="ratio", names=names, title="FDA", y_title="FDA", y_format=".3f"),
                             width="stretch",
+                            key=f"trio_ratio_{f1_xuid}_{f2_xuid}",
                         )
                         st.plotly_chart(
                             plot_trio_metric(d_self, d_f1, d_f2, metric="accuracy", names=names, title="Précision", y_title="%", y_suffix="%", y_format=".2f"),
                             width="stretch",
+                            key=f"trio_accuracy_{f1_xuid}_{f2_xuid}",
                         )
                         st.plotly_chart(
                             plot_trio_metric(d_self, d_f1, d_f2, metric="average_life_seconds", names=names, title="Durée de vie moyenne", y_title="Secondes", y_format=".1f"),
                             width="stretch",
+                            key=f"trio_life_{f1_xuid}_{f2_xuid}",
                         )
+
+                        # Graphes (tout en bas, juste avant les médailles) — 1 graphe par ligne.
+                        fig_spree = _plot_multi_metric_bars_by_match(
+                            series,
+                            metric_col="max_killing_spree",
+                            title="Folie meurtrière (max)",
+                            y_axis_title="Folie meurtrière (max)",
+                            hover_label="folie meurtrière",
+                            colors=colors_by_name,
+                            smooth_window=10,
+                            show_smooth_lines=show_smooth_teammates,
+                        )
+                        if fig_spree is None:
+                            st.info("Aucune donnée de folie meurtrière (max) sur ces matchs.")
+                        else:
+                            st.plotly_chart(fig_spree, width="stretch", key=f"teammates_multi_spree_{len(series)}")
+
+                        fig_hs = _plot_multi_metric_bars_by_match(
+                            series,
+                            metric_col="headshot_kills",
+                            title="Tirs à la tête",
+                            y_axis_title="Tirs à la tête",
+                            hover_label="tirs à la tête",
+                            colors=colors_by_name,
+                            smooth_window=10,
+                            show_smooth_lines=show_smooth_teammates,
+                        )
+                        if fig_hs is None:
+                            st.info("Aucune donnée de tirs à la tête sur ces matchs.")
+                        else:
+                            st.plotly_chart(fig_hs, width="stretch", key=f"teammates_multi_hs_{len(series)}")
+
+                        rendered_bottom_charts = True
 
                         st.subheader("Médailles")
                         trio_match_ids = [str(x) for x in merged["match_id"].dropna().astype(str).tolist()]
@@ -2234,12 +3634,45 @@ def main() -> None:
                                         cols_per_row=6,
                                     )
 
+                if not rendered_bottom_charts:
+                    # S'il n'y a pas de trio (ou pas assez de données), on affiche quand même les graphes tout en bas.
+                    fig_spree = _plot_multi_metric_bars_by_match(
+                        series,
+                        metric_col="max_killing_spree",
+                        title="Folie meurtrière (max)",
+                        y_axis_title="Folie meurtrière (max)",
+                        hover_label="folie meurtrière",
+                        colors=colors_by_name,
+                        smooth_window=10,
+                        show_smooth_lines=show_smooth_teammates,
+                    )
+                    if fig_spree is None:
+                        st.info("Aucune donnée de folie meurtrière (max) sur ces matchs.")
+                    else:
+                        st.plotly_chart(fig_spree, width="stretch", key=f"teammates_multi_spree_{len(series)}")
+
+                    fig_hs = _plot_multi_metric_bars_by_match(
+                        series,
+                        metric_col="headshot_kills",
+                        title="Tirs à la tête",
+                        y_axis_title="Tirs à la tête",
+                        hover_label="tirs à la tête",
+                        colors=colors_by_name,
+                        smooth_window=10,
+                        show_smooth_lines=show_smooth_teammates,
+                    )
+                    if fig_hs is None:
+                        st.info("Aucune donnée de tirs à la tête sur ces matchs.")
+                    else:
+                        st.plotly_chart(fig_hs, width="stretch", key=f"teammates_multi_hs_{len(series)}")
+
 
     # --------------------------------------------------------------------------
-    # Tab: Historique des parties
+    # Page: Historique des parties
     # --------------------------------------------------------------------------
-    with tab_table:
+    elif page == "Historique des parties":
         st.subheader("Historique des parties")
+
         dff_table = dff.copy()
         if "playlist_fr" not in dff_table.columns:
             dff_table["playlist_fr"] = dff_table["playlist_name"].apply(translate_playlist_name)
@@ -2259,54 +3692,150 @@ def main() -> None:
             lambda r: _format_score_label(r.get("my_team_score"), r.get("enemy_team_score")), axis=1
         )
 
+        # MMR équipe/adverse pour chaque match (source PlayerMatchStats).
+        with st.spinner("Chargement des MMR (équipe/adverse)…"):
+            def _mmr_tuple(match_id: str):
+                pm = cached_load_player_match_result(db_path, str(match_id), xuid.strip(), db_key=db_key)
+                if not isinstance(pm, dict):
+                    return (None, None)
+                return (pm.get("team_mmr"), pm.get("enemy_mmr"))
+
+            mmr_pairs = dff_table["match_id"].astype(str).apply(_mmr_tuple)
+            dff_table["team_mmr"] = mmr_pairs.apply(lambda t: t[0])
+            dff_table["enemy_mmr"] = mmr_pairs.apply(lambda t: t[1])
+            dff_table["delta_mmr"] = dff_table.apply(
+                lambda r: (float(r.get("team_mmr")) - float(r.get("enemy_mmr")))
+                if (r.get("team_mmr") is not None and r.get("enemy_mmr") is not None)
+                else None,
+                axis=1,
+            )
+
+        dff_table["start_time_fr"] = dff_table["start_time"].apply(_format_datetime_fr_hm)
+
         dff_table["average_life_mmss"] = dff_table["average_life_seconds"].apply(lambda x: format_mmss(x))
 
+        # Table HTML: colonne "Match" ouvre dans l'onglet Match (même onglet navigateur).
+        view = dff_table.sort_values("start_time", ascending=False).head(250).reset_index(drop=True)
+
+        def _fmt(v) -> str:
+            if v is None:
+                return "-"
+            try:
+                if v != v:  # NaN
+                    return "-"
+            except Exception:
+                pass
+            s = str(v)
+            return s if s.strip() else "-"
+
+        def _fmt_mmr_int(v) -> str:
+            if v is None:
+                return "-"
+            try:
+                if v != v:  # NaN
+                    return "-"
+            except Exception:
+                pass
+            try:
+                return str(int(round(float(v))))
+            except Exception:
+                return _fmt(v)
+
+        colors = HALO_COLORS.as_dict()
+
+        def _outcome_style(label: str) -> str:
+            v = str(label or "").strip().casefold()
+            if v.startswith("victoire"):
+                return f"color:{colors['green']}; font-weight:800"
+            if v.startswith("défaite") or v.startswith("defaite"):
+                return f"color:{colors['red']}; font-weight:800"
+            if v.startswith("égalité") or v.startswith("egalite"):
+                return f"color:{colors['violet']}; font-weight:800"
+            if v.startswith("non"):
+                return f"color:{colors['violet']}; font-weight:800"
+            return "opacity:0.92"
+
+        cols = [
+            ("Match", "_app"),
+            ("HaloWaypoint", "match_url"),
+            ("Date de début", "start_time_fr"),
+            ("Carte", "map_name"),
+            ("Playlist", "playlist_fr"),
+            ("Mode", "mode_ui"),
+            ("Résultat", "outcome_label"),
+            ("Score", "score"),
+            ("MMR équipe", "team_mmr"),
+            ("MMR adverse", "enemy_mmr"),
+            ("Écart MMR", "delta_mmr"),
+            ("FDA", "kda"),
+            ("Frags", "kills"),
+            ("Morts", "deaths"),
+            ("Spree (max)", "max_killing_spree"),
+            ("Têtes", "headshot_kills"),
+            ("Durée vie", "average_life_mmss"),
+            ("Assists", "assists"),
+            ("Précision", "accuracy"),
+            ("Ratio", "ratio"),
+        ]
+
+        head = "".join(f"<th>{html.escape(h)}</th>" for h, _ in cols)
+        body_rows: list[str] = []
+        for _, r in view.iterrows():
+            mid = str(r.get("match_id") or "").strip()
+            app = _app_url("Match", match_id=mid)
+            match_link = f"<a href='{html.escape(app)}' target='_self'>Ouvrir</a>" if mid else "-"
+            hw = str(r.get("match_url") or "").strip()
+            hw_link = f"<a href='{html.escape(hw)}' target='_blank' rel='noopener'>Ouvrir</a>" if hw else "-"
+
+            tds: list[str] = []
+            for _h, key in cols:
+                if key == "_app":
+                    tds.append(f"<td>{match_link}</td>")
+                elif key == "match_url":
+                    tds.append(f"<td>{hw_link}</td>")
+                elif key == "outcome_label":
+                    val = _fmt(r.get(key))
+                    tds.append(f"<td style='{_outcome_style(val)}'>{html.escape(val)}</td>")
+                elif key in ("team_mmr", "enemy_mmr", "delta_mmr"):
+                    val = _fmt_mmr_int(r.get(key))
+                    tds.append(f"<td>{html.escape(val)}</td>")
+                else:
+                    val = _fmt(r.get(key))
+                    tds.append(f"<td>{html.escape(val)}</td>")
+            body_rows.append("<tr>" + "".join(tds) + "</tr>")
+
+        st.markdown(
+            "<div class='os-table-wrap'><table class='os-table'><thead><tr>"
+            + head
+            + "</tr></thead><tbody>"
+            + "".join(body_rows)
+            + "</tbody></table></div>",
+            unsafe_allow_html=True,
+        )
+
         show_cols = [
-            "match_url", "start_time", "map_name", "playlist_fr", "mode_ui", "outcome_label", "score",
+            "match_url", "start_time_fr", "map_name", "playlist_fr", "mode_ui", "outcome_label", "score",
+            "team_mmr", "enemy_mmr", "delta_mmr",
             "kda", "kills", "deaths", "max_killing_spree", "headshot_kills",
             "average_life_mmss", "assists", "accuracy", "ratio",
         ]
-        table = dff_table[show_cols].sort_values("start_time", ascending=False).reset_index(drop=True)
+        table = dff_table[show_cols + ["start_time"]].sort_values("start_time", ascending=False).reset_index(drop=True)
+        table = table[show_cols]
 
-        styled = (
-            table.style
-            .map(_style_outcome_text, subset=["outcome_label"])
-            .map(_style_score_label, subset=["score"])
-            .map(_style_signed_number, subset=["kda"])
-        )
-
-        st.dataframe(
-            styled,
-            width="stretch",
-            hide_index=True,
-            column_config={
-                "match_url": st.column_config.LinkColumn(
-                    "Consulter sur HaloWaypoint",
-                    display_text="Ouvrir",
-                ),
-                "map_name": st.column_config.TextColumn("Carte"),
-                "playlist_fr": st.column_config.TextColumn("Playlist"),
-                "mode_ui": st.column_config.TextColumn("Mode"),
-                "outcome_label": st.column_config.TextColumn("Résultat"),
-                "score": st.column_config.TextColumn("Score"),
-                "kda": st.column_config.NumberColumn("FDA", format="%.2f"),
-                "kills": st.column_config.NumberColumn("Frags"),
-                "deaths": st.column_config.NumberColumn("Morts"),
-                "max_killing_spree": st.column_config.NumberColumn("Folie meurtrière (max)", format="%d"),
-                "headshot_kills": st.column_config.NumberColumn("Tirs à la tête", format="%d"),
-                "average_life_mmss": st.column_config.TextColumn("Durée de vie moyenne"),
-                "assists": st.column_config.NumberColumn("Assistances"),
-                "accuracy": st.column_config.NumberColumn("Précision (%)", format="%.2f"),
-            },
-        )
-
-        csv = table.to_csv(index=False).encode("utf-8")
+        csv_table = table.rename(columns={"start_time_fr": "Date de début"})
+        csv = csv_table.to_csv(index=False).encode("utf-8")
         st.download_button(
             "Télécharger CSV",
             data=csv,
             file_name="openspartan_matches.csv",
             mime="text/csv",
         )
+
+    # --------------------------------------------------------------------------
+    # Page: Paramètres
+    # --------------------------------------------------------------------------
+    elif page == "Paramètres":
+        _render_settings_page(settings)
 
 
 if __name__ == "__main__":

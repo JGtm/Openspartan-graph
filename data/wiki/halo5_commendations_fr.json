@@ -1,0 +1,5412 @@
+{
+  "generated_at": "2026-01-20T20:01:06.520378+00:00",
+  "count": 159,
+  "items": [
+    {
+      "category": "Arme",
+      "name": "Artilleur de banshee",
+      "description": "Tuez les Spartans adverses à l'aide d'un banshee.",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 5,
+          "reward": "100 EXP"
+        },
+        {
+          "tier": 2,
+          "target_count": 10,
+          "reward": "200 EXP"
+        },
+        {
+          "tier": 3,
+          "target_count": 15,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 25,
+          "reward": "500 EXP"
+        },
+        {
+          "tier": 5,
+          "target_count": 50,
+          "reward": "1000 EXP & Pack artilleur de banshee"
+        }
+      ],
+      "master_count": 50,
+      "image_path": "static/commendations/h5g/H5G_citation_Artilleur_de_banshee.png"
+    },
+    {
+      "category": "Arme",
+      "name": "Artilleur de ghost",
+      "description": "Tuez les Spartans adverses à l'aide d'un ghost.",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 5,
+          "reward": "100 EXP"
+        },
+        {
+          "tier": 2,
+          "target_count": 10,
+          "reward": "200 EXP"
+        },
+        {
+          "tier": 3,
+          "target_count": 15,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 25,
+          "reward": "500 EXP"
+        },
+        {
+          "tier": 5,
+          "target_count": 50,
+          "reward": "1000 EXP & Pack artilleur de ghost"
+        }
+      ],
+      "master_count": 50,
+      "image_path": "static/commendations/h5g/H5G_citation_Artilleur_de_ghost.png"
+    },
+    {
+      "category": "Arme",
+      "name": "Artilleur de gungoose",
+      "description": "Éliminez les Spartans adverses à l'aide d'un gungoose.",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 5,
+          "reward": "100 EXP"
+        },
+        {
+          "tier": 2,
+          "target_count": 10,
+          "reward": "200 EXP"
+        },
+        {
+          "tier": 3,
+          "target_count": 15,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 25,
+          "reward": "500 EXP"
+        },
+        {
+          "tier": 5,
+          "target_count": 50,
+          "reward": "1000 & Pack artilleur de gungoose"
+        }
+      ],
+      "master_count": 50,
+      "image_path": "static/commendations/h5g/H5G_citation_Artilleur_de_gungoose.png"
+    },
+    {
+      "category": "Arme",
+      "name": "Artilleur de mantis",
+      "description": "Tuez les Spartans adverses à l'aide d'un mantis.",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 5,
+          "reward": "100 EXP"
+        },
+        {
+          "tier": 2,
+          "target_count": 10,
+          "reward": "200 EXP"
+        },
+        {
+          "tier": 3,
+          "target_count": 15,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 25,
+          "reward": "500 EXP"
+        },
+        {
+          "tier": 5,
+          "target_count": 50,
+          "reward": "1000 EXP & Pack artilleur de mantis"
+        }
+      ],
+      "master_count": 50,
+      "image_path": "static/commendations/h5g/H5G_citation_Artilleur_de_mantis.png"
+    },
+    {
+      "category": "Arme",
+      "name": "Artilleur de phaéton",
+      "description": "Tuez les Spartans adverses à l'aide d'un phaéton.",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 5,
+          "reward": "100 EXP"
+        },
+        {
+          "tier": 2,
+          "target_count": 10,
+          "reward": "200 EXP"
+        },
+        {
+          "tier": 3,
+          "target_count": 15,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 25,
+          "reward": "500 EXP"
+        },
+        {
+          "tier": 5,
+          "target_count": 50,
+          "reward": "1000 EXP & Pack artilleur de phaéton"
+        }
+      ],
+      "master_count": 50,
+      "image_path": "static/commendations/h5g/H5G_citation_Artilleur_de_pha%C3%A9ton.png"
+    },
+    {
+      "category": "Arme",
+      "name": "Artilleur de scorpion",
+      "description": "Tuez les Spartans adverses à l'aide d'un scorpion.",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 5,
+          "reward": "100 EXP"
+        },
+        {
+          "tier": 2,
+          "target_count": 10,
+          "reward": "200 EXP"
+        },
+        {
+          "tier": 3,
+          "target_count": 15,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 25,
+          "reward": "500 EXP"
+        },
+        {
+          "tier": 5,
+          "target_count": 50,
+          "reward": "1000 EXP & Pack artilleur de scorpion"
+        }
+      ],
+      "master_count": 50,
+      "image_path": "static/commendations/h5g/H5G_citation_Artilleur_de_scorpion.png"
+    },
+    {
+      "category": "Arme",
+      "name": "Artilleur de warthog",
+      "description": "Tuez les Spartans adverses à l'aide d'un warthog.",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 5,
+          "reward": "100 EXP"
+        },
+        {
+          "tier": 2,
+          "target_count": 10,
+          "reward": "200 EXP"
+        },
+        {
+          "tier": 3,
+          "target_count": 15,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 25,
+          "reward": "500 EXP"
+        },
+        {
+          "tier": 5,
+          "target_count": 50,
+          "reward": "1000 EXP & Pack artilleur de warthog"
+        }
+      ],
+      "master_count": 50,
+      "image_path": "static/commendations/h5g/H5G_citation_Artilleur_de_warthog.png"
+    },
+    {
+      "category": "Arme",
+      "name": "Artilleur de warthog gauss",
+      "description": "Tuez les Spartans adverses à l'aide d'un warthog gauss.",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 5,
+          "reward": "100 EXP"
+        },
+        {
+          "tier": 2,
+          "target_count": 10,
+          "reward": "200 EXP"
+        },
+        {
+          "tier": 3,
+          "target_count": 15,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 25,
+          "reward": "500 EXP"
+        },
+        {
+          "tier": 5,
+          "target_count": 50,
+          "reward": "1000 EXP & Pack artilleur de warthog gauss"
+        }
+      ],
+      "master_count": 50,
+      "image_path": "static/commendations/h5g/H5G_citation_Artilleur_de_warthog_gauss.png"
+    },
+    {
+      "category": "Arme",
+      "name": "Artilleur de warthog lance-roquettes",
+      "description": "Tuez les Spartans adverses à l'aide d'un warthog lance-roquettes.",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 5,
+          "reward": "100 EXP"
+        },
+        {
+          "tier": 2,
+          "target_count": 10,
+          "reward": "200 EXP"
+        },
+        {
+          "tier": 3,
+          "target_count": 15,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 25,
+          "reward": "500 EXP"
+        },
+        {
+          "tier": 5,
+          "target_count": 50,
+          "reward": "1000 EXP & Pack artilleur de warthog lance-roquettes"
+        }
+      ],
+      "master_count": 50,
+      "image_path": "static/commendations/h5g/H5G_citation_Artilleur_de_warthog_lance-roquettes.png"
+    },
+    {
+      "category": "Arme",
+      "name": "Artilleur de wasp",
+      "description": "Tuez les Spartans adverses à l'aide d'un wasp.",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 5,
+          "reward": "100 EXP"
+        },
+        {
+          "tier": 2,
+          "target_count": 10,
+          "reward": "200 EXP"
+        },
+        {
+          "tier": 3,
+          "target_count": 15,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 25,
+          "reward": "500 EXP"
+        },
+        {
+          "tier": 5,
+          "target_count": 50,
+          "reward": "1000 EXP & Pack artilleur de wasp"
+        }
+      ],
+      "master_count": 50,
+      "image_path": "static/commendations/h5g/H5G_citation_Artilleur_de_wasp.png"
+    },
+    {
+      "category": "Arme",
+      "name": "Canon incendiaire",
+      "description": "Tuez un Spartan adverse à l'aide du canon incendiaire.",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 5,
+          "reward": "100 EXP"
+        },
+        {
+          "tier": 2,
+          "target_count": 10,
+          "reward": "200 EXP"
+        },
+        {
+          "tier": 3,
+          "target_count": 15,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 25,
+          "reward": "500 EXP"
+        },
+        {
+          "tier": 5,
+          "target_count": 50,
+          "reward": "1000 EXP & Pack canon incendiaire"
+        }
+      ],
+      "master_count": 50,
+      "image_path": "static/commendations/h5g/H5G_citation_Canon_incendiaire.png"
+    },
+    {
+      "category": "Arme",
+      "name": "Carabine",
+      "description": "Tuez un Spartan adverse à l'aide de la carabine.",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 5,
+          "reward": "100 EXP"
+        },
+        {
+          "tier": 2,
+          "target_count": 10,
+          "reward": "200 EXP"
+        },
+        {
+          "tier": 3,
+          "target_count": 15,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 25,
+          "reward": "500 EXP"
+        },
+        {
+          "tier": 5,
+          "target_count": 50,
+          "reward": "1000 EXP & Pack carabine"
+        }
+      ],
+      "master_count": 50,
+      "image_path": "static/commendations/h5g/H5G_citation_Carabine.png"
+    },
+    {
+      "category": "Arme",
+      "name": "Carnage au DMR",
+      "description": "Tuez un Spartan adverse à l'aide du DMR0",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 10,
+          "reward": "100 EXP"
+        },
+        {
+          "tier": 2,
+          "target_count": 20,
+          "reward": "200 EXP"
+        },
+        {
+          "tier": 3,
+          "target_count": 30,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 50,
+          "reward": "500 EXP"
+        },
+        {
+          "tier": 5,
+          "target_count": 100,
+          "reward": "1000 EXP & Pack DMR"
+        }
+      ],
+      "master_count": 100,
+      "image_path": "static/commendations/h5g/H5G_citation_Carnage_au_DMR.png"
+    },
+    {
+      "category": "Arme",
+      "name": "Carnage au fusil d'assaut",
+      "description": "Tuez un Spartan adverse à l'aide du fusil d'assaut.",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 10,
+          "reward": "100 EXP"
+        },
+        {
+          "tier": 2,
+          "target_count": 20,
+          "reward": "200 EXP"
+        },
+        {
+          "tier": 3,
+          "target_count": 30,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 50,
+          "reward": "500 EXP"
+        },
+        {
+          "tier": 5,
+          "target_count": 100,
+          "reward": "1000 EXP & Pack fusil d'assaut"
+        }
+      ],
+      "master_count": 100,
+      "image_path": "static/commendations/h5g/H5G_citation_Carnage_au_fusil_d%27assaut.png"
+    },
+    {
+      "category": "Arme",
+      "name": "Carnage au fusil de combat",
+      "description": "Tuez un Spartan adverse à l'aide du fusil de combat.",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 10,
+          "reward": "100 EXP"
+        },
+        {
+          "tier": 2,
+          "target_count": 20,
+          "reward": "200 EXP"
+        },
+        {
+          "tier": 3,
+          "target_count": 30,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 50,
+          "reward": "500 EXP"
+        },
+        {
+          "tier": 5,
+          "target_count": 100,
+          "reward": "1000 EXP & Pack fusil de combat"
+        }
+      ],
+      "master_count": 100,
+      "image_path": "static/commendations/h5g/H5G_citation_Carnage_au_fusil_de_combat.png"
+    },
+    {
+      "category": "Arme",
+      "name": "Carnage à la mitraillette",
+      "description": "Tuez un Spartan adverse à l'aide de la mitraillette.",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 10,
+          "reward": "100 EXP"
+        },
+        {
+          "tier": 2,
+          "target_count": 20,
+          "reward": "200 EXP"
+        },
+        {
+          "tier": 3,
+          "target_count": 30,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 50,
+          "reward": "500 EXP"
+        },
+        {
+          "tier": 5,
+          "target_count": 100,
+          "reward": "1000 EXP & Pack Mitraillette"
+        }
+      ],
+      "master_count": 100,
+      "image_path": "static/commendations/h5g/H5G_citation_Carnage_%C3%A0_la_mitraillette.png"
+    },
+    {
+      "category": "Arme",
+      "name": "Destructeur d'apparitions",
+      "description": "Détruisez les apparitions occupées par l'adversaire.",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 3,
+          "reward": "100 EXP"
+        },
+        {
+          "tier": 2,
+          "target_count": 6,
+          "reward": "200 EXP"
+        },
+        {
+          "tier": 3,
+          "target_count": 9,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 15,
+          "reward": "500 EXP"
+        },
+        {
+          "tier": 5,
+          "target_count": 30,
+          "reward": "1000 EXP & Pack destructeur d'apparitions"
+        }
+      ],
+      "master_count": 30,
+      "image_path": "static/commendations/h5g/H5G_citation_Destructeur_d%27apparitions.png"
+    },
+    {
+      "category": "Arme",
+      "name": "Destructeur de banshees",
+      "description": "Détruisez les banshees occupés par l'adversaire.",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 3,
+          "reward": "100 EXP"
+        },
+        {
+          "tier": 2,
+          "target_count": 6,
+          "reward": "200 EXP"
+        },
+        {
+          "tier": 3,
+          "target_count": 9,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 15,
+          "reward": "500 EXP"
+        },
+        {
+          "tier": 5,
+          "target_count": 30,
+          "reward": "1000 EXP & Pack destructeur de banshees"
+        }
+      ],
+      "master_count": 30,
+      "image_path": "static/commendations/h5g/H5G_citation_Destructeur_de_banshees.png"
+    },
+    {
+      "category": "Arme",
+      "name": "Destructeur de ghosts",
+      "description": "Détruisez les ghosts occupés par l'adversaire.",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 5,
+          "reward": "100 EXP"
+        },
+        {
+          "tier": 2,
+          "target_count": 10,
+          "reward": "200 EXP"
+        },
+        {
+          "tier": 3,
+          "target_count": 15,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 25,
+          "reward": "500 EXP"
+        },
+        {
+          "tier": 5,
+          "target_count": 50,
+          "reward": "1000 EXP & Pack destructeur de ghosts"
+        }
+      ],
+      "master_count": 50,
+      "image_path": "static/commendations/h5g/H5G_citation_Destructeur_de_ghosts.png"
+    },
+    {
+      "category": "Arme",
+      "name": "Destructeur de mantis",
+      "description": "Détruisez les mantis occupés par l'adversaire.",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 1,
+          "reward": "100 EXP"
+        },
+        {
+          "tier": 2,
+          "target_count": 3,
+          "reward": "200 EXP"
+        },
+        {
+          "tier": 3,
+          "target_count": 5,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 7,
+          "reward": "500 EXP"
+        },
+        {
+          "tier": 5,
+          "target_count": 10,
+          "reward": "1000 EXP & Pack destructeur de mantis"
+        }
+      ],
+      "master_count": 10,
+      "image_path": "static/commendations/h5g/H5G_citation_Destructeur_de_mantis.png"
+    },
+    {
+      "category": "Arme",
+      "name": "Destructeur de mongooses",
+      "description": "Détruisez les mongooses occupées par l'adversaire.",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 5,
+          "reward": "100 EXP"
+        },
+        {
+          "tier": 2,
+          "target_count": 10,
+          "reward": "200 EXP"
+        },
+        {
+          "tier": 3,
+          "target_count": 15,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 25,
+          "reward": "500 EXP"
+        },
+        {
+          "tier": 5,
+          "target_count": 50,
+          "reward": "1000 EXP & Pack destructeur de mongooses"
+        }
+      ],
+      "master_count": 50,
+      "image_path": "static/commendations/h5g/H5G_citation_Destructeur_de_mongooses.png"
+    },
+    {
+      "category": "Arme",
+      "name": "Destructeur de phaétons",
+      "description": "Détruisez les phaétons occupés par l'ennemi.",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 1,
+          "reward": "100 EXP"
+        },
+        {
+          "tier": 2,
+          "target_count": 3,
+          "reward": "200 EXP"
+        },
+        {
+          "tier": 3,
+          "target_count": 5,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 7,
+          "reward": "500 EXP"
+        },
+        {
+          "tier": 5,
+          "target_count": 10,
+          "reward": "1000 EXP & Pack destructeur de phaétons"
+        }
+      ],
+      "master_count": 10,
+      "image_path": "static/commendations/h5g/H5G_citation_Destructeur_de_pha%C3%A9tons.png"
+    },
+    {
+      "category": "Arme",
+      "name": "Destructeur de scorpions",
+      "description": "Détruisez les scorpions occupés par l'adversaire.",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 1,
+          "reward": "100 EXP"
+        },
+        {
+          "tier": 2,
+          "target_count": 3,
+          "reward": "200 EXP"
+        },
+        {
+          "tier": 3,
+          "target_count": 5,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 7,
+          "reward": "500 EXP"
+        },
+        {
+          "tier": 5,
+          "target_count": 10,
+          "reward": "1000 EXP & Pack destructeur de scorpions"
+        }
+      ],
+      "master_count": 10,
+      "image_path": "static/commendations/h5g/H5G_citation_Destructeur_de_scorpions.png"
+    },
+    {
+      "category": "Arme",
+      "name": "Destructeur de warthogs",
+      "description": "Détruisez les warthogs occupés par l'adversaire.",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 5,
+          "reward": "100 EXP"
+        },
+        {
+          "tier": 2,
+          "target_count": 10,
+          "reward": "200 EXP"
+        },
+        {
+          "tier": 3,
+          "target_count": 15,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 25,
+          "reward": "500 EXP"
+        },
+        {
+          "tier": 5,
+          "target_count": 50,
+          "reward": "1000 EXP & Pack destructeur de warthogs"
+        }
+      ],
+      "master_count": 50,
+      "image_path": "static/commendations/h5g/H5G_citation_Destructeur_de_warthogs.png"
+    },
+    {
+      "category": "Arme",
+      "name": "Destructeur de wasps",
+      "description": "Détruisez les wasps occupés par l'adversaire.",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 3,
+          "reward": "100 EXP"
+        },
+        {
+          "tier": 2,
+          "target_count": 6,
+          "reward": "200 EXP"
+        },
+        {
+          "tier": 3,
+          "target_count": 9,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 15,
+          "reward": "500 EXP"
+        },
+        {
+          "tier": 5,
+          "target_count": 30,
+          "reward": "1000 EXP & Pack destructeur de wasps"
+        }
+      ],
+      "master_count": 30,
+      "image_path": "static/commendations/h5g/H5G_citation_Destructeur_de_wasps.png"
+    },
+    {
+      "category": "Arme",
+      "name": "Fusil Storm",
+      "description": "Tuez un Spartan adverse à l'aide du fusil Storm.",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 5,
+          "reward": "100 EXP"
+        },
+        {
+          "tier": 2,
+          "target_count": 10,
+          "reward": "200 EXP"
+        },
+        {
+          "tier": 3,
+          "target_count": 15,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 25,
+          "reward": "500 EXP"
+        },
+        {
+          "tier": 5,
+          "target_count": 50,
+          "reward": "1000 EXP & Pack fusil Storm"
+        }
+      ],
+      "master_count": 50,
+      "image_path": "static/commendations/h5g/H5G_citation_Fusil_Storm.png"
+    },
+    {
+      "category": "Arme",
+      "name": "Fusil binaire",
+      "description": "Tuez un Spartan adverse à l'aide du fusil binaire.",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 5,
+          "reward": "100 EXP"
+        },
+        {
+          "tier": 2,
+          "target_count": 10,
+          "reward": "200 EXP"
+        },
+        {
+          "tier": 3,
+          "target_count": 15,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 25,
+          "reward": "500 EXP"
+        },
+        {
+          "tier": 5,
+          "target_count": 50,
+          "reward": "1000 EXP & Pack Fusil binaire"
+        }
+      ],
+      "master_count": 50,
+      "image_path": "static/commendations/h5g/H5G_citation_Fusil_binaire.png"
+    },
+    {
+      "category": "Arme",
+      "name": "Fusil léger",
+      "description": "Tuez un Spartan adverse à l'aide du fusil léger.",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 5,
+          "reward": "100 EXP"
+        },
+        {
+          "tier": 2,
+          "target_count": 10,
+          "reward": "200 EXP"
+        },
+        {
+          "tier": 3,
+          "target_count": 15,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 25,
+          "reward": "500 EXP"
+        },
+        {
+          "tier": 5,
+          "target_count": 50,
+          "reward": "1000 EXP & Pack fusil léger"
+        }
+      ],
+      "master_count": 50,
+      "image_path": "static/commendations/h5g/H5G_citation_Fusil_l%C3%A9ger.png"
+    },
+    {
+      "category": "Arme",
+      "name": "Fusil sniper",
+      "description": "Tuez un Spartan adverse à l'aide du fusil sniper.",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 5,
+          "reward": "100 EXP"
+        },
+        {
+          "tier": 2,
+          "target_count": 10,
+          "reward": "200 EXP"
+        },
+        {
+          "tier": 3,
+          "target_count": 15,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 25,
+          "reward": "500 EXP"
+        },
+        {
+          "tier": 5,
+          "target_count": 50,
+          "reward": "1000 EXP & Pack fusil sniper"
+        }
+      ],
+      "master_count": 50,
+      "image_path": "static/commendations/h5g/H5G_citation_Fusil_sniper.png"
+    },
+    {
+      "category": "Arme",
+      "name": "Fusil sniper covenant",
+      "description": "Tuez un Spartan adverse à l'aide du fusil sniper covenant.",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 5,
+          "reward": "100 EXP"
+        },
+        {
+          "tier": 2,
+          "target_count": 10,
+          "reward": "EXP"
+        },
+        {
+          "tier": 3,
+          "target_count": 15,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 25,
+          "reward": "500 EXP"
+        },
+        {
+          "tier": 5,
+          "target_count": 50,
+          "reward": "1000 EXP & Pack fusil sniper covenant"
+        }
+      ],
+      "master_count": 50,
+      "image_path": "static/commendations/h5g/H5G_citation_Fusil_sniper_covenant.png"
+    },
+    {
+      "category": "Arme",
+      "name": "Fusil à plasma brute",
+      "description": "Tuez un Spartan adverse à l'aide du fusil à plasma brute.",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 5,
+          "reward": "100 EXP"
+        },
+        {
+          "tier": 2,
+          "target_count": 10,
+          "reward": "200 EXP"
+        },
+        {
+          "tier": 3,
+          "target_count": 15,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 25,
+          "reward": "500 EXP"
+        },
+        {
+          "tier": 5,
+          "target_count": 50,
+          "reward": "1000 EXP & Pack fusil à plasma brute"
+        }
+      ],
+      "master_count": 50,
+      "image_path": "static/commendations/h5g/H5G_citation_Fusil_%C3%A0_plasma_brute.png"
+    },
+    {
+      "category": "Arme",
+      "name": "Fusil à pompe",
+      "description": "Tuez un Spartan adverse à l'aide du fusil à pompe.",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 5,
+          "reward": "100 EXP"
+        },
+        {
+          "tier": 2,
+          "target_count": 10,
+          "reward": "200 EXP"
+        },
+        {
+          "tier": 3,
+          "target_count": 15,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 25,
+          "reward": "500 EXP"
+        },
+        {
+          "tier": 5,
+          "target_count": 50,
+          "reward": "1000 EXP & Pack fusil à pompe"
+        }
+      ],
+      "master_count": 50,
+      "image_path": "static/commendations/h5g/H5G_citation_Fusil_%C3%A0_pompe.png"
+    },
+    {
+      "category": "Arme",
+      "name": "Grenade à fragmentation",
+      "description": "Tuez un Spartan adverse à l'aide d'une grenade à fragmentation.",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 5,
+          "reward": "100 EXP"
+        },
+        {
+          "tier": 2,
+          "target_count": 10,
+          "reward": "200 EXP"
+        },
+        {
+          "tier": 3,
+          "target_count": 15,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 25,
+          "reward": "500 EXP"
+        },
+        {
+          "tier": 5,
+          "target_count": 50,
+          "reward": "1000 EXP & Pack grenade à fragmentation"
+        }
+      ],
+      "master_count": 50,
+      "image_path": "static/commendations/h5g/H5G_citation_Grenade_%C3%A0_fragmentation.png"
+    },
+    {
+      "category": "Arme",
+      "name": "Grenade à impulsion",
+      "description": "Tuez un Spartan adverse à l'aide d'une grenade à impulsion.",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 2,
+          "reward": "100 EXP"
+        },
+        {
+          "tier": 2,
+          "target_count": 4,
+          "reward": "200 EXP"
+        },
+        {
+          "tier": 3,
+          "target_count": 6,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 10,
+          "reward": "500 EXP"
+        },
+        {
+          "tier": 5,
+          "target_count": 20,
+          "reward": "1000 EXP & Pack grenade à dispersion"
+        }
+      ],
+      "master_count": 20,
+      "image_path": "static/commendations/h5g/H5G_citation_Grenade_%C3%A0_impulsion.png"
+    },
+    {
+      "category": "Arme",
+      "name": "Grenade à plasma",
+      "description": "Tuez un Spartan adverse à l'aide d'une grenade à plasma.",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 2,
+          "reward": "100 EXP"
+        },
+        {
+          "tier": 2,
+          "target_count": 4,
+          "reward": "200 EXP"
+        },
+        {
+          "tier": 3,
+          "target_count": 6,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 10,
+          "reward": "500 EXP"
+        },
+        {
+          "tier": 5,
+          "target_count": 20,
+          "reward": "1000 EXP & Pack grenade à plasma"
+        }
+      ],
+      "master_count": 20,
+      "image_path": "static/commendations/h5g/H5G_citation_Grenade_%C3%A0_plasma.png"
+    },
+    {
+      "category": "Arme",
+      "name": "Grenadier-plasma",
+      "description": "Tuez un Spartan adverse à l'aide d'un grenadier-plasma.",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 5,
+          "reward": "100 EXP"
+        },
+        {
+          "tier": 2,
+          "target_count": 10,
+          "reward": "200 EXP"
+        },
+        {
+          "tier": 3,
+          "target_count": 15,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 25,
+          "reward": "500 EXP"
+        },
+        {
+          "tier": 5,
+          "target_count": 50,
+          "reward": "1000 EXP & Pack grenadier-plasma"
+        }
+      ],
+      "master_count": 50,
+      "image_path": "static/commendations/h5g/H5G_citation_Grenadier-plasma.png"
+    },
+    {
+      "category": "Arme",
+      "name": "Hydra",
+      "description": "Tuez un Spartan adverse à l'aide de l'hydra.",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 5,
+          "reward": "100 EXP"
+        },
+        {
+          "tier": 2,
+          "target_count": 10,
+          "reward": "200 EXP"
+        },
+        {
+          "tier": 3,
+          "target_count": 15,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 25,
+          "reward": "500 EXP"
+        },
+        {
+          "tier": 5,
+          "target_count": 50,
+          "reward": "1 000 EXP & Pack hydra"
+        }
+      ],
+      "master_count": 50,
+      "image_path": "static/commendations/h5g/H5G_citation_Hydra.png"
+    },
+    {
+      "category": "Arme",
+      "name": "Lance-grenades Reach",
+      "description": "Tuez un Spartan adverse à l'aide du lance-grenades Reach.",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 5,
+          "reward": "100 EXP"
+        },
+        {
+          "tier": 2,
+          "target_count": 10,
+          "reward": "200 EXP"
+        },
+        {
+          "tier": 3,
+          "target_count": 15,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 25,
+          "reward": "500 EXP"
+        },
+        {
+          "tier": 5,
+          "target_count": 50,
+          "reward": "1000 EXP & Pack lance-grenades Reach"
+        }
+      ],
+      "master_count": 50,
+      "image_path": "static/commendations/h5g/H5G_citation_Lance-grenades_Reach.png"
+    },
+    {
+      "category": "Arme",
+      "name": "Lance-roquettes",
+      "description": "Tuez un Spartan adverse à l'aide du lance-roquettes.",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 5,
+          "reward": "100 EXP"
+        },
+        {
+          "tier": 2,
+          "target_count": 10,
+          "reward": "200 EXP"
+        },
+        {
+          "tier": 3,
+          "target_count": 15,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 25,
+          "reward": "500 EXP"
+        },
+        {
+          "tier": 5,
+          "target_count": 50,
+          "reward": "1000 EXP & Pack lance-roquettes"
+        }
+      ],
+      "master_count": 50,
+      "image_path": "static/commendations/h5g/H5G_citation_Lance-roquettes.png"
+    },
+    {
+      "category": "Arme",
+      "name": "Laser spartan",
+      "description": "Tuez un Spartan adverse à l'aide du laser spartan.",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 5,
+          "reward": "100 EXP"
+        },
+        {
+          "tier": 2,
+          "target_count": 10,
+          "reward": "200 EXP"
+        },
+        {
+          "tier": 3,
+          "target_count": 15,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 25,
+          "reward": "500 EXP"
+        },
+        {
+          "tier": 5,
+          "target_count": 50,
+          "reward": "1000 EXP & Pack laser spartan"
+        }
+      ],
+      "master_count": 50,
+      "image_path": "static/commendations/h5g/H5G_citation_Laser_spartan.png"
+    },
+    {
+      "category": "Arme",
+      "name": "Marteau antigrav",
+      "description": "Tuez un Spartan adverse à l'aide du marteau antigrav.",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 5,
+          "reward": "100 EXP"
+        },
+        {
+          "tier": 2,
+          "target_count": 10,
+          "reward": "200 EXP"
+        },
+        {
+          "tier": 3,
+          "target_count": 15,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 25,
+          "reward": "500 EXP"
+        },
+        {
+          "tier": 5,
+          "target_count": 50,
+          "reward": "1000 EXP & Pack Marteau antigrav"
+        }
+      ],
+      "master_count": 50,
+      "image_path": "static/commendations/h5g/H5G_citation_Marteau_antigrav.png"
+    },
+    {
+      "category": "Arme",
+      "name": "Maîtrise de véhicule",
+      "description": "Tuez les Spartans adverses à l'aide d'une apparition.",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 5,
+          "reward": "100 EXP"
+        },
+        {
+          "tier": 2,
+          "target_count": 10,
+          "reward": "200 EXP"
+        },
+        {
+          "tier": 3,
+          "target_count": 15,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 25,
+          "reward": "500 EXP"
+        },
+        {
+          "tier": 5,
+          "target_count": 50,
+          "reward": "1000 EXP & Pack artilleur d'apparition"
+        }
+      ],
+      "master_count": 50,
+      "image_path": "static/commendations/h5g/H5G_citation_Artilleur_de_l%27apparition.png"
+    },
+    {
+      "category": "Arme",
+      "name": "Needler",
+      "description": "Tuez un Spartan adverse à l'aide du needler.",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 5,
+          "reward": "100 EXP"
+        },
+        {
+          "tier": 2,
+          "target_count": 10,
+          "reward": "200 EXP"
+        },
+        {
+          "tier": 3,
+          "target_count": 15,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 25,
+          "reward": "500 EXP"
+        },
+        {
+          "tier": 5,
+          "target_count": 50,
+          "reward": "1000 EXP & Pack needler"
+        }
+      ],
+      "master_count": 50,
+      "image_path": "static/commendations/h5g/H5G_citation_Needler.png"
+    },
+    {
+      "category": "Arme",
+      "name": "Pilote",
+      "description": "Décrochez des médailles de pilote.",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 10,
+          "reward": "100 EXP"
+        },
+        {
+          "tier": 2,
+          "target_count": 20,
+          "reward": "200 EXP"
+        },
+        {
+          "tier": 3,
+          "target_count": 30,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 50,
+          "reward": "500 EXP"
+        },
+        {
+          "tier": 5,
+          "target_count": 100,
+          "reward": "1000 EXP & Pack pilote"
+        }
+      ],
+      "master_count": 100,
+      "image_path": "static/commendations/h5g/H5G_citation_Pilote.png"
+    },
+    {
+      "category": "Arme",
+      "name": "Pistolet à combustible",
+      "description": "Tuez un Spartan adverse à l'aide du pistolet à combustible.",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 5,
+          "reward": "100 EXP"
+        },
+        {
+          "tier": 2,
+          "target_count": 10,
+          "reward": "200 EXP"
+        },
+        {
+          "tier": 3,
+          "target_count": 15,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 25,
+          "reward": "500 EXP"
+        },
+        {
+          "tier": 5,
+          "target_count": 50,
+          "reward": "1000 EXP & Pack pistolet à combustible"
+        }
+      ],
+      "master_count": 50,
+      "image_path": "static/commendations/h5g/H5G_citation_Pistolet_%C3%A0_combustible.png"
+    },
+    {
+      "category": "Arme",
+      "name": "Pistolet à particules",
+      "description": "Tuez un Spartan adverse à l'aide du pistolet à particules.",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 5,
+          "reward": "100 EXP"
+        },
+        {
+          "tier": 2,
+          "target_count": 10,
+          "reward": "200 EXP"
+        },
+        {
+          "tier": 3,
+          "target_count": 15,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 25,
+          "reward": "500 EXP"
+        },
+        {
+          "tier": 5,
+          "target_count": 50,
+          "reward": "1000 EXP & Pack pistolet à particules"
+        }
+      ],
+      "master_count": 50,
+      "image_path": "static/commendations/h5g/H5G_citation_Pistolet_%C3%A0_particules.png"
+    },
+    {
+      "category": "Arme",
+      "name": "Railgun",
+      "description": "Tuez un Spartan adverse à l'aide du railgun.",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 5,
+          "reward": "100 EXP"
+        },
+        {
+          "tier": 2,
+          "target_count": 10,
+          "reward": "200 EXP"
+        },
+        {
+          "tier": 3,
+          "target_count": 15,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 25,
+          "reward": "500 EXP"
+        },
+        {
+          "tier": 5,
+          "target_count": 50,
+          "reward": "1000 EXP & Pack railgun"
+        }
+      ],
+      "master_count": 50,
+      "image_path": "static/commendations/h5g/H5G_citation_Railgun.png"
+    },
+    {
+      "category": "Arme",
+      "name": "Rayon de sentinelle",
+      "description": "Tuez un Spartan adverse à l'aide du rayon de sentinelle.",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 5,
+          "reward": "100 EXP"
+        },
+        {
+          "tier": 2,
+          "target_count": 10,
+          "reward": "200 EXP"
+        },
+        {
+          "tier": 3,
+          "target_count": 15,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 25,
+          "reward": "500 EXP"
+        },
+        {
+          "tier": 5,
+          "target_count": 50,
+          "reward": "1000 EXP & Pack rayon de sentinelle"
+        }
+      ],
+      "master_count": 50,
+      "image_path": "static/commendations/h5g/H5G_citation_Rayon_de_sentinelle.png"
+    },
+    {
+      "category": "Arme",
+      "name": "Répercuteur",
+      "description": "Tuez un Spartan adverse à l'aide du répercuteur.",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 5,
+          "reward": "100 EXP"
+        },
+        {
+          "tier": 2,
+          "target_count": 10,
+          "reward": "200 EXP"
+        },
+        {
+          "tier": 3,
+          "target_count": 15,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 25,
+          "reward": "500 EXP"
+        },
+        {
+          "tier": 5,
+          "target_count": 50,
+          "reward": "1000 EXP & Pack répercuteur"
+        }
+      ],
+      "master_count": 50,
+      "image_path": "static/commendations/h5g/H5G_citation_R%C3%A9percuteur.png"
+    },
+    {
+      "category": "Arme",
+      "name": "SAW",
+      "description": "Tuez un Spartan adverse avec le SAW.",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 5,
+          "reward": "100 EXP"
+        },
+        {
+          "tier": 2,
+          "target_count": 10,
+          "reward": "200 EXP"
+        },
+        {
+          "tier": 3,
+          "target_count": 15,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 25,
+          "reward": "500 EXP"
+        },
+        {
+          "tier": 5,
+          "target_count": 50,
+          "reward": "1000 EXP & Pack SAW"
+        }
+      ],
+      "master_count": 50,
+      "image_path": "static/commendations/h5g/H5G_citation_SAW.png"
+    },
+    {
+      "category": "Arme",
+      "name": "SPNKR",
+      "description": "Tuez un Spartan adverse à l'aide du SPNKr.",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 5,
+          "reward": "100 EXP"
+        },
+        {
+          "tier": 2,
+          "target_count": 10,
+          "reward": "200 EXP"
+        },
+        {
+          "tier": 3,
+          "target_count": 15,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 25,
+          "reward": "500 EXP"
+        },
+        {
+          "tier": 5,
+          "target_count": 50,
+          "reward": "1000 EXP & Pack SPNKr"
+        }
+      ],
+      "master_count": 50,
+      "image_path": "static/commendations/h5g/H5G_citation_SPNKR.png"
+    },
+    {
+      "category": "Arme",
+      "name": "Écrasement",
+      "description": "Écrasez un Spartan adverse avec un véhicule.",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 10,
+          "reward": "100 EXP"
+        },
+        {
+          "tier": 2,
+          "target_count": 20,
+          "reward": "200 EXP"
+        },
+        {
+          "tier": 3,
+          "target_count": 30,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 50,
+          "reward": "500 EXP"
+        },
+        {
+          "tier": 5,
+          "target_count": 100,
+          "reward": "1000 EXP & Pack écrasement"
+        }
+      ],
+      "master_count": 100,
+      "image_path": "static/commendations/h5g/H5G_citation_%C3%89crasement.png"
+    },
+    {
+      "category": "Arme",
+      "name": "Épée à énergie",
+      "description": "Tuez un Spartan adverse à l'aide d'une épée à énergie.",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 5,
+          "reward": "100 EXP"
+        },
+        {
+          "tier": 2,
+          "target_count": 10,
+          "reward": "200 EXP"
+        },
+        {
+          "tier": 3,
+          "target_count": 15,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 25,
+          "reward": "500 EXP"
+        },
+        {
+          "tier": 5,
+          "target_count": 50,
+          "reward": "1000 EXP & Pack épée à énergie"
+        }
+      ],
+      "master_count": 50,
+      "image_path": "static/commendations/h5g/H5G_citation_%C3%89p%C3%A9e_%C3%A0_%C3%A9nergie.png"
+    },
+    {
+      "category": "Arme",
+      "name": "Éradicateur",
+      "description": "Tuez un Spartan adverse à l'aide de l'éradicateur.",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 5,
+          "reward": "100 EXP"
+        },
+        {
+          "tier": 2,
+          "target_count": 10,
+          "reward": "200 EXP"
+        },
+        {
+          "tier": 3,
+          "target_count": 15,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 25,
+          "reward": "500 EXP"
+        },
+        {
+          "tier": 5,
+          "target_count": 50,
+          "reward": "1000 EXP & Pack éradicateur"
+        }
+      ],
+      "master_count": 50,
+      "image_path": "static/commendations/h5g/H5G_citation_%C3%89radicateur.png"
+    },
+    {
+      "category": "Ennemi",
+      "name": "Destructeur de Covenants\n\nObtenez toutes les citations d'élimination de Covenants.\n\n4 conditions\nRécompenses\n\n2000 EXP\nPack destructeur de Covenants (Débloque l'emblème Sceau covenant)\n\n\nDestructeur de Forerunners\n\nObtenez toutes les citations d'élimination de Forerunners.\n\n5 conditions\nRécompenses\n\n2000 EXP\nPack desctructeur de Forerunners (Débloque l'emblème Sceau forerunner)\n\nCitations\nTueur d'Élites",
+      "description": "Tuez des Élites.",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 10,
+          "reward": "100 EXP"
+        },
+        {
+          "tier": 2,
+          "target_count": 20,
+          "reward": "200 EXP"
+        },
+        {
+          "tier": 3,
+          "target_count": 30,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 50,
+          "reward": "500 EXP"
+        },
+        {
+          "tier": 5,
+          "target_count": 100,
+          "reward": "1000 EXP & Pack Tueur d'Élites (Débloque l'emblème Mâchoire)"
+        }
+      ],
+      "master_count": 100,
+      "image_path": "static/commendations/h5g/H5G_citation_Tueur_d%27%C3%89lites.png"
+    },
+    {
+      "category": "Ennemi",
+      "name": "Tueur de Chasseurs",
+      "description": "Tuez des Chasseurs.",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 2,
+          "reward": "100 EXP"
+        },
+        {
+          "tier": 2,
+          "target_count": 4,
+          "reward": "200 EXP"
+        },
+        {
+          "tier": 3,
+          "target_count": 6,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 10,
+          "reward": "500 EXP"
+        },
+        {
+          "tier": 5,
+          "target_count": 20,
+          "reward": "1000 EXP & Pack Tueur de Chasseurs (Débloque l'emblème Proie)"
+        }
+      ],
+      "master_count": 20,
+      "image_path": "static/commendations/h5g/H5G_citation_Tueur_de_Chasseurs.png"
+    },
+    {
+      "category": "Ennemi",
+      "name": "Tueur de Grognards",
+      "description": "Tuez des Grognards.",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 10,
+          "reward": "100 EXP"
+        },
+        {
+          "tier": 2,
+          "target_count": 20,
+          "reward": "200 EXP"
+        },
+        {
+          "tier": 3,
+          "target_count": 30,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 50,
+          "reward": "500 EXP"
+        },
+        {
+          "tier": 5,
+          "target_count": 100,
+          "reward": "100 EXP & Pack tueur de Grognards (Débloque l'emblème Dents)"
+        }
+      ],
+      "master_count": 100,
+      "image_path": "static/commendations/h5g/H5G_citation_Tueur_de_Grognards.png"
+    },
+    {
+      "category": "Ennemi",
+      "name": "Tueur de Marines",
+      "description": "Tuez les Marines ennemis.",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 20,
+          "reward": "100 EXP"
+        },
+        {
+          "tier": 2,
+          "target_count": 40,
+          "reward": "200 EXP"
+        },
+        {
+          "tier": 3,
+          "target_count": 60,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 100,
+          "reward": "500 EXP"
+        },
+        {
+          "tier": 5,
+          "target_count": 200,
+          "reward": "1000 EXP & Pack tueur de Marines"
+        }
+      ],
+      "master_count": 200,
+      "image_path": "static/commendations/h5g/H5G_citation_Tueur_de_r%C3%A9pliques_de_Marines.png"
+    },
+    {
+      "category": "Ennemi",
+      "name": "Tueur de Rapaces",
+      "description": "Tuez des Rapaces.",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 5,
+          "reward": "100 EXP"
+        },
+        {
+          "tier": 2,
+          "target_count": 10,
+          "reward": "200 EXP"
+        },
+        {
+          "tier": 3,
+          "target_count": 15,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 25,
+          "reward": "500 EXP"
+        },
+        {
+          "tier": 5,
+          "target_count": 50,
+          "reward": "1000 EXP & Pack tueur de Rapaces (Débloque l'emblème Équipe d'intervention Majestic)"
+        }
+      ],
+      "master_count": 50,
+      "image_path": "static/commendations/h5g/H5G_citation_Tueur_de_Rapaces.png"
+    },
+    {
+      "category": "Ennemi",
+      "name": "Tueur de Veilleurs",
+      "description": "Tuez des Veilleurs.",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 1,
+          "reward": "100 EXP"
+        },
+        {
+          "tier": 2,
+          "target_count": 3,
+          "reward": "200 EXP"
+        },
+        {
+          "tier": 3,
+          "target_count": 5,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 7,
+          "reward": "500 EXP"
+        },
+        {
+          "tier": 5,
+          "target_count": 10,
+          "reward": "1000 EXP & Pack tueur de Veilleurs (Débloque l'emblème Main du Didacte)"
+        }
+      ],
+      "master_count": 10,
+      "image_path": "static/commendations/h5g/H5G_citation_Tueur_de_Veilleurs.png"
+    },
+    {
+      "category": "Ennemi",
+      "name": "Tueur de chevaliers",
+      "description": "Tuez des chevaliers.",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 2,
+          "reward": "100 EXP"
+        },
+        {
+          "tier": 2,
+          "target_count": 4,
+          "reward": "200 EXP"
+        },
+        {
+          "tier": 3,
+          "target_count": 6,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 10,
+          "reward": "500 EXP"
+        },
+        {
+          "tier": 5,
+          "target_count": 20,
+          "reward": "1000 EXP & Pack tueur de chevaliers (Débloque l'emblème Joyau)"
+        }
+      ],
+      "master_count": 20,
+      "image_path": "static/commendations/h5g/H5G_citation_Tueur_de_chevalier.png"
+    },
+    {
+      "category": "Ennemi",
+      "name": "Tueur de mechs grognards",
+      "description": "Tuez des mechs grognards.",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 1,
+          "reward": "100 EXP"
+        },
+        {
+          "tier": 2,
+          "target_count": 3,
+          "reward": "200 EXP"
+        },
+        {
+          "tier": 3,
+          "target_count": 5,
+          "reward": "300 EXP + 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 7,
+          "reward": "500 EXP"
+        },
+        {
+          "tier": 5,
+          "target_count": 10,
+          "reward": "1000 EXP + Pack tueur de mechs grognards"
+        }
+      ],
+      "master_count": 10,
+      "image_path": "static/commendations/h5g/H5G_citation_Tueur_de_mechs_grognards.png"
+    },
+    {
+      "category": "Ennemi",
+      "name": "Tueur de rampants",
+      "description": "Tuez des rampants.",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 10,
+          "reward": "100 EXP"
+        },
+        {
+          "tier": 2,
+          "target_count": 20,
+          "reward": "200 EXP"
+        },
+        {
+          "tier": 3,
+          "target_count": null,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": null,
+          "reward": "500 EXP"
+        },
+        {
+          "tier": 5,
+          "target_count": 100,
+          "reward": "1000 EXP & Pack tueur de rampants (Débloque l'emblème Joyau)"
+        }
+      ],
+      "master_count": 100,
+      "image_path": "static/commendations/h5g/H5G_citation_Tueur_de_rampants.png"
+    },
+    {
+      "category": "Ennemi",
+      "name": "Tueur de sentinelles",
+      "description": "Tuez des sentinelles.",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 5,
+          "reward": "100 EXP"
+        },
+        {
+          "tier": 2,
+          "target_count": 10,
+          "reward": "200 EXP"
+        },
+        {
+          "tier": 3,
+          "target_count": 15,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 25,
+          "reward": "500 EXP"
+        },
+        {
+          "tier": 5,
+          "target_count": 50,
+          "reward": "1000 EXP & Pack tueur de chevaliers (Débloque l'emblème Matrice)"
+        }
+      ],
+      "master_count": 50,
+      "image_path": "static/commendations/h5g/H5G_citation_Tueur_de_sentinelles.png"
+    },
+    {
+      "category": "Ennemi",
+      "name": "Tueur de soldats",
+      "description": "Tuez des soldats.",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 10,
+          "reward": "100 EXP"
+        },
+        {
+          "tier": 2,
+          "target_count": 20,
+          "reward": "200 EXP"
+        },
+        {
+          "tier": 3,
+          "target_count": 30,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 50,
+          "reward": "500 EXP"
+        },
+        {
+          "tier": 5,
+          "target_count": 100,
+          "reward": "1000 EXP & Pack tueur de soldats"
+        }
+      ],
+      "master_count": 100,
+      "image_path": "static/commendations/h5g/H5G_citation_Tueur_de_soldats.png"
+    },
+    {
+      "category": "Mode de jeu",
+      "name": "Annexion forcée",
+      "description": "Prenez le contrôle de 3 bases sans mourir dans n'importe quelle partie matchmaking Bases.",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 3,
+          "reward": "100 EXP"
+        },
+        {
+          "tier": 2,
+          "target_count": 6,
+          "reward": "200 EXP"
+        },
+        {
+          "tier": 3,
+          "target_count": 9,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 15,
+          "reward": "500 EXP"
+        },
+        {
+          "tier": 5,
+          "target_count": 30,
+          "reward": "1000 EXP & Pack annexion forcée"
+        }
+      ],
+      "master_count": 30,
+      "image_path": "static/commendations/h5g/H5G_citation_Annexion_forc%C3%A9e.png"
+    },
+    {
+      "category": "Mode de jeu",
+      "name": "Assistant",
+      "description": "Remportez n'importe quelle médaille d'assistance en Zone de combat.",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 25,
+          "reward": "100 EXP"
+        },
+        {
+          "tier": 2,
+          "target_count": 50,
+          "reward": "200 EXP"
+        },
+        {
+          "tier": 3,
+          "target_count": 75,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 125,
+          "reward": "500 EXP"
+        },
+        {
+          "tier": 5,
+          "target_count": 250,
+          "reward": "1000 EXP & 1 assistant"
+        }
+      ],
+      "master_count": 250,
+      "image_path": "static/commendations/h5g/H5G_citation_Assistant.png"
+    },
+    {
+      "category": "Mode de jeu",
+      "name": "Bulldozer",
+      "description": "Terminez n'importe quelle partie matchmaking Assassin avec un FDA supérieur à 8.",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 3,
+          "reward": "100 EXP"
+        },
+        {
+          "tier": 2,
+          "target_count": 6,
+          "reward": "200 EXP"
+        },
+        {
+          "tier": 3,
+          "target_count": 9,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 15,
+          "reward": "500 EXP"
+        },
+        {
+          "tier": 5,
+          "target_count": 30,
+          "reward": "1000 EXP & Pack bulldozer"
+        }
+      ],
+      "master_count": 30,
+      "image_path": "static/commendations/h5g/H5G_citation_Bulldozer.png"
+    },
+    {
+      "category": "Mode de jeu",
+      "name": "Chasse au gros gibier",
+      "description": "Tuez un boss ultra ou participez à son élimination en Zone de combat.",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 3,
+          "reward": "100 EXP"
+        },
+        {
+          "tier": 2,
+          "target_count": 6,
+          "reward": "200 EXP"
+        },
+        {
+          "tier": 3,
+          "target_count": 9,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 15,
+          "reward": "500 EXP"
+        },
+        {
+          "tier": 5,
+          "target_count": 30,
+          "reward": "1000 EXP & Pack chasse au gros gibier"
+        }
+      ],
+      "master_count": 30,
+      "image_path": "static/commendations/h5g/H5G_citation_Chasse_au_gros_gibier.png"
+    },
+    {
+      "category": "Mode de jeu",
+      "name": "Chasseur",
+      "description": "Tuez un boss ou participez à son élimination en Zone de combat.",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 5,
+          "reward": "100 EXP"
+        },
+        {
+          "tier": 2,
+          "target_count": 10,
+          "reward": "200 EXP"
+        },
+        {
+          "tier": 3,
+          "target_count": 15,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 25,
+          "reward": "500 EXP"
+        },
+        {
+          "tier": 5,
+          "target_count": 50,
+          "reward": "1000 EXP & Pack chasseur"
+        }
+      ],
+      "master_count": 50,
+      "image_path": "static/commendations/h5g/H5G_citation_Chasseur.png"
+    },
+    {
+      "category": "Mode de jeu",
+      "name": "Défenseur du drapeau",
+      "description": "Protégez le drapeau de votre équipe dans n'importe quelle partie matchmaking Capture du drapeau.",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 10,
+          "reward": "100 EXP"
+        },
+        {
+          "tier": 2,
+          "target_count": 20,
+          "reward": "200 EXP"
+        },
+        {
+          "tier": 3,
+          "target_count": 30,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 50,
+          "reward": "500 EXP"
+        },
+        {
+          "tier": 5,
+          "target_count": 100,
+          "reward": "1000 EXP & Pack défenseur du drapeau"
+        }
+      ],
+      "master_count": 100,
+      "image_path": "static/commendations/h5g/H5G_citation_D%C3%A9fenseur_du_drapeau.png"
+    },
+    {
+      "category": "Mode de jeu",
+      "name": "Imparable",
+      "description": "Survivez à une partie en Élimination.",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 3,
+          "reward": "100 EXP"
+        },
+        {
+          "tier": 2,
+          "target_count": 6,
+          "reward": "200 EXP"
+        },
+        {
+          "tier": 3,
+          "target_count": 9,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 15,
+          "reward": "500 EXP"
+        },
+        {
+          "tier": 5,
+          "target_count": 30,
+          "reward": "1000 EXP & Pack imparable"
+        }
+      ],
+      "master_count": 30,
+      "image_path": "static/commendations/h5g/H5G_citation_Imparable.png"
+    },
+    {
+      "category": "Mode de jeu",
+      "name": "Je te tiens !",
+      "description": "Rapportez le drapeau de votre équipe dans n'importe quelle partie matchmaking Capture du drapeau.",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 10,
+          "reward": "100 EXP"
+        },
+        {
+          "tier": 2,
+          "target_count": 20,
+          "reward": "200 EXP"
+        },
+        {
+          "tier": 3,
+          "target_count": 30,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 50,
+          "reward": "500 EXP"
+        },
+        {
+          "tier": 5,
+          "target_count": 100,
+          "reward": "1000 EXP & Pack je te tiens !"
+        }
+      ],
+      "master_count": 100,
+      "image_path": "static/commendations/h5g/H5G_citation_Je_te_tiens_%21.png"
+    },
+    {
+      "category": "Mode de jeu",
+      "name": "Jouets éducatifs",
+      "description": "Récupérez au moins 3 armes ou power-ups en une seule partie matchmaking Assassin de n'importe quel type.",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 3,
+          "reward": "100 EXP"
+        },
+        {
+          "tier": 2,
+          "target_count": 6,
+          "reward": "200 EXP"
+        },
+        {
+          "tier": 3,
+          "target_count": 9,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 15,
+          "reward": "500 EXP"
+        },
+        {
+          "tier": 5,
+          "target_count": 30,
+          "reward": "1000 EXP & Pack jouets éducatifs"
+        }
+      ],
+      "master_count": 30,
+      "image_path": "static/commendations/h5g/H5G_citation_Jouets_%C3%A9ducatifs.png"
+    },
+    {
+      "category": "Mode de jeu",
+      "name": "Maître des cibles",
+      "description": "Gagnez des parties pour avancer vers un nouvel ensemble de livrées magnum.",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 10,
+          "reward": "100 EXP"
+        },
+        {
+          "tier": 2,
+          "target_count": 20,
+          "reward": "200 EXP"
+        },
+        {
+          "tier": 3,
+          "target_count": 30,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 50,
+          "reward": "500 EXP"
+        },
+        {
+          "tier": 5,
+          "target_count": 100,
+          "reward": "1000 EXP & Pack magnum"
+        }
+      ],
+      "master_count": 100,
+      "image_path": "static/commendations/h5g/H5G_citation_Magnum.png"
+    },
+    {
+      "category": "Mode de jeu",
+      "name": "Maître des cibles",
+      "description": "Gagnez des parties pour avancer vers un nouvel ensemble de livrées magnum.",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 75,
+          "reward": "100 EXP"
+        },
+        {
+          "tier": 2,
+          "target_count": 100,
+          "reward": "200 EXP"
+        },
+        {
+          "tier": 3,
+          "target_count": 125,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 150,
+          "reward": "500 EXP"
+        },
+        {
+          "tier": 5,
+          "target_count": 200,
+          "reward": "1000 EXP & Pack victoire en Élimination"
+        }
+      ],
+      "master_count": 200,
+      "image_path": "static/commendations/h5g/H5G_citation_Magnum.png"
+    },
+    {
+      "category": "Mode de jeu",
+      "name": "Maîtrise du drapeau",
+      "description": "Prenez le contrôle d'une base.",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 5,
+          "reward": "100 EXP"
+        },
+        {
+          "tier": 2,
+          "target_count": 10,
+          "reward": "200 EXP"
+        },
+        {
+          "tier": 3,
+          "target_count": 15,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 25,
+          "reward": "500 EXP"
+        },
+        {
+          "tier": 5,
+          "target_count": 50,
+          "reward": "1000 EXP & Pack conquérant"
+        }
+      ],
+      "master_count": 50,
+      "image_path": "static/commendations/h5g/H5G_citation_Conqu%C3%A9rant.png"
+    },
+    {
+      "category": "Mode de jeu",
+      "name": "Partie prenante",
+      "description": "Défendez une base appartenant à votre équipe dans n'importe quelle partie matchmaking Bases.",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 10,
+          "reward": "100 EXP"
+        },
+        {
+          "tier": 2,
+          "target_count": 20,
+          "reward": "200 EXP"
+        },
+        {
+          "tier": 3,
+          "target_count": 30,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 50,
+          "reward": "500 EXP"
+        },
+        {
+          "tier": 5,
+          "target_count": 100,
+          "reward": "1000 EXP & Pack partie prenante"
+        }
+      ],
+      "master_count": 100,
+      "image_path": "static/commendations/h5g/H5G_citation_Partie_prenante.png"
+    },
+    {
+      "category": "Mode de jeu",
+      "name": "Situation critique",
+      "description": "Remportez une manche en infériorité numérique dans n'importe quelle partie matchmaking Élimination.",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 3,
+          "reward": "100 EXP"
+        },
+        {
+          "tier": 2,
+          "target_count": 6,
+          "reward": "200 EXP"
+        },
+        {
+          "tier": 3,
+          "target_count": 9,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 15,
+          "reward": "500 EXP"
+        },
+        {
+          "tier": 5,
+          "target_count": 30,
+          "reward": "1000 EXP & Pack situation critique"
+        }
+      ],
+      "master_count": 30,
+      "image_path": "static/commendations/h5g/H5G_citation_Situation_critique.png"
+    },
+    {
+      "category": "Mode de jeu",
+      "name": "Sus au porteur du drapeau",
+      "description": "Tuez un porte-drapeau ennemi dans n'importe quelle partie matchmaking Capture du drapeau.",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 10,
+          "reward": "100 EXP"
+        },
+        {
+          "tier": 2,
+          "target_count": 20,
+          "reward": "200 EXP"
+        },
+        {
+          "tier": 3,
+          "target_count": 30,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 50,
+          "reward": "500 EXP"
+        },
+        {
+          "tier": 5,
+          "target_count": 100,
+          "reward": "1000 EXP & Pack sus au porteur du drapeau"
+        }
+      ],
+      "master_count": 100,
+      "image_path": "static/commendations/h5g/H5G_citation_Sus_au_porteur_du_drapeau.png"
+    },
+    {
+      "category": "Mode de jeu",
+      "name": "Victoire au drapeau",
+      "description": "Remportez n'importe quelle partie matchmaking Capture du drapeau.",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 5,
+          "reward": "100 EXP"
+        },
+        {
+          "tier": 2,
+          "target_count": 10,
+          "reward": "200 EXP"
+        },
+        {
+          "tier": 3,
+          "target_count": 15,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 25,
+          "reward": "500 EXP"
+        },
+        {
+          "tier": 5,
+          "target_count": 50,
+          "reward": "1000 EXP & Pack victoire au drapeau"
+        }
+      ],
+      "master_count": 50,
+      "image_path": "static/commendations/h5g/H5G_citation_Victoire_au_drapeau.png"
+    },
+    {
+      "category": "Mode de jeu",
+      "name": "Victoire en Assassin",
+      "description": "Remportez une partie d'Assassin en équipe.",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 5,
+          "reward": "100 EXP"
+        },
+        {
+          "tier": 2,
+          "target_count": 10,
+          "reward": "200 EXP"
+        },
+        {
+          "tier": 3,
+          "target_count": 15,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 25,
+          "reward": "500 EXP"
+        },
+        {
+          "tier": 5,
+          "target_count": 50,
+          "reward": "1000 EXP & Pack victoire en Assassin"
+        }
+      ],
+      "master_count": 50,
+      "image_path": "static/commendations/h5g/H5G_citation_Victoire_en_Assassin.png"
+    },
+    {
+      "category": "Mode de jeu",
+      "name": "Victoire en Bases",
+      "description": "Remportez n'importe quelle partie matchmaking Bases.",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 5,
+          "reward": "100 EXP"
+        },
+        {
+          "tier": 2,
+          "target_count": 10,
+          "reward": "200 EXP"
+        },
+        {
+          "tier": 3,
+          "target_count": 15,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 25,
+          "reward": "500 EXP"
+        },
+        {
+          "tier": 5,
+          "target_count": 50,
+          "reward": "1000 EXP & Pack victoire en Bases"
+        }
+      ],
+      "master_count": 50,
+      "image_path": "static/commendations/h5g/H5G_citation_Victoire_en_Bases.png"
+    },
+    {
+      "category": "Mode de jeu",
+      "name": "Victoire en Élimination",
+      "description": "Remportez n'importe quelle partie matchmaking Élimination.",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 5,
+          "reward": "100 EXP"
+        },
+        {
+          "tier": 2,
+          "target_count": 10,
+          "reward": "200 EXP"
+        },
+        {
+          "tier": 3,
+          "target_count": 15,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 25,
+          "reward": "500 EXP"
+        },
+        {
+          "tier": 5,
+          "target_count": 50,
+          "reward": "1000 EXP & Pack victoire en Élimination"
+        }
+      ],
+      "master_count": 50,
+      "image_path": "static/commendations/h5g/H5G_citation_Victoire_en_%C3%89limination.png"
+    },
+    {
+      "category": "Mode de jeu",
+      "name": "À la charge",
+      "description": "Prenez le contrôle d'une base dans n'importe quelle partie matchmaking Bases.",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 10,
+          "reward": "100 EXP"
+        },
+        {
+          "tier": 2,
+          "target_count": 20,
+          "reward": "200 EXP"
+        },
+        {
+          "tier": 3,
+          "target_count": 30,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 50,
+          "reward": "500 EXP"
+        },
+        {
+          "tier": 5,
+          "target_count": 100,
+          "reward": "1000 EXP & Pack à la charge"
+        }
+      ],
+      "master_count": 100,
+      "image_path": "static/commendations/h5g/H5G_citation_%C3%80_la_charge.png"
+    },
+    {
+      "category": "Multijoueur",
+      "name": "Assassin",
+      "description": "Assassinez des Spartans adverses.",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 5,
+          "reward": "100 EXP"
+        },
+        {
+          "tier": 2,
+          "target_count": 10,
+          "reward": "200 EXP"
+        },
+        {
+          "tier": 3,
+          "target_count": 15,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 25,
+          "reward": "500 EXP"
+        },
+        {
+          "tier": 5,
+          "target_count": 50,
+          "reward": "1000 EXP & Pack Assassin (Débloque l'emblème Assassin)"
+        }
+      ],
+      "master_count": 50,
+      "image_path": "static/commendations/h5g/H5G_citation_Assassin.png"
+    },
+    {
+      "category": "Multijoueur",
+      "name": "Carnage de Spartans",
+      "description": "Tuez plusieurs Spartans adverses sans mourir.",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 3,
+          "reward": "100 EXP"
+        },
+        {
+          "tier": 2,
+          "target_count": 6,
+          "reward": "200 EXP"
+        },
+        {
+          "tier": 3,
+          "target_count": 9,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 15,
+          "reward": "500 EXP"
+        },
+        {
+          "tier": 5,
+          "target_count": 30,
+          "reward": "1000 EXP & Pack Carnage de Spartans"
+        }
+      ],
+      "master_count": 30,
+      "image_path": "static/commendations/h5g/H5G_citation_Carnage_de_Spartans.png"
+    },
+    {
+      "category": "Multijoueur",
+      "name": "Combat rapproché",
+      "description": "Remportez n'importe quelle médaille de combat rapproché.",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 10,
+          "reward": "100 EXP"
+        },
+        {
+          "tier": 2,
+          "target_count": 20,
+          "reward": "200 EXP"
+        },
+        {
+          "tier": 3,
+          "target_count": 30,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 50,
+          "reward": "500 EXP"
+        },
+        {
+          "tier": 5,
+          "target_count": 100,
+          "reward": "1000 EXP & Pack Combat rapproché"
+        }
+      ],
+      "master_count": 100,
+      "image_path": "static/commendations/h5g/H5G_citation_Combat_rapproch%C3%A9.png"
+    },
+    {
+      "category": "Multijoueur",
+      "name": "Combattant opportuniste",
+      "description": "Remportez n'importe quelle médaille d'aptitude au combat.",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 10,
+          "reward": "100 EXP"
+        },
+        {
+          "tier": 2,
+          "target_count": 20,
+          "reward": "200 EXP"
+        },
+        {
+          "tier": 3,
+          "target_count": 30,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 50,
+          "reward": "500 EXP"
+        },
+        {
+          "tier": 5,
+          "target_count": 100,
+          "reward": "1000 EXP & Pack Combattant opportuniste"
+        }
+      ],
+      "master_count": 100,
+      "image_path": "static/commendations/h5g/H5G_citation_Combattant_opportuniste.png"
+    },
+    {
+      "category": "Multijoueur",
+      "name": "Dégage",
+      "description": "Tuez un Spartan en train d'escalader.",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 5,
+          "reward": "100 EXP"
+        },
+        {
+          "tier": 2,
+          "target_count": 10,
+          "reward": "200 EXP"
+        },
+        {
+          "tier": 3,
+          "target_count": 15,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 25,
+          "reward": "500 EXP"
+        },
+        {
+          "tier": 5,
+          "target_count": 50,
+          "reward": "1000 EXP & Pack Dégage"
+        }
+      ],
+      "master_count": 50,
+      "image_path": "static/commendations/h5g/H5G_citation_D%C3%A9gage.png"
+    },
+    {
+      "category": "Multijoueur",
+      "name": "Geronimo",
+      "description": "Tuez un Spartan adverse à l'aide d'un coup au sol.",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 5,
+          "reward": "100 EXP"
+        },
+        {
+          "tier": 2,
+          "target_count": 10,
+          "reward": "200 EXP"
+        },
+        {
+          "tier": 3,
+          "target_count": 15,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 25,
+          "reward": "500 EXP"
+        },
+        {
+          "tier": 5,
+          "target_count": 50,
+          "reward": "1000 EXP & Pack Geronimo"
+        }
+      ],
+      "master_count": 50,
+      "image_path": "static/commendations/h5g/H5G_citation_Geronimo.png"
+    },
+    {
+      "category": "Multijoueur",
+      "name": "Mastodonte",
+      "description": "Tuez un Spartan adverse à l'aide d'un coup d'épaule.",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 5,
+          "reward": "100 EXP"
+        },
+        {
+          "tier": 2,
+          "target_count": 10,
+          "reward": "200 EXP"
+        },
+        {
+          "tier": 3,
+          "target_count": 15,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 25,
+          "reward": "500 EXP"
+        },
+        {
+          "tier": 5,
+          "target_count": 50,
+          "reward": "1000 EXP & Pack Mastodonte"
+        }
+      ],
+      "master_count": 50,
+      "image_path": "static/commendations/h5g/H5G_citation_Mastodonte.png"
+    },
+    {
+      "category": "Multijoueur",
+      "name": "Multifrag",
+      "description": "Tuez rapidement plusieurs Spartans adverses.",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 3,
+          "reward": "100 EXP"
+        },
+        {
+          "tier": 2,
+          "target_count": 6,
+          "reward": "200 EXP"
+        },
+        {
+          "tier": 3,
+          "target_count": 9,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 15,
+          "reward": "500 XP"
+        },
+        {
+          "tier": 5,
+          "target_count": 30,
+          "reward": "1000 EXP & Pack Multifrag"
+        }
+      ],
+      "master_count": 30,
+      "image_path": "static/commendations/h5g/H5G_citation_Multifrag.png"
+    },
+    {
+      "category": "Multijoueur",
+      "name": "Protecteur",
+      "description": "Protégez un équipier.",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 10,
+          "reward": "100 EXP"
+        },
+        {
+          "tier": 2,
+          "target_count": 20,
+          "reward": "200 EXP"
+        },
+        {
+          "tier": 3,
+          "target_count": 20,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 50,
+          "reward": "500 EXP"
+        },
+        {
+          "tier": 5,
+          "target_count": 100,
+          "reward": "1000 EXP & Pack Protecteur"
+        }
+      ],
+      "master_count": 100,
+      "image_path": "static/commendations/h5g/H5G_citation_Protecteur.png"
+    },
+    {
+      "category": "Multijoueur",
+      "name": "Pugilat",
+      "description": "Tuez un Spartan ennemi d'une attaque rapprochée.",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 5,
+          "reward": "100 EXP"
+        },
+        {
+          "tier": 2,
+          "target_count": 10,
+          "reward": "200 EXP"
+        },
+        {
+          "tier": 3,
+          "target_count": 15,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 25,
+          "reward": "500 EXP"
+        },
+        {
+          "tier": 5,
+          "target_count": 50,
+          "reward": "1000 EXP & Pack Pugilat"
+        }
+      ],
+      "master_count": 50,
+      "image_path": "static/commendations/h5g/H5G_citation_Pugilat.png"
+    },
+    {
+      "category": "Multijoueur",
+      "name": "Tir à la tête",
+      "description": "Tuez un Spartan ennemi d'un tir à la tête.",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 10,
+          "reward": "100 EXP"
+        },
+        {
+          "tier": 2,
+          "target_count": 20,
+          "reward": "200 EXP"
+        },
+        {
+          "tier": 3,
+          "target_count": 30,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 50,
+          "reward": "500 EXP"
+        },
+        {
+          "tier": 5,
+          "target_count": 100,
+          "reward": "1000 EXP & Pack Tir à la tête"
+        }
+      ],
+      "master_count": 100,
+      "image_path": "static/commendations/h5g/H5G_citation_Tir_%C3%A0_la_t%C3%AAte.png"
+    },
+    {
+      "category": "Multijoueur",
+      "name": "Tueur de Spartans",
+      "description": "Éliminez les Spartans ennemis.",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 20,
+          "reward": "100 EXP"
+        },
+        {
+          "tier": 2,
+          "target_count": 40,
+          "reward": "200 EXP"
+        },
+        {
+          "tier": 3,
+          "target_count": 60,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 100,
+          "reward": "500 EXP"
+        },
+        {
+          "tier": 5,
+          "target_count": 200,
+          "reward": "1000 EXP & Pack Tueur de Spartans"
+        }
+      ],
+      "master_count": 200,
+      "image_path": "static/commendations/h5g/H5G_citation_Tueur_de_Spartans.png"
+    },
+    {
+      "category": "Multijoueur",
+      "name": "Œil de lynx",
+      "description": "Tuez un Spartan adverse en pleine santé à l'aide d'une arme de précision sans manquer un seul coup.",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 10,
+          "reward": "100 EXP"
+        },
+        {
+          "tier": 2,
+          "target_count": 20,
+          "reward": "200 EXP"
+        },
+        {
+          "tier": 3,
+          "target_count": 30,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 50,
+          "reward": "500 EXP"
+        },
+        {
+          "tier": 5,
+          "target_count": 100,
+          "reward": "1000 EXP & Pack Œil de lynx"
+        }
+      ],
+      "master_count": 100,
+      "image_path": "static/commendations/h5g/H5G_citation_%C5%92il_de_lynx.png"
+    },
+    {
+      "category": "Spartan Companies",
+      "name": "4 Little Spartans went out to play",
+      "description": "Gagner une partie dans n'importe quel mode Élimination en matchmaking",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 500,
+          "reward": "100 XP"
+        },
+        {
+          "tier": 2,
+          "target_count": 1000,
+          "reward": "200 XP"
+        },
+        {
+          "tier": 3,
+          "target_count": 1500,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 2400,
+          "reward": "500 XP"
+        },
+        {
+          "tier": 5,
+          "target_count": 4900,
+          "reward": "1000 EXP & 1 pack de réquisitions"
+        }
+      ],
+      "master_count": 4900,
+      "image_path": "static/commendations/h5g/H5G_citation_4_Little_Spartans_went_out_to_play.png"
+    },
+    {
+      "category": "Spartan Companies",
+      "name": "Almost doesn't count",
+      "description": "Tuer un Spartan ennemi quand votre vie est baisse et survivre",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 3000,
+          "reward": "100 XP"
+        },
+        {
+          "tier": 2,
+          "target_count": 6000,
+          "reward": "200 XP"
+        },
+        {
+          "tier": 3,
+          "target_count": 9000,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 14400,
+          "reward": "500 XP"
+        },
+        {
+          "tier": 5,
+          "target_count": 29200,
+          "reward": "1000 EXP & 1 pack de réquisitions"
+        }
+      ],
+      "master_count": 29200,
+      "image_path": "static/commendations/h5g/H5G_citation_Almost_doesn%27t_count.png"
+    },
+    {
+      "category": "Spartan Companies",
+      "name": "As One",
+      "description": "Tuer un ennemi en étant assisté par au moins 3 joueurs alliés ou aider dans une descente en équipe",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 150,
+          "reward": "100 XP"
+        },
+        {
+          "tier": 2,
+          "target_count": 300,
+          "reward": "200 XP"
+        },
+        {
+          "tier": 3,
+          "target_count": 450,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 720,
+          "reward": "500 XP"
+        },
+        {
+          "tier": 5,
+          "target_count": 1480,
+          "reward": "1000 EXP & 1 pack de réquisitions"
+        }
+      ],
+      "master_count": 1480,
+      "image_path": "static/commendations/h5g/H5G_citation_As_One.png"
+    },
+    {
+      "category": "Spartan Companies",
+      "name": "Body Guard",
+      "description": "Protéger un coéquipier",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 3000,
+          "reward": "100 XP"
+        },
+        {
+          "tier": 2,
+          "target_count": 6000,
+          "reward": "200 XP"
+        },
+        {
+          "tier": 3,
+          "target_count": 9000,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 14400,
+          "reward": "500 XP"
+        },
+        {
+          "tier": 5,
+          "target_count": 29200,
+          "reward": "1000 EXP & 1 pack de réquisitions"
+        }
+      ],
+      "master_count": 29200,
+      "image_path": "static/commendations/h5g/H5G_citation_Body_Guard.png"
+    },
+    {
+      "category": "Spartan Companies",
+      "name": "Bosses, Bases, and mayhem. Oh my!",
+      "description": "Gagner une partie en Warzone",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 500,
+          "reward": "100 XP"
+        },
+        {
+          "tier": 2,
+          "target_count": 1000,
+          "reward": "200 XP"
+        },
+        {
+          "tier": 3,
+          "target_count": 1500,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 2400,
+          "reward": "500 XP"
+        },
+        {
+          "tier": 5,
+          "target_count": 4900,
+          "reward": "1000 EXP & 1 pack de réquisitions"
+        }
+      ],
+      "master_count": 4900,
+      "image_path": "static/commendations/h5g/H5G_citation_Bosses%2C_Bases%2C_and_mayhem._Oh_my%21.png"
+    },
+    {
+      "category": "Spartan Companies",
+      "name": "Can't we get along?",
+      "description": "Tuer des ennemis Covenants",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 2000,
+          "reward": "100 XP"
+        },
+        {
+          "tier": 2,
+          "target_count": 4000,
+          "reward": "200 XP"
+        },
+        {
+          "tier": 3,
+          "target_count": 6000,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 9600,
+          "reward": "500 XP"
+        },
+        {
+          "tier": 5,
+          "target_count": 19400,
+          "reward": "1000 EXP & 1 pack de réquisitions"
+        }
+      ],
+      "master_count": 19400,
+      "image_path": "static/commendations/h5g/H5G_citation_Can%27t_we_get_along%3F.png"
+    },
+    {
+      "category": "Spartan Companies",
+      "name": "Crunchy Center",
+      "description": "Obtenir une victoire par destruction du générateur en Zone de combat",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 50,
+          "reward": "100 XP"
+        },
+        {
+          "tier": 2,
+          "target_count": 100,
+          "reward": "200 XP"
+        },
+        {
+          "tier": 3,
+          "target_count": 150,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 240,
+          "reward": "500 XP"
+        },
+        {
+          "tier": 5,
+          "target_count": 460,
+          "reward": "1000 EXP & 1 pack de réquisitions"
+        }
+      ],
+      "master_count": 460,
+      "image_path": "static/commendations/h5g/H5G_citation_Crunchy_Center.png"
+    },
+    {
+      "category": "Spartan Companies",
+      "name": "Deconstructed",
+      "description": "Tuer des ennemis Prométhéens",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 3000,
+          "reward": "100 XP"
+        },
+        {
+          "tier": 2,
+          "target_count": 6000,
+          "reward": "200 XP"
+        },
+        {
+          "tier": 3,
+          "target_count": 9000,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 14400,
+          "reward": "500 XP"
+        },
+        {
+          "tier": 5,
+          "target_count": 29200,
+          "reward": "1000 EXP & 1 pack de réquisitions"
+        }
+      ],
+      "master_count": 29200,
+      "image_path": "static/commendations/h5g/H5G_citation_Deconstructed.png"
+    },
+    {
+      "category": "Spartan Companies",
+      "name": "Expect the unexpected",
+      "description": "Capture the flag in Breakout (Capturer le drapeau en Élimination)",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 20,
+          "reward": "100 XP"
+        },
+        {
+          "tier": 2,
+          "target_count": 40,
+          "reward": "200 XP"
+        },
+        {
+          "tier": 3,
+          "target_count": 60,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 96,
+          "reward": "500 XP"
+        },
+        {
+          "tier": 5,
+          "target_count": 184,
+          "reward": "1000 EXP & 1 pack de réquisitions"
+        }
+      ],
+      "master_count": 184,
+      "image_path": "static/commendations/h5g/H5G_citation_Expect_the_unexpected.png"
+    },
+    {
+      "category": "Spartan Companies",
+      "name": "First Strike",
+      "description": "Obtenir le premier frag d'une partie",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 750,
+          "reward": "100 XP"
+        },
+        {
+          "tier": 2,
+          "target_count": 1500,
+          "reward": "200 XP"
+        },
+        {
+          "tier": 3,
+          "target_count": 2250,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 3600,
+          "reward": "500 XP"
+        },
+        {
+          "tier": 5,
+          "target_count": 7300,
+          "reward": "1000 EXP & 1 pack de réquisitions"
+        }
+      ],
+      "master_count": 7300,
+      "image_path": "static/commendations/h5g/H5G_citation_First_Strike.png"
+    },
+    {
+      "category": "Spartan Companies",
+      "name": "Flag 'em down",
+      "description": "Obtenir une des médailles suivantes : Interception, Bataille de drapeaux, Frag du porteur, Retour du drapeau, Défense du drapeau",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 1000,
+          "reward": "100 XP"
+        },
+        {
+          "tier": 2,
+          "target_count": 2000,
+          "reward": "200 XP"
+        },
+        {
+          "tier": 3,
+          "target_count": 3000,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 4800,
+          "reward": "500 XP"
+        },
+        {
+          "tier": 5,
+          "target_count": 9700,
+          "reward": "1000 EXP & 1 pack de réquisitions"
+        }
+      ],
+      "master_count": 9700,
+      "image_path": "static/commendations/h5g/H5G_citation_Flag_%27em_down.png"
+    },
+    {
+      "category": "Spartan Companies",
+      "name": "Forgot to pay the toll",
+      "description": "Tuer le conducteur d'un véhicule ennemi en mouvement en utilisant un Fusil sniper",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 100,
+          "reward": "100 XP"
+        },
+        {
+          "tier": 2,
+          "target_count": 200,
+          "reward": "200 XP"
+        },
+        {
+          "tier": 3,
+          "target_count": 300,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 480,
+          "reward": "500 XP"
+        },
+        {
+          "tier": 5,
+          "target_count": 1020,
+          "reward": "1000 EXP & 1 pack de réquisitions"
+        }
+      ],
+      "master_count": 1020,
+      "image_path": "static/commendations/h5g/H5G_citation_Forgot_to_pay_the_toll.png"
+    },
+    {
+      "category": "Spartan Companies",
+      "name": "From Downtown",
+      "description": "Tuer un Spartan ennemi depuis une longue distance",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 500,
+          "reward": "100 XP"
+        },
+        {
+          "tier": 2,
+          "target_count": 1000,
+          "reward": "200 XP"
+        },
+        {
+          "tier": 3,
+          "target_count": 1500,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 2400,
+          "reward": "500 XP"
+        },
+        {
+          "tier": 5,
+          "target_count": 4900,
+          "reward": "1000 EXP & 1 pack de réquisitions"
+        }
+      ],
+      "master_count": 4900,
+      "image_path": "static/commendations/h5g/H5G_citation_From_Downtown.png"
+    },
+    {
+      "category": "Spartan Companies",
+      "name": "From the top rope",
+      "description": "Tuer un Spartan ennemi avec un coup au sol",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 500,
+          "reward": "100 XP"
+        },
+        {
+          "tier": 2,
+          "target_count": 1000,
+          "reward": "200 XP"
+        },
+        {
+          "tier": 3,
+          "target_count": 1500,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 2400,
+          "reward": "500 XP"
+        },
+        {
+          "tier": 5,
+          "target_count": 4900,
+          "reward": "1000 EXP & 1 pack de réquisitions"
+        }
+      ],
+      "master_count": 4900,
+      "image_path": "static/commendations/h5g/H5G_citation_From_the_top_rope.png"
+    },
+    {
+      "category": "Spartan Companies",
+      "name": "GOAL!!!!",
+      "description": "Gagner des médailles de scores en Assaut ou Grifball",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 500,
+          "reward": "100 XP"
+        },
+        {
+          "tier": 2,
+          "target_count": 1000,
+          "reward": "200 XP"
+        },
+        {
+          "tier": 3,
+          "target_count": 1500,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 2400,
+          "reward": "500 XP"
+        },
+        {
+          "tier": 5,
+          "target_count": 4900,
+          "reward": "1000 EXP & 1 pack de réquisitions"
+        }
+      ],
+      "master_count": 4900,
+      "image_path": "static/commendations/h5g/H5G_citation_GOAL%21%21%21%21.png"
+    },
+    {
+      "category": "Spartan Companies",
+      "name": "Grand Theft",
+      "description": "Aborder un véhicule ou un véhicule aérien",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 200,
+          "reward": "100 XP"
+        },
+        {
+          "tier": 2,
+          "target_count": 400,
+          "reward": "200 XP"
+        },
+        {
+          "tier": 3,
+          "target_count": 600,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 960,
+          "reward": "500 XP"
+        },
+        {
+          "tier": 5,
+          "target_count": 1940,
+          "reward": "1000 EXP & 1 pack de réquisitions"
+        }
+      ],
+      "master_count": 1940,
+      "image_path": "static/commendations/h5g/H5G_citation_Grand_Theft.png"
+    },
+    {
+      "category": "Spartan Companies",
+      "name": "Hammer time",
+      "description": "Gagner des parties Grifball",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 250,
+          "reward": "100 XP"
+        },
+        {
+          "tier": 2,
+          "target_count": 500,
+          "reward": "200 XP"
+        },
+        {
+          "tier": 3,
+          "target_count": 750,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 1200,
+          "reward": "500 XP"
+        },
+        {
+          "tier": 5,
+          "target_count": 2400,
+          "reward": "1000 EXP & 1 pack de réquisitions"
+        }
+      ],
+      "master_count": 2400,
+      "image_path": "static/commendations/h5g/H5G_citation_Hammer_time.png"
+    },
+    {
+      "category": "Spartan Companies",
+      "name": "Helping Hand",
+      "description": "Obtenir n'importe quelle assistance",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 20000,
+          "reward": "100 XP"
+        },
+        {
+          "tier": 2,
+          "target_count": 40000,
+          "reward": "200 XP"
+        },
+        {
+          "tier": 3,
+          "target_count": 60000,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 96000,
+          "reward": "500 XP"
+        },
+        {
+          "tier": 5,
+          "target_count": 194400,
+          "reward": "1000 EXP & 1 pack de réquisitions"
+        }
+      ],
+      "master_count": 194400,
+      "image_path": "static/commendations/h5g/H5G_citation_Helping_Hand.png"
+    },
+    {
+      "category": "Spartan Companies",
+      "name": "I might be contagious",
+      "description": "Gagner des parties infection",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 1000,
+          "reward": "100 XP"
+        },
+        {
+          "tier": 2,
+          "target_count": 2000,
+          "reward": "200 XP"
+        },
+        {
+          "tier": 3,
+          "target_count": 3000,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 4800,
+          "reward": "500 XP"
+        },
+        {
+          "tier": 5,
+          "target_count": 9700,
+          "reward": "1000 EXP & 1 pack de réquisitions"
+        }
+      ],
+      "master_count": 9700,
+      "image_path": "static/commendations/h5g/H5G_citation_I_might_be_contagious.png"
+    },
+    {
+      "category": "Spartan Companies",
+      "name": "I'm just perfect",
+      "description": "Tuer un joueur avec une arme de précision sans manquer un tir",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 2000,
+          "reward": "100 XP"
+        },
+        {
+          "tier": 2,
+          "target_count": 4000,
+          "reward": "200 XP"
+        },
+        {
+          "tier": 3,
+          "target_count": 6000,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 9600,
+          "reward": "500 XP"
+        },
+        {
+          "tier": 5,
+          "target_count": 19400,
+          "reward": "1000 EXP & 1 pack de réquisitions"
+        }
+      ],
+      "master_count": 19400,
+      "image_path": "static/commendations/h5g/H5G_citation_I%27m_just_perfect.png"
+    },
+    {
+      "category": "Spartan Companies",
+      "name": "Is that my ball?",
+      "description": "Gagner des médailles défensives en Assaut ou Grifball",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 1000,
+          "reward": "100 XP"
+        },
+        {
+          "tier": 2,
+          "target_count": 2000,
+          "reward": "200 XP"
+        },
+        {
+          "tier": 3,
+          "target_count": 3000,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 4800,
+          "reward": "500 XP"
+        },
+        {
+          "tier": 5,
+          "target_count": 9700,
+          "reward": "1000 EXP & 1 pack de réquisitions"
+        }
+      ],
+      "master_count": 9700,
+      "image_path": "static/commendations/h5g/H5G_citation_Is_that_my_ball%3F.png"
+    },
+    {
+      "category": "Spartan Companies",
+      "name": "Is there no one else?",
+      "description": "Tuer rapidement trois Spartan ennemis ou plus",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 1000,
+          "reward": "100 XP"
+        },
+        {
+          "tier": 2,
+          "target_count": 2000,
+          "reward": "200 XP"
+        },
+        {
+          "tier": 3,
+          "target_count": 3000,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 4800,
+          "reward": "500 XP"
+        },
+        {
+          "tier": 5,
+          "target_count": 9700,
+          "reward": "1000 EXP & 1 pack de réquisitions"
+        }
+      ],
+      "master_count": 9700,
+      "image_path": "static/commendations/h5g/H5G_citation_Is_there_no_one_else%3F.png"
+    },
+    {
+      "category": "Spartan Companies",
+      "name": "It's a bird!",
+      "description": "Tuer un Spartan ennemi avec un véhicule aérien",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 250,
+          "reward": "100 XP"
+        },
+        {
+          "tier": 2,
+          "target_count": 500,
+          "reward": "200 XP"
+        },
+        {
+          "tier": 3,
+          "target_count": 750,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 1200,
+          "reward": "500 XP"
+        },
+        {
+          "tier": 5,
+          "target_count": 2400,
+          "reward": "1000 EXP & 1 pack de réquisitions"
+        }
+      ],
+      "master_count": 2400,
+      "image_path": "static/commendations/h5g/H5G_citation_It%27s_a_bird%21.png"
+    },
+    {
+      "category": "Spartan Companies",
+      "name": "Kicking it Old School",
+      "description": "Obtenir les médailles BXR, Combo noob ou Grenade et tir à la tête",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 100,
+          "reward": "100 XP"
+        },
+        {
+          "tier": 2,
+          "target_count": 200,
+          "reward": "200 XP"
+        },
+        {
+          "tier": 3,
+          "target_count": 300,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 480,
+          "reward": "500 XP"
+        },
+        {
+          "tier": 5,
+          "target_count": 1020,
+          "reward": "1000 EXP & 1 pack de réquisitions"
+        }
+      ],
+      "master_count": 1020,
+      "image_path": "static/commendations/h5g/H5G_citation_Kicking_it_Old_School.png"
+    },
+    {
+      "category": "Spartan Companies",
+      "name": "Kill or be killed",
+      "description": "Gagner une partie dans n'importe quel mode Assassin en matchmaking",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 1000,
+          "reward": "100 XP"
+        },
+        {
+          "tier": 2,
+          "target_count": 2000,
+          "reward": "200 XP"
+        },
+        {
+          "tier": 3,
+          "target_count": 3000,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 4800,
+          "reward": "500 XP"
+        },
+        {
+          "tier": 5,
+          "target_count": 9700,
+          "reward": "1000 EXP & 1 pack de réquisitions"
+        }
+      ],
+      "master_count": 9700,
+      "image_path": "static/commendations/h5g/H5G_citation_Kill_or_be_killed.png"
+    },
+    {
+      "category": "Spartan Companies",
+      "name": "Lawnmower",
+      "description": "Tuer un adversaire en l'écrasant avec un véhicule",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 500,
+          "reward": "100 XP"
+        },
+        {
+          "tier": 2,
+          "target_count": 1000,
+          "reward": "200 XP"
+        },
+        {
+          "tier": 3,
+          "target_count": 1500,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 2400,
+          "reward": "500 XP"
+        },
+        {
+          "tier": 5,
+          "target_count": 4900,
+          "reward": "1000 EXP & 1 pack de réquisitions"
+        }
+      ],
+      "master_count": 4900,
+      "image_path": "static/commendations/h5g/H5G_citation_Lawnmower.png"
+    },
+    {
+      "category": "Spartan Companies",
+      "name": "Like a boss",
+      "description": "Tuer un boss dans une partie Baptême du feu zone de combat",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 250,
+          "reward": "100 XP"
+        },
+        {
+          "tier": 2,
+          "target_count": 500,
+          "reward": "200 XP"
+        },
+        {
+          "tier": 3,
+          "target_count": 750,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 1200,
+          "reward": "500 XP"
+        },
+        {
+          "tier": 5,
+          "target_count": 2400,
+          "reward": "1000 EXP & 1 pack de réquisitions"
+        }
+      ],
+      "master_count": 2400,
+      "image_path": "static/commendations/h5g/H5G_citation_Like_a_boss.png"
+    },
+    {
+      "category": "Spartan Companies",
+      "name": "Look ma no pin",
+      "description": "Tuer un Spartan ennemi avec n'importe quelle grenade",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 4000,
+          "reward": "100 XP"
+        },
+        {
+          "tier": 2,
+          "target_count": 8000,
+          "reward": "200 XP"
+        },
+        {
+          "tier": 3,
+          "target_count": 12000,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 19200,
+          "reward": "500 XP"
+        },
+        {
+          "tier": 5,
+          "target_count": 38900,
+          "reward": "1000 EXP & 1 pack de réquisitions"
+        }
+      ],
+      "master_count": 38900,
+      "image_path": "static/commendations/h5g/H5G_citation_Look_ma_no_pin.png"
+    },
+    {
+      "category": "Spartan Companies",
+      "name": "Lucky",
+      "description": "Obtenir les médailles La chance, Chargeur vide, Sayonara ou Boulet de canon",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 400,
+          "reward": "100 XP"
+        },
+        {
+          "tier": 2,
+          "target_count": 800,
+          "reward": "200 XP"
+        },
+        {
+          "tier": 3,
+          "target_count": 1200,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 1920,
+          "reward": "500 XP"
+        },
+        {
+          "tier": 5,
+          "target_count": 3880,
+          "reward": "1000 EXP & 1 pack de réquisitions"
+        }
+      ],
+      "master_count": 3880,
+      "image_path": "static/commendations/h5g/H5G_citation_Lucky.png"
+    },
+    {
+      "category": "Spartan Companies",
+      "name": "My castle",
+      "description": "Obtenir une des médailles suivantes : Verrouillage, Contrôle total, Capture en série, Défense de la base, Base sécurisée, Assistance à la capture",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 2000,
+          "reward": "100 XP"
+        },
+        {
+          "tier": 2,
+          "target_count": 4000,
+          "reward": "200 XP"
+        },
+        {
+          "tier": 3,
+          "target_count": 6000,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 9600,
+          "reward": "500 XP"
+        },
+        {
+          "tier": 5,
+          "target_count": 19400,
+          "reward": "1000 EXP & 1 pack de réquisitions"
+        }
+      ],
+      "master_count": 19400,
+      "image_path": "static/commendations/h5g/H5G_citation_My_castle.png"
+    },
+    {
+      "category": "Spartan Companies",
+      "name": "No Hard Feelings",
+      "description": "Tuer des Spartans ennemis",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 50000,
+          "reward": "100 XP"
+        },
+        {
+          "tier": 2,
+          "target_count": 100000,
+          "reward": "200 XP"
+        },
+        {
+          "tier": 3,
+          "target_count": 150000,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 240000,
+          "reward": "500 XP"
+        },
+        {
+          "tier": 5,
+          "target_count": 486000,
+          "reward": "1000 EXP & 1 pack de réquisitions"
+        }
+      ],
+      "master_count": 486000,
+      "image_path": "static/commendations/h5g/H5G_citation_No_Hard_Feelings.png"
+    },
+    {
+      "category": "Spartan Companies",
+      "name": "No time to lose",
+      "description": "Gagner une partie en Assaut de la zone de combat",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 250,
+          "reward": "100 XP"
+        },
+        {
+          "tier": 2,
+          "target_count": 500,
+          "reward": "200 XP"
+        },
+        {
+          "tier": 3,
+          "target_count": 750,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 1200,
+          "reward": "500 XP"
+        },
+        {
+          "tier": 5,
+          "target_count": 2400,
+          "reward": "1000 EXP & 1 pack de réquisitions"
+        }
+      ],
+      "master_count": 2400,
+      "image_path": "static/commendations/h5g/H5G_citation_No_time_to_lose.png"
+    },
+    {
+      "category": "Spartan Companies",
+      "name": "Not so fast",
+      "description": "Tuer un ennemi qui tente d'aborder un véhicule ou un véhicule aérien",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 50,
+          "reward": "100 XP"
+        },
+        {
+          "tier": 2,
+          "target_count": 100,
+          "reward": "200 XP"
+        },
+        {
+          "tier": 3,
+          "target_count": 150,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 240,
+          "reward": "500 XP"
+        },
+        {
+          "tier": 5,
+          "target_count": 460,
+          "reward": "1000 EXP & 1 pack de réquisitions"
+        }
+      ],
+      "master_count": 460,
+      "image_path": "static/commendations/h5g/H5G_citation_Not_so_fast.png"
+    },
+    {
+      "category": "Spartan Companies",
+      "name": "Not so tough",
+      "description": "Tuer ou aider à tuer un boss en Zone de Combat",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 1000,
+          "reward": "100 XP"
+        },
+        {
+          "tier": 2,
+          "target_count": 2000,
+          "reward": "200 XP"
+        },
+        {
+          "tier": 3,
+          "target_count": 3000,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 4800,
+          "reward": "500 XP"
+        },
+        {
+          "tier": 5,
+          "target_count": 9700,
+          "reward": "1000 EXP & 1 pack de réquisitions"
+        }
+      ],
+      "master_count": 9700,
+      "image_path": "static/commendations/h5g/H5G_citation_Not_so_tough.png"
+    },
+    {
+      "category": "Spartan Companies",
+      "name": "Now you see me",
+      "description": "Distraire un adversaire qui est ensuite tué",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 4000,
+          "reward": "100 XP"
+        },
+        {
+          "tier": 2,
+          "target_count": 8000,
+          "reward": "200 XP"
+        },
+        {
+          "tier": 3,
+          "target_count": 12000,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 19200,
+          "reward": "500 XP"
+        },
+        {
+          "tier": 5,
+          "target_count": 38900,
+          "reward": "1000 EXP & 1 pack de réquisitions"
+        }
+      ],
+      "master_count": 38900,
+      "image_path": "static/commendations/h5g/H5G_citation_Now_you_see_me.png"
+    },
+    {
+      "category": "Spartan Companies",
+      "name": "Oddly specific",
+      "description": "Utiliser une grenade pour récupérer une arme puissante pour vous ou un coéquipier",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 5,
+          "reward": "100 XP"
+        },
+        {
+          "tier": 2,
+          "target_count": 10,
+          "reward": "200 XP"
+        },
+        {
+          "tier": 3,
+          "target_count": 15,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 24,
+          "reward": "500 XP"
+        },
+        {
+          "tier": 5,
+          "target_count": 46,
+          "reward": "1000 EXP & 1 pack de réquisitions"
+        }
+      ],
+      "master_count": 46,
+      "image_path": "static/commendations/h5g/H5G_citation_Oddly_specific.png"
+    },
+    {
+      "category": "Spartan Companies",
+      "name": "Passing through",
+      "description": "Conduire un véhicule et avoir un passager qui tue un adversaire",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 700,
+          "reward": "100 XP"
+        },
+        {
+          "tier": 2,
+          "target_count": 1400,
+          "reward": "200 XP"
+        },
+        {
+          "tier": 3,
+          "target_count": 2100,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 3360,
+          "reward": "500 XP"
+        },
+        {
+          "tier": 5,
+          "target_count": 6840,
+          "reward": "1000 EXP & 1 pack de réquisitions"
+        }
+      ],
+      "master_count": 6840,
+      "image_path": "static/commendations/h5g/H5G_citation_Passing_through.png"
+    },
+    {
+      "category": "Spartan Companies",
+      "name": "Patriot",
+      "description": "Capturer un drapeau, assister à la capture d'un drapeau ou tuer avec un drapeau",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 500,
+          "reward": "100 XP"
+        },
+        {
+          "tier": 2,
+          "target_count": 1000,
+          "reward": "200 XP"
+        },
+        {
+          "tier": 3,
+          "target_count": 1500,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 2400,
+          "reward": "500 XP"
+        },
+        {
+          "tier": 5,
+          "target_count": 4900,
+          "reward": "1000 EXP & 1 pack de réquisitions"
+        }
+      ],
+      "master_count": 4900,
+      "image_path": "static/commendations/h5g/H5G_citation_Patriot.png"
+    },
+    {
+      "category": "Spartan Companies",
+      "name": "Personal Space",
+      "description": "Gagner une partie dans n'importe quel mode Base en matchmaking",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 250,
+          "reward": "100 XP"
+        },
+        {
+          "tier": 2,
+          "target_count": 500,
+          "reward": "200 XP"
+        },
+        {
+          "tier": 3,
+          "target_count": 750,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 1200,
+          "reward": "500 XP"
+        },
+        {
+          "tier": 5,
+          "target_count": 2400,
+          "reward": "1000 EXP & 1 pack de réquisitions"
+        }
+      ],
+      "master_count": 2400,
+      "image_path": "static/commendations/h5g/H5G_citation_Personal_Space.png"
+    },
+    {
+      "category": "Spartan Companies",
+      "name": "Player vs Everything",
+      "description": "Gagner des parties en Baptême du feu zone de combat",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 200,
+          "reward": "100 XP"
+        },
+        {
+          "tier": 2,
+          "target_count": 400,
+          "reward": "200 XP"
+        },
+        {
+          "tier": 3,
+          "target_count": 600,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 960,
+          "reward": "500 XP"
+        },
+        {
+          "tier": 5,
+          "target_count": 1940,
+          "reward": "1000 EXP & 1 pack de réquisitions"
+        }
+      ],
+      "master_count": 1940,
+      "image_path": "static/commendations/h5g/H5G_citation_Player_vs_Everything.png"
+    },
+    {
+      "category": "Spartan Companies",
+      "name": "Positive contribution",
+      "description": "Finir avec FDA supérieur à 8 dans n'importe quelle partie Assassin en matchmaking",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 300,
+          "reward": "100 XP"
+        },
+        {
+          "tier": 2,
+          "target_count": 600,
+          "reward": "200 XP"
+        },
+        {
+          "tier": 3,
+          "target_count": 900,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 1440,
+          "reward": "500 XP"
+        },
+        {
+          "tier": 5,
+          "target_count": 2960,
+          "reward": "1000 EXP & 1 pack de réquisitions"
+        }
+      ],
+      "master_count": 2960,
+      "image_path": "static/commendations/h5g/H5G_citation_Positive_contribution.png"
+    },
+    {
+      "category": "Spartan Companies",
+      "name": "Power play",
+      "description": "Tuer un Spartan ennemi avec une arme puissante",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 10000,
+          "reward": "100 XP"
+        },
+        {
+          "tier": 2,
+          "target_count": 20000,
+          "reward": "200 XP"
+        },
+        {
+          "tier": 3,
+          "target_count": 30000,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 48000,
+          "reward": "500 XP"
+        },
+        {
+          "tier": 5,
+          "target_count": 97200,
+          "reward": "1000 EXP & 1 pack de réquisitions"
+        }
+      ],
+      "master_count": 97200,
+      "image_path": "static/commendations/h5g/H5G_citation_Power_play.png"
+    },
+    {
+      "category": "Spartan Companies",
+      "name": "Road Trip",
+      "description": "Tuer un Spartan ennemi avec un véhicule terrestre",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 3000,
+          "reward": "100 XP"
+        },
+        {
+          "tier": 2,
+          "target_count": 6000,
+          "reward": "200 XP"
+        },
+        {
+          "tier": 3,
+          "target_count": 9000,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 14400,
+          "reward": "500 XP"
+        },
+        {
+          "tier": 5,
+          "target_count": 29200,
+          "reward": "1000 EXP & 1 pack de réquisitions"
+        }
+      ],
+      "master_count": 29200,
+      "image_path": "static/commendations/h5g/H5G_citation_Road_Trip.png"
+    },
+    {
+      "category": "Spartan Companies",
+      "name": "Rule #1: Cardio",
+      "description": "Gagner des parties infection",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 250,
+          "reward": "100 XP"
+        },
+        {
+          "tier": 2,
+          "target_count": 500,
+          "reward": "200 XP"
+        },
+        {
+          "tier": 3,
+          "target_count": 750,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 1200,
+          "reward": "500 XP"
+        },
+        {
+          "tier": 5,
+          "target_count": 2400,
+          "reward": "1000 EXP & 1 pack de réquisitions"
+        }
+      ],
+      "master_count": 2400,
+      "image_path": "static/commendations/h5g/H5G_citation_Rule_1_Cardio.png"
+    },
+    {
+      "category": "Spartan Companies",
+      "name": "Scrapyard",
+      "description": "Aider à la destruction d'un véhicule",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 800,
+          "reward": "100 XP"
+        },
+        {
+          "tier": 2,
+          "target_count": 1600,
+          "reward": "200 XP"
+        },
+        {
+          "tier": 3,
+          "target_count": 2400,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 3840,
+          "reward": "500 XP"
+        },
+        {
+          "tier": 5,
+          "target_count": 7760,
+          "reward": "1000 EXP & 1 pack de réquisitions"
+        }
+      ],
+      "master_count": 7760,
+      "image_path": "static/commendations/h5g/H5G_citation_Scrapyard.png"
+    },
+    {
+      "category": "Spartan Companies",
+      "name": "So cuddly",
+      "description": "Assassinate enemy Spartans (Assassiner des Spartan ennemis)",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 500,
+          "reward": "100 XP"
+        },
+        {
+          "tier": 2,
+          "target_count": 1000,
+          "reward": "200 XP"
+        },
+        {
+          "tier": 3,
+          "target_count": 1500,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 2400,
+          "reward": "500 XP"
+        },
+        {
+          "tier": 5,
+          "target_count": 4900,
+          "reward": "1000 EXP & 1 pack de réquisitions"
+        }
+      ],
+      "master_count": 4900,
+      "image_path": "static/commendations/h5g/H5G_citation_So_cuddly.png"
+    },
+    {
+      "category": "Spartan Companies",
+      "name": "Somebody call for an extermination?",
+      "description": "Obtenir n'importe quelle médaille de survivant",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 1000,
+          "reward": "100 XP"
+        },
+        {
+          "tier": 2,
+          "target_count": 2000,
+          "reward": "200 XP"
+        },
+        {
+          "tier": 3,
+          "target_count": 3000,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 4800,
+          "reward": "500 XP"
+        },
+        {
+          "tier": 5,
+          "target_count": 9700,
+          "reward": "1000 EXP & 1 pack de réquisitions"
+        }
+      ],
+      "master_count": 9700,
+      "image_path": "static/commendations/h5g/H5G_citation_Somebody_call_for_an_extermination%3F.png"
+    },
+    {
+      "category": "Spartan Companies",
+      "name": "Something on your face",
+      "description": "Tuer un Spartan ennemi avec un tir à la tête",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 30000,
+          "reward": "100 XP"
+        },
+        {
+          "tier": 2,
+          "target_count": 60000,
+          "reward": "200 XP"
+        },
+        {
+          "tier": 3,
+          "target_count": 90000,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 144000,
+          "reward": "500 XP"
+        },
+        {
+          "tier": 5,
+          "target_count": 291600,
+          "reward": "1000 EXP & 1 pack de réquisitions"
+        }
+      ],
+      "master_count": 291600,
+      "image_path": "static/commendations/h5g/H5G_citation_Something_on_your_face.png"
+    },
+    {
+      "category": "Spartan Companies",
+      "name": "Sorry mate",
+      "description": "Tuer des Marines",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 4000,
+          "reward": "100 XP"
+        },
+        {
+          "tier": 2,
+          "target_count": 8000,
+          "reward": "200 XP"
+        },
+        {
+          "tier": 3,
+          "target_count": 12000,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 19200,
+          "reward": "500 XP"
+        },
+        {
+          "tier": 5,
+          "target_count": 38900,
+          "reward": "1000 EXP & 1 pack de réquisitions"
+        }
+      ],
+      "master_count": 38900,
+      "image_path": "static/commendations/h5g/H5G_citation_Sorry_mate.png"
+    },
+    {
+      "category": "Spartan Companies",
+      "name": "Standard Issue",
+      "description": "Tuer un Spartan ennemi avec une arme standard",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 40000,
+          "reward": "100 XP"
+        },
+        {
+          "tier": 2,
+          "target_count": 80000,
+          "reward": "200 XP"
+        },
+        {
+          "tier": 3,
+          "target_count": 120000,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 192000,
+          "reward": "500 XP"
+        },
+        {
+          "tier": 5,
+          "target_count": 388800,
+          "reward": "1000 EXP & 1 pack de réquisitions"
+        }
+      ],
+      "master_count": 388800,
+      "image_path": "static/commendations/h5g/H5G_citation_Standard_Issue.png"
+    },
+    {
+      "category": "Spartan Companies",
+      "name": "Standing tall",
+      "description": "Obtenir les super médailles Élimination : Immortel, Quarté, Tiercé, Doublé, Vainqueur",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 150,
+          "reward": "100 XP"
+        },
+        {
+          "tier": 2,
+          "target_count": 300,
+          "reward": "200 XP"
+        },
+        {
+          "tier": 3,
+          "target_count": 450,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 720,
+          "reward": "500 XP"
+        },
+        {
+          "tier": 5,
+          "target_count": 1480,
+          "reward": "1000 EXP & 1 pack de réquisitions"
+        }
+      ],
+      "master_count": 1480,
+      "image_path": "static/commendations/h5g/H5G_citation_Standing_tall.png"
+    },
+    {
+      "category": "Spartan Companies",
+      "name": "Sting like a bee",
+      "description": "Tuer un Spartan ennemi en combat rapproché",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 5000,
+          "reward": "100 XP"
+        },
+        {
+          "tier": 2,
+          "target_count": 10000,
+          "reward": "200 XP"
+        },
+        {
+          "tier": 3,
+          "target_count": 15000,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 24000,
+          "reward": "500 XP"
+        },
+        {
+          "tier": 5,
+          "target_count": 48600,
+          "reward": "1000 EXP & 1 pack de réquisitions"
+        }
+      ],
+      "master_count": 48600,
+      "image_path": "static/commendations/h5g/H5G_citation_Sting_like_a_bee.png"
+    },
+    {
+      "category": "Spartan Companies",
+      "name": "Striker",
+      "description": "Gagner des médailles offensives en Assaut ou Grifball",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 1000,
+          "reward": "100 XP"
+        },
+        {
+          "tier": 2,
+          "target_count": 2000,
+          "reward": "200 XP"
+        },
+        {
+          "tier": 3,
+          "target_count": 3000,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 4800,
+          "reward": "500 XP"
+        },
+        {
+          "tier": 5,
+          "target_count": 9700,
+          "reward": "1000 EXP & 1 pack de réquisitions"
+        }
+      ],
+      "master_count": 9700,
+      "image_path": "static/commendations/h5g/H5G_citation_Striker.png"
+    },
+    {
+      "category": "Spartan Companies",
+      "name": "The Pain Train",
+      "description": "Tuer un Spartan ennemi avec la charge spartane",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 1000,
+          "reward": "100 XP"
+        },
+        {
+          "tier": 2,
+          "target_count": 2000,
+          "reward": "200 XP"
+        },
+        {
+          "tier": 3,
+          "target_count": 3000,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 4800,
+          "reward": "500 XP"
+        },
+        {
+          "tier": 5,
+          "target_count": 9700,
+          "reward": "1000 EXP & 1 pack de réquisitions"
+        }
+      ],
+      "master_count": 9700,
+      "image_path": "static/commendations/h5g/H5G_citation_The_Pain_Train.png"
+    },
+    {
+      "category": "Spartan Companies",
+      "name": "The Reaper",
+      "description": "Tuer un adversaire d'outre-tombe",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 500,
+          "reward": "100 XP"
+        },
+        {
+          "tier": 2,
+          "target_count": 1000,
+          "reward": "200 XP"
+        },
+        {
+          "tier": 3,
+          "target_count": 1500,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 2400,
+          "reward": "500 XP"
+        },
+        {
+          "tier": 5,
+          "target_count": 4850,
+          "reward": "1000 EXP & 1 pack de réquisitions"
+        }
+      ],
+      "master_count": 4850,
+      "image_path": "static/commendations/h5g/H5G_citation_The_Reaper.png"
+    },
+    {
+      "category": "Spartan Companies",
+      "name": "Tick Tick Boom",
+      "description": "Gagner des parties en Assaut",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 200,
+          "reward": "100 XP"
+        },
+        {
+          "tier": 2,
+          "target_count": 400,
+          "reward": "200 XP"
+        },
+        {
+          "tier": 3,
+          "target_count": 600,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 960,
+          "reward": "500 XP"
+        },
+        {
+          "tier": 5,
+          "target_count": 1940,
+          "reward": "1000 EXP & 1 pack de réquisitions"
+        }
+      ],
+      "master_count": 1940,
+      "image_path": "static/commendations/h5g/H5G_citation_Tick_Tick_Boom.png"
+    },
+    {
+      "category": "Spartan Companies",
+      "name": "Till someone loses an eye",
+      "description": "Earn Sniper Rifle medals: Snipeltaneous, Airborne Snapshot, Snapshot, Sniper Headshot, Sniper Doubleshot (Obtener les médailles de Fusil Sniper : Snipertanée !, Grand-angle dans les airs, Grand-angle, Tir à la tête de sniper, deux Tir de précision avec un Double frag).",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 1500,
+          "reward": "100 XP"
+        },
+        {
+          "tier": 2,
+          "target_count": 3000,
+          "reward": "200 XP"
+        },
+        {
+          "tier": 3,
+          "target_count": 4500,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 7200,
+          "reward": "500 XP"
+        },
+        {
+          "tier": 5,
+          "target_count": 14600,
+          "reward": "1000 EXP & 1 pack de réquisitions"
+        }
+      ],
+      "master_count": 14600,
+      "image_path": "static/commendations/h5g/H5G_citation_Till_someone_loses_an_eye.png"
+    },
+    {
+      "category": "Spartan Companies",
+      "name": "Too close to the fire",
+      "description": "Tuer un ennemi près de votre générateur en Zone de combat ou Assaut de la zone de combat",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 300,
+          "reward": "100 XP"
+        },
+        {
+          "tier": 2,
+          "target_count": 600,
+          "reward": "200 XP"
+        },
+        {
+          "tier": 3,
+          "target_count": 900,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 1440,
+          "reward": "500 XP"
+        },
+        {
+          "tier": 5,
+          "target_count": 2960,
+          "reward": "1000 EXP & 1 pack de réquisitions"
+        }
+      ],
+      "master_count": 2960,
+      "image_path": "static/commendations/h5g/H5G_citation_Too_close_to_the_fire.png"
+    },
+    {
+      "category": "Spartan Companies",
+      "name": "Too fast for you",
+      "description": "Tuer un adversaire qui vous a tiré dessus en premier",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 2000,
+          "reward": "100 XP"
+        },
+        {
+          "tier": 2,
+          "target_count": 4000,
+          "reward": "200 XP"
+        },
+        {
+          "tier": 3,
+          "target_count": 6000,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 9600,
+          "reward": "500 XP"
+        },
+        {
+          "tier": 5,
+          "target_count": 19400,
+          "reward": "1000 EXP & 1 pack de réquisitions"
+        }
+      ],
+      "master_count": 19400,
+      "image_path": "static/commendations/h5g/H5G_citation_Too_fast_for_you.png"
+    },
+    {
+      "category": "Spartan Companies",
+      "name": "Vandalism",
+      "description": "Détruire un véhicule ennemi",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 1200,
+          "reward": "100 XP"
+        },
+        {
+          "tier": 2,
+          "target_count": 2400,
+          "reward": "200 XP"
+        },
+        {
+          "tier": 3,
+          "target_count": 3600,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 5760,
+          "reward": "500 XP"
+        },
+        {
+          "tier": 5,
+          "target_count": 11640,
+          "reward": "1000 EXP & 1 pack de réquisitions"
+        }
+      ],
+      "master_count": 11640,
+      "image_path": "static/commendations/h5g/H5G_citation_Vandalism.png"
+    },
+    {
+      "category": "Spartan Companies",
+      "name": "What's mine is mine",
+      "description": "Gagner une partie dans n'importe quel mode CDD en matchmaking",
+      "tiers": [
+        {
+          "tier": 1,
+          "target_count": 200,
+          "reward": "100 XP"
+        },
+        {
+          "tier": 2,
+          "target_count": 400,
+          "reward": "200 XP"
+        },
+        {
+          "tier": 3,
+          "target_count": 600,
+          "reward": "300 EXP & 1 pack de réquisitions"
+        },
+        {
+          "tier": 4,
+          "target_count": 960,
+          "reward": "500 XP"
+        },
+        {
+          "tier": 5,
+          "target_count": 1940,
+          "reward": "1000 EXP & 1 pack de réquisitions"
+        }
+      ],
+      "master_count": 1940,
+      "image_path": "static/commendations/h5g/H5G_citation_What%27s_mine_is_mine.png"
+    }
+  ]
+}

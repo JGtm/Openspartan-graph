@@ -7,6 +7,9 @@ from src.db.loaders import (
     load_player_match_result,
     load_top_medals,
     load_match_medals_for_player,
+    has_table,
+    load_highlight_events_for_match,
+    load_match_player_gamertags,
     query_matches_with_friend,
     list_other_player_xuids,
     list_top_teammates,
@@ -14,6 +17,8 @@ from src.db.loaders import (
 from src.db.parsers import (
     guess_xuid_from_db_path,
     parse_iso_utc,
+    resolve_xuid_from_db,
+    infer_spnkr_player_from_db_path,
 )
 from src.db.profiles import (
     PROFILES_PATH,
@@ -32,12 +37,17 @@ __all__ = [
     "load_player_match_result",
     "load_top_medals",
     "load_match_medals_for_player",
+    "has_table",
+    "load_highlight_events_for_match",
+    "load_match_player_gamertags",
     "query_matches_with_friend",
     "list_other_player_xuids",
     "list_top_teammates",
     # parsers
     "guess_xuid_from_db_path",
     "parse_iso_utc",
+    "resolve_xuid_from_db",
+    "infer_spnkr_player_from_db_path",
     # profiles
     "PROFILES_PATH",
     "load_profiles",
