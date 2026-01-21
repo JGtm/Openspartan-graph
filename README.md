@@ -127,6 +127,23 @@ Options utiles (voir `--help`):
 - `--refresh-bootstrap-match-type all` (défaut: all)
 - `--refresh-out-db data/spnkr.db` (défaut: data/spnkr.db)
 
+### Réparer les gamertags (aliases) via film roster
+
+Quand les `HighlightEvents.gamertag` sont corrompus, la stratégie la plus robuste est de compléter `xuid_aliases.json`
+en re-dérivant le roster depuis les film chunks (XUID -> Gamertag).
+
+Via le lanceur (recommandé) :
+
+```bash
+# Répare le match le plus récent de la DB
+python openspartan_launcher.py repair-aliases --db data/spnkr_gt_JGtm.db --latest
+
+# Répare tous les matchs (plus long)
+python openspartan_launcher.py repair-aliases --db data/spnkr_gt_JGtm.db --all-matches
+```
+
+Note: nécessite une auth SPNKr valide (ex: `.env.local` avec Azure refresh token).
+
 ### Changer le joueur par défaut (Gamertag / XUID)
 
 Le projet est configuré avec des valeurs par défaut pour simplifier l'usage en local.

@@ -30,6 +30,7 @@ import re
 import shutil
 import socket
 import subprocess
+import sqlite3
 import sys
 import time
 import webbrowser
@@ -41,6 +42,7 @@ REPO_ROOT = Path(__file__).resolve().parent
 DEFAULT_DATA_DIR = REPO_ROOT / "data"
 DEFAULT_STREAMLIT_APP = REPO_ROOT / "streamlit_app.py"
 DEFAULT_IMPORTER = REPO_ROOT / "scripts" / "spnkr_import_db.py"
+DEFAULT_FILM_ROSTER_REFETCH = REPO_ROOT / "scripts" / "refetch_film_roster.py"
 
 
 def _pick_free_port() -> int:
@@ -215,6 +217,54 @@ def _infer_player_from_db_filename(db_path: Path) -> str | None:
     return None
 
 
+def _guess_default_spnkr_db() -> Path | None:
+    env = os.environ.get("OPENSPARTAN_DB_PATH") or os.environ.get("OPENSPARTAN_DB")
+    if env:
+        p = Path(env).expanduser()
+        if p.exists():
+            return p.resolve()
+
+    dbs = _iter_spnkr_dbs(DEFAULT_DATA_DIR)
+    if not dbs:
+        return None
+    # Choisit la plus récemment modifiée.
+    return max(dbs, key=lambda p: p.stat().st_mtime)
+
+
+def _latest_match_id_from_db(db_path: Path) -> str | None:
+    """Retourne le MatchId le plus récent selon MatchStats.MatchInfo.StartTime."""
+    try:
+        con = sqlite3.connect(str(db_path))
+    except Exception:
+        return None
+    try:
+        cur = con.cursor()
+        cur.execute(
+            """
+            SELECT
+              json_extract(ResponseBody,'$.MatchId') as MatchId,
+              json_extract(ResponseBody,'$.MatchInfo.StartTime') as Start
+            FROM MatchStats
+            WHERE json_extract(ResponseBody,'$.MatchId') IS NOT NULL
+              AND json_extract(ResponseBody,'$.MatchInfo.StartTime') IS NOT NULL
+            ORDER BY Start DESC
+            LIMIT 1
+            """
+        )
+        row = cur.fetchone()
+        if not row:
+            return None
+        mid = row[0]
+        return str(mid).strip() if isinstance(mid, str) and mid.strip() else None
+    except Exception:
+        return None
+    finally:
+        try:
+            con.close()
+        except Exception:
+            pass
+
+
 def _cmd_run(args: argparse.Namespace) -> int:
     db = Path(args.db).expanduser().resolve() if args.db else None
     return _launch_streamlit(db_path=db, port=args.port, no_browser=args.no_browser)
@@ -283,6 +333,62 @@ def _cmd_run_with_refresh(args: argparse.Namespace) -> int:
     return _launch_streamlit(db_path=db, port=args.port, no_browser=args.no_browser)
 
 
+def _cmd_repair_aliases(args: argparse.Namespace) -> int:
+    if not DEFAULT_FILM_ROSTER_REFETCH.exists():
+        raise SystemExit(f"Introuvable: {DEFAULT_FILM_ROSTER_REFETCH}")
+
+    db_path = Path(args.db).expanduser().resolve() if args.db else None
+    if db_path is None:
+        guessed = _guess_default_spnkr_db()
+        if guessed is None:
+            raise SystemExit("Fournis --db (aucune DB par défaut détectée).")
+        db_path = guessed
+
+    match_id = str(getattr(args, "match_id", "") or "").strip() or None
+    if getattr(args, "latest", False) and not match_id:
+        match_id = _latest_match_id_from_db(db_path)
+        if not match_id:
+            raise SystemExit("Impossible de déterminer le match le plus récent (MatchStats).")
+
+    cmd = [sys.executable, str(DEFAULT_FILM_ROSTER_REFETCH), "--db", str(db_path), "--write-aliases"]
+
+    if getattr(args, "aliases", None):
+        cmd += ["--aliases", str(args.aliases)]
+
+    if getattr(args, "patch_highlight_events", False):
+        cmd.append("--patch-highlight-events")
+
+    # Ciblage: match unique (par défaut) ou tous.
+    if getattr(args, "all_matches", False):
+        cmd.append("--all-matches")
+        if getattr(args, "db_source_table", None):
+            cmd += ["--db-source-table", str(args.db_source_table)]
+    else:
+        if not match_id:
+            raise SystemExit("Choisis --latest, --match-id, ou --all-matches")
+        cmd += ["--match-id", match_id]
+
+    # Contrôle download
+    if getattr(args, "include_type2", False):
+        cmd.append("--include-type2")
+    if getattr(args, "max_type2_chunks", None) is not None:
+        cmd += ["--max-type2-chunks", str(int(args.max_type2_chunks))]
+    if getattr(args, "max_total_chunks", None) is not None:
+        cmd += ["--max-total-chunks", str(int(args.max_total_chunks))]
+    if getattr(args, "print_limit", None) is not None:
+        cmd += ["--print-limit", str(int(args.print_limit))]
+
+    print("[Repair] Film roster -> xuid_aliases.json")
+    print("- db:", db_path)
+    if getattr(args, "all_matches", False):
+        print("- mode: all-matches")
+    else:
+        print("- match_id:", match_id)
+
+    proc = subprocess.run(cmd, cwd=str(REPO_ROOT))
+    return int(proc.returncode)
+
+
 def _interactive(argv0: str) -> int:
     print("OpenSpartan Graphs — Lanceur")
     print("(Astuce: ajoute --help pour les options CLI)")
@@ -291,9 +397,10 @@ def _interactive(argv0: str) -> int:
     print("  2) Lancer le dashboard + refresh SPNKr")
     print("  3) Refresh SPNKr (une DB)")
     print("  4) Refresh SPNKr (toutes les DB data/spnkr*.db)")
+    print("  5) Réparer les aliases (film -> xuid_aliases.json)")
     print("  Q) Quitter")
 
-    choice = input("\nTon choix (1/2/3/4/Q): ").strip().lower()
+    choice = input("\nTon choix (1/2/3/4/5/Q): ").strip().lower()
     if choice in {"q", "quit", "exit"}:
         return 0
 
@@ -304,6 +411,28 @@ def _interactive(argv0: str) -> int:
         if not player:
             print("Aucun joueur fourni.")
             return 2
+
+    if choice == "5":
+        default_db = _guess_default_spnkr_db()
+        default_str = str(default_db) if default_db else ""
+        db_s = input(f"DB à réparer [défaut: {default_str}]: ").strip() or default_str
+        if not db_s:
+            print("Aucune DB fournie.")
+            return 2
+        args = argparse.Namespace(
+            db=db_s,
+            latest=True,
+            match_id=None,
+            all_matches=False,
+            db_source_table="HighlightEvents",
+            include_type2=False,
+            max_type2_chunks=0,
+            max_total_chunks=None,
+            print_limit=20,
+            patch_highlight_events=False,
+            aliases=None,
+        )
+        return _cmd_repair_aliases(args)
 
     if choice == "1":
         return _launch_streamlit(db_path=None, port=None, no_browser=False)
@@ -432,6 +561,51 @@ def _build_parser() -> argparse.ArgumentParser:
     p_runref.add_argument("--port", type=int, default=None, help="Port (sinon auto)")
     p_runref.add_argument("--no-browser", action="store_true", help="N'ouvre pas le navigateur")
     p_runref.set_defaults(func=_cmd_run_with_refresh)
+
+    p_rep = sub.add_parser(
+        "repair-aliases",
+        help="Répare/complète xuid_aliases.json depuis les film chunks (SPNKr auth requise)",
+    )
+    p_rep.add_argument("--db", default=None, help="DB cible (défaut: OPENSPARTAN_DB_PATH ou data/spnkr*.db récent)")
+    p_rep.add_argument("--match-id", default=None, help="Match GUID à réparer")
+    p_rep.add_argument("--latest", action="store_true", help="Répare le match le plus récent (MatchStats)")
+    p_rep.add_argument("--all-matches", action="store_true", help="Répare tous les matchs de la DB (long)")
+    p_rep.add_argument(
+        "--db-source-table",
+        choices=["HighlightEvents", "MatchStats"],
+        default="HighlightEvents",
+        help="Table utilisée pour lister les MatchId quand --all-matches est activé",
+    )
+    p_rep.add_argument("--aliases", default=None, help="Chemin vers xuid_aliases.json (optionnel)")
+    p_rep.add_argument(
+        "--patch-highlight-events",
+        action="store_true",
+        help="Optionnel: patch HighlightEvents.ResponseBody.gamertag en plus des aliases",
+    )
+    p_rep.add_argument(
+        "--include-type2",
+        action="store_true",
+        help="Inclut aussi des chunks type2 (par défaut: type1 seulement)",
+    )
+    p_rep.add_argument(
+        "--max-type2-chunks",
+        type=int,
+        default=0,
+        help="Limite le nombre de chunks type2 téléchargés (défaut: 0)",
+    )
+    p_rep.add_argument(
+        "--max-total-chunks",
+        type=int,
+        default=None,
+        help="Limite le nombre total de chunks téléchargés (type1+type2)",
+    )
+    p_rep.add_argument(
+        "--print-limit",
+        type=int,
+        default=20,
+        help="Limite le nombre de lignes affichées",
+    )
+    p_rep.set_defaults(func=_cmd_repair_aliases)
 
     return ap
 
