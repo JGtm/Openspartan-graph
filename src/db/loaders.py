@@ -10,12 +10,63 @@ from src.db.parsers import (
     coerce_duration_seconds,
     coerce_number,
     parse_iso_utc,
+    parse_xuid_input,
 )
 from src.db import queries
 from src.models import MatchRow, FriendMatch
 
 
 _CTRL_RE = re.compile(r"[\x00-\x1f\x7f]")
+
+
+_MOJIBAKE_MARKERS = (
+    "Ã",
+    "Â",
+    "â€",
+    "â€™",
+    "â€˜",
+    "â€œ",
+    "â€�",
+    "â€“",
+    "â€”",
+    "ðŸ",
+)
+
+
+def _mojibake_score(s: str) -> int:
+    return sum(s.count(m) for m in _MOJIBAKE_MARKERS)
+
+
+def _fix_mojibake(s: str) -> str:
+    """Tente de corriger un texte UTF-8 mal décodé (mojibake).
+
+    Exemples typiques:
+    - "FranÃ§ois" -> "François"
+    - "Dâ€™Artagnan" -> "D’Artagnan"
+    """
+    if not s:
+        return s
+
+    base_score = _mojibake_score(s)
+    if base_score == 0:
+        return s
+
+    best = s
+    best_score = base_score
+
+    for enc in ("latin1", "cp1252"):
+        try:
+            candidate = s.encode(enc).decode("utf-8")
+        except Exception:
+            continue
+        cand_score = _mojibake_score(candidate)
+        if cand_score < best_score:
+            best = candidate
+            best_score = cand_score
+            if best_score == 0:
+                break
+
+    return best
 
 
 def _sanitize_gamertag(value: Any) -> Any:
@@ -34,7 +85,16 @@ def _sanitize_gamertag(value: Any) -> Any:
 
     if not isinstance(value, str):
         return value
-    s = value.replace("\ufffd", "")
+
+    # Certains dumps SPNKr mettent dans "gamertag" un champ binaire/structuré
+    # (souvent avec des NUL). Dans ce cas, ce n'est pas un vrai gamertag,
+    # et le garder dégrade l'UI (ex: "ipP\u0100", "aba73\u0103").
+    # On préfère alors considérer le nom comme absent et retomber sur XUID/alias.
+    if _CTRL_RE.search(value):
+        return ""
+
+    s = _fix_mojibake(value)
+    s = s.replace("\ufffd", "")
     s = _CTRL_RE.sub("", s)
     s = " ".join(s.split()).strip()
     return s or value
@@ -99,6 +159,74 @@ def load_highlight_events_for_match(db_path: str, match_id: str) -> list[dict[st
                 if "gamertag" in obj:
                     obj["gamertag"] = _sanitize_gamertag(obj.get("gamertag"))
                 out.append(obj)
+    return out
+
+
+def load_match_player_gamertags(db_path: str, match_id: str) -> Dict[str, str]:
+    """Retourne un mapping XUID -> Gamertag pour un match.
+
+    Les gamertags des HighlightEvents peuvent être absents ou mal encodés.
+    MatchStats contient généralement les identités des joueurs de manière plus fiable.
+
+    Returns:
+        Dict {xuid_str: gamertag_str}
+    """
+    if not match_id:
+        return {}
+
+    with get_connection(db_path) as con:
+        cur = con.cursor()
+        cur.execute(queries.LOAD_MATCH_STATS_BY_MATCH_ID, (match_id,))
+        row = cur.fetchone()
+        if not row or not isinstance(row[0], str) or not row[0]:
+            return {}
+
+        try:
+            payload = json.loads(row[0])
+        except Exception:
+            return {}
+
+    players = payload.get("Players")
+    if not isinstance(players, list) or not players:
+        return {}
+
+    out: Dict[str, str] = {}
+
+    def _extract_from_player_obj(p: Any) -> tuple[str | None, str | None]:
+        if not isinstance(p, dict):
+            return None, None
+
+        pid = p.get("PlayerId")
+        xuid_val: Any = None
+        gt_val: Any = None
+
+        if isinstance(pid, dict):
+            xuid_val = pid.get("Xuid") or pid.get("xuid")
+            gt_val = pid.get("Gamertag") or pid.get("gamertag")
+        elif isinstance(pid, str):
+            # Parfois, PlayerId peut être une chaîne (gamertag ou xuid)
+            xuid_val = pid
+            gt_val = p.get("Gamertag") or p.get("gamertag")
+
+        if xuid_val is None:
+            xuid_val = p.get("Xuid") or p.get("xuid")
+        if gt_val is None:
+            gt_val = p.get("Gamertag") or p.get("gamertag")
+
+        xuid_s = str(xuid_val or "").strip()
+        # Normalise xuid("...") -> "..." si besoin
+        xuid_norm = parse_xuid_input(xuid_s) or xuid_s
+        gt_s = _sanitize_gamertag(gt_val)
+        if not isinstance(gt_s, str):
+            gt_s = str(gt_s or "").strip()
+        gt_s = gt_s.strip()
+        return (xuid_norm or None), (gt_s or None)
+
+    for p in players:
+        xuid_norm, gt = _extract_from_player_obj(p)
+        if xuid_norm and gt:
+            out[str(xuid_norm)] = gt
+
     return out
 
 

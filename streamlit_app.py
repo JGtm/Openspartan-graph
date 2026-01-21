@@ -40,6 +40,7 @@ from src.db import (
     load_match_medals_for_player,
     load_top_medals,
     load_highlight_events_for_match,
+    load_match_player_gamertags,
     has_table,
 )
 from src.db.parsers import parse_xuid_input
@@ -1018,6 +1019,12 @@ def cached_load_highlight_events_for_match(db_path: str, match_id: str, *, db_ke
 
 
 @st.cache_data(show_spinner=False)
+def cached_load_match_player_gamertags(db_path: str, match_id: str, *, db_key: str | None = None):
+    _ = db_key
+    return load_match_player_gamertags(db_path, match_id)
+
+
+@st.cache_data(show_spinner=False)
 def cached_load_top_medals(
     db_path: str,
     xuid: str,
@@ -1588,6 +1595,9 @@ def _render_match_view(
         with st.spinner("Chargement des highlight events (film)…"):
             he = cached_load_highlight_events_for_match(db_path, match_id.strip(), db_key=db_key)
 
+        # Mapping plus fiable que les gamertags des highlight events
+        match_gt_map = cached_load_match_player_gamertags(db_path, match_id.strip(), db_key=db_key)
+
         pairs = compute_killer_victim_pairs(he, tolerance_ms=5)
         if not pairs:
             st.info("Aucune paire kill/death trouvée (ou match sans timeline exploitable).")
@@ -1607,6 +1617,13 @@ def _render_match_view(
                 gt = str(gamertag_value or "").strip()
                 xu_raw = str(xuid_value or "").strip()
                 xu = parse_xuid_input(xu_raw) or xu_raw
+
+                # Si on connait le gamertag depuis MatchStats, on le préfère.
+                xu_key = str(xu).strip() if xu is not None else ""
+                if xu_key and isinstance(match_gt_map, dict):
+                    mapped = match_gt_map.get(xu_key)
+                    if isinstance(mapped, str) and mapped.strip():
+                        return mapped.strip()
 
                 # Si le gamertag ressemble à un XUID / placeholder, on l'ignore.
                 if (not gt) or gt == "?" or gt.isdigit() or gt.lower().startswith("xuid("):
