@@ -4,7 +4,7 @@
 
 ### 6) Bannière + rang du joueur (haut de page)
 - À analyser selon ce qui est récupérable via la source de données (probablement import SPNKr + stockage en DB).
-- Objectif: afficher en haut de page le rang + bannière + images associées (fallback si indisponible).
+- Objectif: afficher en haut de page le rang + bannière + emblemes (fallback si indisponible).
 
 ### 11) Citations / Commendations (style Halo 5)
 - Mis de côté pour l’instant.
