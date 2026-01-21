@@ -254,6 +254,25 @@ FAQ (Azure)
 
 Ensuite, pointez la sidebar du dashboard sur `data\spnkr.db`.
 
+### Précharger le profil (appearance + images)
+
+Si tu veux **pré-télécharger** les images du header (emblem/backdrop/nameplate) sans ouvrir Streamlit,
+tu peux utiliser :
+
+```bash
+python scripts/prefetch_profile_assets.py <Gamertag>
+
+# Force le refresh API + re-download des images
+python scripts/prefetch_profile_assets.py <Gamertag> --force
+
+# Mode offline: n'utilise que les caches existants
+python scripts/prefetch_profile_assets.py <Gamertag> --offline
+```
+
+Le script alimente les caches suivants :
+- `data/cache/profile_api/` (JSON d'apparence)
+- `data/cache/player_assets/` (images)
+
 ## ⚡ Performance (démarrage / rerun)
 
 Streamlit relance le script à chaque interaction (rerun). Pour diagnostiquer un démarrage un peu long :

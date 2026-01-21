@@ -90,7 +90,10 @@ from src.ui import (
     save_settings,
     directory_input,
     file_input,
+    get_profile_appearance,
+    ensure_spnkr_tokens,
 )
+from src.ui.player_assets import download_image_to_cache, ensure_local_image_path
 from src.ui.medals import (
     load_medal_name_maps,
     medal_has_known_label,
@@ -1245,6 +1248,110 @@ def _render_settings_page(settings: AppSettings) -> AppSettings:
             placeholder="Ex: C:\\...\\db_profiles.json",
         )
 
+    with st.expander("Profil joueur (bannière / rang)", expanded=False):
+        st.caption(
+            "Affichage en haut de page. Si tu actives le téléchargement, les URLs seront mises en cache automatiquement."
+        )
+        profile_assets_download_enabled = st.toggle(
+            "Autoriser le téléchargement d'images depuis une URL",
+            value=bool(getattr(settings, "profile_assets_download_enabled", False)),
+            help="Si désactivé, seules les images déjà en cache ou des chemins locaux sont utilisés.",
+        )
+        profile_assets_auto_refresh_hours = st.number_input(
+            "Rafraîchissement auto (heures)",
+            min_value=0,
+            max_value=24 * 30,
+            value=int(getattr(settings, "profile_assets_auto_refresh_hours", 24) or 0),
+            step=1,
+            help="0 = ne re-télécharge jamais si le cache existe. Sinon, re-télécharge si le cache est plus vieux que N heures.",
+        )
+
+        st.markdown("---")
+        profile_api_enabled = st.toggle(
+            "Récupérer automatiquement depuis l'API (SPNKr)",
+            value=bool(getattr(settings, "profile_api_enabled", False)),
+            help=(
+                "Récupère service tag + emblem/backdrop/nameplate à partir du XUID (opt-in réseau). "
+                "Nécessite des tokens dans l'environnement: SPNKR_SPARTAN_TOKEN et SPNKR_CLEARANCE_TOKEN."
+            ),
+        )
+        profile_api_auto_refresh_hours = st.number_input(
+            "Rafraîchissement API (heures)",
+            min_value=0,
+            max_value=24 * 30,
+            value=int(getattr(settings, "profile_api_auto_refresh_hours", 6) or 0),
+            step=1,
+            help="Cache disque des URLs d'apparence. 0 = désactivé (re-fetch à chaque run).",
+        )
+        profile_banner = st.text_input(
+            "Bannière (URL ou chemin local)",
+            value=str(getattr(settings, "profile_banner", "") or "").strip(),
+            placeholder="https://.../banner.png ou C:\\...\\banner.png",
+        )
+        profile_emblem = st.text_input(
+            "Emblème (URL ou chemin local)",
+            value=str(getattr(settings, "profile_emblem", "") or "").strip(),
+            placeholder="https://.../emblem.png ou C:\\...\\emblem.png",
+        )
+        profile_backdrop = st.text_input(
+            "Backdrop (fond) (URL ou chemin local)",
+            value=str(getattr(settings, "profile_backdrop", "") or "").strip(),
+            placeholder="https://.../backdrop.png ou C:\\...\\backdrop.png",
+            help="Si défini, utilisé en priorité comme image de fond du header.",
+        )
+        profile_nameplate = st.text_input(
+            "Nameplate (plaque) (URL ou chemin local)",
+            value=str(getattr(settings, "profile_nameplate", "") or "").strip(),
+            placeholder="https://.../nameplate.png ou C:\\...\\nameplate.png",
+            help="Optionnel: affiché derrière le gamertag/service tag.",
+        )
+        profile_service_tag = st.text_input(
+            "Service tag",
+            value=str(getattr(settings, "profile_service_tag", "") or "").strip(),
+            placeholder="Ex: JGTM",
+        )
+        profile_id_badge_text_color = st.text_input(
+            "Couleur de texte (ID badge)",
+            value=str(getattr(settings, "profile_id_badge_text_color", "") or "").strip(),
+            placeholder="Ex: #FFFFFF",
+            help="Optionnel: couleur de texte sur la plaque (par défaut: texte standard).",
+        )
+        profile_rank_label = st.text_input(
+            "Rang (libellé)",
+            value=str(getattr(settings, "profile_rank_label", "") or "").strip(),
+            placeholder="Ex: Diamond III",
+        )
+        profile_rank_subtitle = st.text_input(
+            "Rang (détail)",
+            value=str(getattr(settings, "profile_rank_subtitle", "") or "").strip(),
+            placeholder="Ex: CSR 1540",
+        )
+
+        if st.button("Forcer téléchargement maintenant (si URL)", width="stretch"):
+            if not profile_assets_download_enabled:
+                st.info("Active d'abord l'option de téléchargement.")
+            else:
+                ok_any = False
+                for (label, url, prefix) in (
+                    ("bannière", profile_banner, "banner"),
+                    ("emblème", profile_emblem, "emblem"),
+                    ("backdrop", profile_backdrop, "backdrop"),
+                    ("nameplate", profile_nameplate, "nameplate"),
+                ):
+                    u = str(url or "").strip()
+                    if not u:
+                        continue
+                    if not (u.startswith("http://") or u.startswith("https://")):
+                        continue
+                    ok, err, out_path = download_image_to_cache(u, prefix=prefix)
+                    if ok:
+                        ok_any = True
+                        st.success(f"Téléchargement OK ({label}).")
+                    else:
+                        st.warning(f"Téléchargement KO ({label}): {err}")
+                if ok_any:
+                    st.info("Les images sont mises en cache localement et seront utilisées par le header.")
+
 
 
     cols = st.columns(2)
@@ -1264,6 +1371,18 @@ def _render_settings_page(settings: AppSettings) -> AppSettings:
             spnkr_refresh_with_highlight_events=bool(with_he),
             aliases_path=str(aliases_path or "").strip(),
             profiles_path=str(profiles_path or "").strip(),
+            profile_assets_download_enabled=bool(profile_assets_download_enabled),
+            profile_assets_auto_refresh_hours=int(profile_assets_auto_refresh_hours),
+            profile_api_enabled=bool(profile_api_enabled),
+            profile_api_auto_refresh_hours=int(profile_api_auto_refresh_hours),
+            profile_banner=str(profile_banner or "").strip(),
+            profile_emblem=str(profile_emblem or "").strip(),
+            profile_backdrop=str(profile_backdrop or "").strip(),
+            profile_nameplate=str(profile_nameplate or "").strip(),
+            profile_service_tag=str(profile_service_tag or "").strip(),
+            profile_id_badge_text_color=str(profile_id_badge_text_color or "").strip(),
+            profile_rank_label=str(profile_rank_label or "").strip(),
+            profile_rank_subtitle=str(profile_rank_subtitle or "").strip(),
         )
         ok, err = save_settings(new_settings)
         if ok:
@@ -1730,21 +1849,6 @@ def _render_match_view(
             ),
             secondary_y=True,
         )
-        if exp_ratio_f is not None:
-            exp_fig.add_trace(
-                go.Scatter(
-                    x=labels,
-                    y=[exp_ratio_f] * len(labels),
-                    mode="lines+markers",
-                    name="Ratio attendu",
-                    line=dict(color=HALO_COLORS.violet, width=3, dash="dot"),
-                    marker=dict(size=6),
-                    hovertemplate="ratio (attendu): %{y:.2f}<extra></extra>",
-                ),
-                secondary_y=True,
-            )
-        else:
-            st.caption("Ratio attendu indisponible (Assists attendues manquantes dans PlayerMatchStats).")
 
         exp_fig.update_layout(
             barmode="group",
@@ -2280,6 +2384,122 @@ def main() -> None:
 
     me_name = display_name_from_xuid(xuid.strip()) if str(xuid or "").strip() else "(joueur)"
     aliases_key = _aliases_cache_key()
+
+    # Auto-profil (SPNKr) : récupère des URLs d'apparence (service tag / emblem / backdrop / nameplate)
+    # et ne remplace pas les champs manuels si déjà remplis.
+    api_enabled = bool(getattr(settings, "profile_api_enabled", False))
+    api_refresh_h = int(getattr(settings, "profile_api_auto_refresh_hours", 0) or 0)
+    api_app = None
+    api_err = None
+    if api_enabled and str(xuid or "").strip():
+        try:
+            api_app, api_err = get_profile_appearance(
+                xuid=str(xuid).strip(),
+                enabled=True,
+                refresh_hours=api_refresh_h,
+            )
+        except Exception as e:
+            api_app, api_err = None, str(e)
+        if api_err:
+            st.caption(f"Profil auto (SPNKr): {api_err}")
+
+    # Header (profil joueur):
+    # - chemins locaux OK
+    # - URLs: mise en cache automatique uniquement si l'option est activée
+    dl_enabled = bool(getattr(settings, "profile_assets_download_enabled", False)) or bool(api_enabled)
+    refresh_h = int(getattr(settings, "profile_assets_auto_refresh_hours", 0) or 0)
+
+    # Valeurs manuelles (prioritaires) / sinon auto depuis API.
+    banner_value = str(getattr(settings, "profile_banner", "") or "").strip()
+    emblem_value = str(getattr(settings, "profile_emblem", "") or "").strip() or (getattr(api_app, "emblem_image_url", None) if api_app else "")
+    backdrop_value = str(getattr(settings, "profile_backdrop", "") or "").strip() or (getattr(api_app, "backdrop_image_url", None) if api_app else "")
+    nameplate_value = str(getattr(settings, "profile_nameplate", "") or "").strip() or (getattr(api_app, "nameplate_image_url", None) if api_app else "")
+    service_tag_value = str(getattr(settings, "profile_service_tag", "") or "").strip() or (getattr(api_app, "service_tag", None) if api_app else "")
+    rank_label_value = str(getattr(settings, "profile_rank_label", "") or "").strip() or (getattr(api_app, "rank_label", None) if api_app else "")
+    rank_subtitle_value = str(getattr(settings, "profile_rank_subtitle", "") or "").strip() or (getattr(api_app, "rank_subtitle", None) if api_app else "")
+    rank_icon_value = (getattr(api_app, "rank_image_url", None) if api_app else "") or ""
+
+    def _needs_halo_auth(url: str) -> bool:
+        u = str(url or "").strip().lower()
+        if not u:
+            return False
+        return (
+            ("/hi/images/file/" in u)
+            or u.startswith("inventory/")
+            or u.startswith("/inventory/")
+            or ("gamecms-hacs.svc.halowaypoint.com/hi/images/file/" in u)
+        )
+
+    # Si on doit télécharger des assets protégés et qu'on vient du cache, les tokens peuvent manquer.
+    if dl_enabled and (not str(os.environ.get("SPNKR_CLEARANCE_TOKEN") or "").strip()):
+        if _needs_halo_auth(backdrop_value) or _needs_halo_auth(rank_icon_value):
+            _ok, _err = ensure_spnkr_tokens(timeout_seconds=12)
+
+    banner_path = ensure_local_image_path(
+        banner_value,
+        prefix="banner",
+        download_enabled=dl_enabled,
+        auto_refresh_hours=refresh_h,
+    )
+    emblem_path = ensure_local_image_path(
+        emblem_value,
+        prefix="emblem",
+        download_enabled=dl_enabled,
+        auto_refresh_hours=refresh_h,
+    )
+    backdrop_path = ensure_local_image_path(
+        backdrop_value,
+        prefix="backdrop",
+        download_enabled=dl_enabled,
+        auto_refresh_hours=refresh_h,
+    )
+    nameplate_path = ensure_local_image_path(
+        nameplate_value,
+        prefix="nameplate",
+        download_enabled=dl_enabled,
+        auto_refresh_hours=refresh_h,
+    )
+    rank_icon_path = ensure_local_image_path(
+        rank_icon_value,
+        prefix="rank",
+        download_enabled=dl_enabled,
+        auto_refresh_hours=refresh_h,
+    )
+
+    # Diagnostics non bloquants (aide à comprendre pourquoi une image ne s'affiche pas)
+    def _warn_asset(prefix: str, url: str, path: str | None) -> None:
+        if not dl_enabled:
+            return
+        u = str(url or "").strip()
+        if not u or (not u.startswith("http://") and not u.startswith("https://")):
+            return
+        if path:
+            return
+        key = f"_warned_asset_{prefix}_{hash(u)}"
+        if st.session_state.get(key):
+            return
+        st.session_state[key] = True
+        ok, err, _out = download_image_to_cache(u, prefix=prefix, timeout_seconds=12)
+        if not ok:
+            st.caption(f"Asset '{prefix}' non téléchargé: {err}")
+
+    _warn_asset("backdrop", backdrop_value, backdrop_path)
+    _warn_asset("rank", rank_icon_value, rank_icon_path)
+    st.markdown(
+        get_hero_html(
+            player_name=me_name,
+            service_tag=str(service_tag_value or "").strip() or None,
+            rank_label=str(rank_label_value or "").strip() or None,
+            rank_subtitle=str(rank_subtitle_value or "").strip() or None,
+            rank_icon_path=rank_icon_path,
+            banner_path=banner_path,
+            backdrop_path=backdrop_path,
+            nameplate_path=nameplate_path,
+            id_badge_text_color=str(getattr(settings, "profile_id_badge_text_color", "") or "").strip() or None,
+            emblem_path=emblem_path,
+        ),
+        unsafe_allow_html=True,
+    )
 
     # ==========================================================================
     # Chargement des données
