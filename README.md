@@ -72,15 +72,32 @@ pip install -e ".[all]"
 
 ### Dashboard (recommandé)
 
-**Le plus simple :** double-cliquez sur `run_dashboard.bat`
+Le mode de lancement recommandé est désormais un **lanceur Python unique**.
 
-Ou en ligne de commande :
+Mode interactif (max 2 questions) :
 
 ```bash
-# Via le launcher
+python openspartan_launcher.py
+```
+
+Mode CLI (options claires + `--help` indispensable) :
+
+```bash
+python openspartan_launcher.py --help
+
+# Lancer le dashboard
+python openspartan_launcher.py run
+```
+
+Note : les fichiers `.bat` restent présents pour compatibilité mais sont considérés *deprecated* et délèguent vers `openspartan_launcher.py`.
+
+Alternative (si tu veux rester sur les anciens points d’entrée) :
+
+```bash
+# Ancien launcher (conservé)
 python run_dashboard.py
 
-# Ou directement Streamlit
+# Direct Streamlit
 streamlit run streamlit_app.py
 ```
 
@@ -96,13 +113,13 @@ Si vous utilisez l'import SPNKr ([scripts/spnkr_import_db.py](scripts/spnkr_impo
 Exemple (recommandé, mode minimal fiable):
 
 ```bash
-python run_dashboard.py --refresh-spnkr --refresh-no-assets
+python openspartan_launcher.py run+refresh --player <GamertagOuXUID> --no-assets
 ```
 
 Au premier lancement (si `data/spnkr.db` n'existe pas ou est vide), le launcher fait automatiquement une **construction complète** (bootstrap) avec un `--max-matches` élevé et `--match-type all`.
 Ensuite, les lancements suivants font un refresh plus léger.
 
-Options utiles:
+Options utiles (voir `--help`):
 
 - `--refresh-max-matches 50` (défaut: 50)
 - `--refresh-bootstrap-max-matches 2000` (défaut: 2000)
@@ -115,12 +132,12 @@ Options utiles:
 Le projet est configuré avec des valeurs par défaut pour simplifier l'usage en local.
 
 - **Dans le code (valeurs en dur)**: modifie `DEFAULT_PLAYER_GAMERTAG` et `DEFAULT_PLAYER_XUID` dans [src/config.py](src/config.py).
-- **Dans le launcher Windows (valeurs en dur)**: modifie `DEFAULT_GAMERTAG` et `DEFAULT_XUID` dans [run_dashboard.bat](run_dashboard.bat).
+- **Dans le launcher (conseillé)**: passe `--player` à `openspartan_launcher.py` ou définis `SPNKR_PLAYER`.
 - **Au lancement (sans toucher au code)**:
   - `SPNKR_PLAYER` (env) permet d'override le joueur ciblé par le refresh SPNKr.
   - Le chemin DB utilisé par le dashboard peut être forcé via `OPENSPARTAN_DB_PATH` (ou `OPENSPARTAN_DB`).
 
-Sous Windows, le launcher [run_dashboard.bat](run_dashboard.bat) a un défaut (actuellement `JGtm`) et tu peux l'override via `SPNKR_PLAYER`.
+Sous Windows, les `.bat` sont maintenant *deprecated* : ils délèguent vers `openspartan_launcher.py`.
 
 ### CLI (génération PNG)
 
