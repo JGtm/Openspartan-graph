@@ -14,6 +14,7 @@ from src.db.loaders import (
     query_matches_with_friend,
     list_other_player_xuids,
     list_top_teammates,
+    get_sync_metadata,
 )
 from src.db.parsers import (
     guess_xuid_from_db_path,
@@ -45,6 +46,7 @@ __all__ = [
     "query_matches_with_friend",
     "list_other_player_xuids",
     "list_top_teammates",
+    "get_sync_metadata",
     # parsers
     "guess_xuid_from_db_path",
     "parse_iso_utc",

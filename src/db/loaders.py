@@ -1121,3 +1121,65 @@ def list_top_teammates(db_path: str, self_xuid: str, limit: int = 20) -> List[tu
                 continue
             out.append((m.group(1), int(matches)))
         return out
+
+
+def get_sync_metadata(db_path: str) -> Dict[str, Any]:
+    """Récupère les métadonnées de synchronisation depuis la table SyncMeta.
+    
+    Args:
+        db_path: Chemin vers le fichier .db.
+        
+    Returns:
+        Dictionnaire contenant:
+        - last_sync_at: datetime du dernier sync (ou None)
+        - last_match_time: datetime du dernier match importé (ou None)
+        - total_matches: nombre total de matchs (ou 0)
+        - player_xuid: XUID du joueur principal (ou None)
+    """
+    result: Dict[str, Any] = {
+        "last_sync_at": None,
+        "last_match_time": None,
+        "total_matches": 0,
+        "player_xuid": None,
+    }
+    
+    try:
+        with get_connection(db_path) as con:
+            cur = con.cursor()
+            
+            # Vérifier si la table existe
+            cur.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='SyncMeta'"
+            )
+            if not cur.fetchone():
+                # Fallback: compter les matchs depuis MatchStats
+                cur.execute("SELECT COUNT(*) FROM MatchStats")
+                row = cur.fetchone()
+                result["total_matches"] = row[0] if row else 0
+                return result
+            
+            # Récupérer toutes les métadonnées
+            cur.execute("SELECT Key, Value, UpdatedAt FROM SyncMeta")
+            for key, value, updated_at in cur.fetchall():
+                if key == "last_sync_at" and value:
+                    result["last_sync_at"] = parse_iso_utc(value)
+                elif key == "last_match_time" and value:
+                    result["last_match_time"] = parse_iso_utc(value)
+                elif key == "total_matches" and value:
+                    try:
+                        result["total_matches"] = int(value)
+                    except (ValueError, TypeError):
+                        pass
+                elif key == "player_xuid" and value:
+                    result["player_xuid"] = str(value).strip()
+            
+            # Si total_matches n'est pas dans SyncMeta, compter depuis MatchStats
+            if result["total_matches"] == 0:
+                cur.execute("SELECT COUNT(*) FROM MatchStats")
+                row = cur.fetchone()
+                result["total_matches"] = row[0] if row else 0
+                
+    except Exception:
+        pass
+    
+    return result

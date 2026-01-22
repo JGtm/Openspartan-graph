@@ -48,6 +48,7 @@ from src.db import (
     load_highlight_events_for_match,
     load_match_player_gamertags,
     has_table,
+    get_sync_metadata,
 )
 from src.db.parsers import parse_xuid_input
 from src.db import infer_spnkr_player_from_db_path
@@ -259,6 +260,78 @@ def _is_spnkr_db_path(db_path: str) -> bool:
         return False
 
 
+def _render_sync_indicator(db_path: str) -> None:
+    """Affiche l'indicateur de dernière synchronisation dans la sidebar.
+    
+    Couleurs:
+    - 🟢 Vert: sync < 1h
+    - 🟡 Jaune: sync < 24h  
+    - 🔴 Rouge: sync > 24h ou jamais
+    """
+    if not db_path or not os.path.exists(db_path):
+        return
+    
+    meta = get_sync_metadata(db_path)
+    last_sync = meta.get("last_sync_at")
+    total_matches = meta.get("total_matches", 0)
+    
+    now = datetime.now(timezone.utc)
+    
+    if last_sync:
+        delta = now - last_sync
+        hours = delta.total_seconds() / 3600
+        
+        if hours < 1:
+            minutes = int(delta.total_seconds() / 60)
+            indicator = "🟢"
+            time_str = f"il y a {minutes} min" if minutes > 0 else "à l'instant"
+        elif hours < 24:
+            indicator = "🟡"
+            h = int(hours)
+            time_str = f"il y a {h}h"
+        else:
+            indicator = "🔴"
+            days = int(hours / 24)
+            if days == 1:
+                time_str = "il y a 1 jour"
+            else:
+                time_str = f"il y a {days} jours"
+        
+        sync_text = f"{indicator} Sync {time_str}"
+    else:
+        # Pas de métadonnées de sync, on utilise la date de modification du fichier
+        try:
+            mtime = os.path.getmtime(db_path)
+            mtime_dt = datetime.fromtimestamp(mtime, tz=timezone.utc)
+            delta = now - mtime_dt
+            hours = delta.total_seconds() / 3600
+            
+            if hours < 1:
+                indicator = "🟢"
+                minutes = int(delta.total_seconds() / 60)
+                time_str = f"il y a {minutes} min" if minutes > 0 else "à l'instant"
+            elif hours < 24:
+                indicator = "🟡"
+                h = int(hours)
+                time_str = f"il y a {h}h"
+            else:
+                indicator = "🔴"
+                days = int(hours / 24)
+                time_str = f"il y a {days} jour{'s' if days > 1 else ''}"
+            
+            sync_text = f"{indicator} Modifié {time_str}"
+        except Exception:
+            sync_text = "🔴 Sync inconnue"
+    
+    # Affichage compact
+    match_info = f"({total_matches} matchs)" if total_matches > 0 else ""
+    st.markdown(
+        f"<div style='font-size: 0.85em; color: #888; margin: 4px 0 8px 0;'>"
+        f"{sync_text} {match_info}</div>",
+        unsafe_allow_html=True,
+    )
+
+
 def _refresh_spnkr_db_via_api(
     *,
     db_path: str,
@@ -268,6 +341,7 @@ def _refresh_spnkr_db_via_api(
     rps: int,
     with_highlight_events: bool = True,
     with_aliases: bool = True,
+    delta: bool = False,
     timeout_seconds: int = 180,
 ) -> tuple[bool, str]:
     """Rafraîchit une DB SPNKr en appelant scripts/spnkr_import_db.py.
@@ -277,6 +351,7 @@ def _refresh_spnkr_db_via_api(
     Args:
         with_highlight_events: Activer les highlight events (défaut: True)
         with_aliases: Activer le refresh des aliases (défaut: True)
+        delta: Mode delta - s'arrête dès qu'un match connu est rencontré (défaut: False)
     """
     repo_root = Path(__file__).resolve().parent
     importer = repo_root / "scripts" / "spnkr_import_db.py"
@@ -317,6 +392,9 @@ def _refresh_spnkr_db_via_api(
         cmd.append("--no-highlight-events")
     if not with_aliases:
         cmd.append("--no-aliases")
+    # Mode delta: arrêt dès match connu (sync rapide)
+    if delta:
+        cmd.append("--delta")
 
     try:
         proc = subprocess.run(
@@ -2464,6 +2542,52 @@ def main() -> None:
         render_perf_panel(location="sidebar")
         st.markdown("<div class='os-sidebar-brand'>OpenSpartan Graphs</div>", unsafe_allow_html=True)
         st.markdown("<div class='os-sidebar-divider'></div>", unsafe_allow_html=True)
+
+        # Indicateur de dernière synchronisation
+        if db_path and os.path.exists(db_path):
+            _render_sync_indicator(db_path)
+
+        # Bouton Sync rapide pour les DB SPNKr
+        if db_path and _is_spnkr_db_path(db_path) and os.path.exists(db_path):
+            # Déduire le joueur depuis le nom de la DB
+            spnkr_player = infer_spnkr_player_from_db_path(db_path) or ""
+            
+            if spnkr_player:
+                sync_col1, sync_col2 = st.columns([1, 1])
+                with sync_col1:
+                    sync_clicked = st.button(
+                        "🔄 Sync",
+                        key="quick_sync_button",
+                        help="Synchronise les nouveaux matchs (mode delta: arrêt dès match connu).",
+                        use_container_width=True,
+                    )
+                with sync_col2:
+                    full_sync = st.button(
+                        "📥 Full",
+                        key="full_sync_button", 
+                        help="Synchronisation complète (parcourt tout l'historique).",
+                        use_container_width=True,
+                    )
+                
+                if sync_clicked or full_sync:
+                    with st.spinner("Synchronisation en cours..." if sync_clicked else "Sync complète en cours..."):
+                        ok, msg = _refresh_spnkr_db_via_api(
+                            db_path=db_path,
+                            player=spnkr_player,
+                            match_type="matchmaking",
+                            max_matches=200 if sync_clicked else 500,
+                            rps=5,
+                            with_highlight_events=True,
+                            with_aliases=True,
+                            delta=sync_clicked,  # Mode delta pour sync rapide
+                            timeout_seconds=120 if sync_clicked else 300,
+                        )
+                    if ok:
+                        st.success(msg)
+                        _clear_app_caches()
+                        st.rerun()
+                    else:
+                        st.error(msg)
 
         # Toujours visible
         if st.button(
