@@ -1243,19 +1243,6 @@ def _render_settings_page(settings: AppSettings) -> AppSettings:
         )
 
     with st.expander("Paramètres avancés", expanded=False):
-        st.toggle(
-            "Inclure Firefight (PvE)",
-            key="include_firefight",
-            value=bool(st.session_state.get("include_firefight", False)),
-            help="Impacte les filtres et tous les onglets basés sur les matchs.",
-        )
-        st.toggle(
-            "Limiter aux playlists (Partie rapide / Assassin classé / Arène classée)",
-            key="restrict_playlists",
-            value=bool(st.session_state.get("restrict_playlists", True)),
-            help="Réduit les playlists/modes/cartes aux valeurs attendues (utile si la DB est hétérogène).",
-        )
-
         show_profile_player_settings = st.toggle(
             "Afficher les réglages du profil joueur (avancé)",
             value=bool(st.session_state.get("show_profile_player_settings", False)),
@@ -2816,7 +2803,20 @@ def main() -> None:
         if "include_firefight" not in st.session_state:
             st.session_state["include_firefight"] = False
         if "restrict_playlists" not in st.session_state:
-            st.session_state["restrict_playlists"] = True
+            st.session_state["restrict_playlists"] = False  # Désactivé par défaut pour voir tous les matchs
+
+        # Filtres de type de partie
+        st.toggle(
+            "Inclure Firefight (PvE)",
+            key="include_firefight",
+            help="Inclut les parties Firefight (mode PvE) dans les statistiques.",
+        )
+        st.toggle(
+            "Restreindre aux playlists standard",
+            key="restrict_playlists",
+            help="Limite aux playlists Quick Play, Ranked Arena/Slayer, Big Team Battle.",
+        )
+        st.markdown("<div style='height: 8px'></div>", unsafe_allow_html=True)
 
     include_firefight = bool(st.session_state.get("include_firefight", False))
 

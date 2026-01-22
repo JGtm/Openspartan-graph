@@ -41,6 +41,7 @@ def is_allowed_playlist_name(name: str) -> bool:
     - Quick Play
     - Ranked Slayer
     - Ranked Arena
+    - Big Team Battle
     
     Args:
         name: Nom de la playlist.
@@ -58,6 +59,11 @@ def is_allowed_playlist_name(name: str) -> bool:
         return True
     # "classé" (masc) / "classée" (fém)
     if re.search(r"\bassassin\b.*\bclass(?:e|é)(?:e)?\b", s):
+        return True
+    # Big Team Battle (FR: Grande équipe / Grand combat)
+    if re.search(r"\bbig\s*team\b", s):
+        return True
+    if re.search(r"\bgrande?\s*(?:équipe|equipe|combat)\b", s):
         return True
     # EN (API)
     if re.search(r"\bquick\s*play\b", s):
