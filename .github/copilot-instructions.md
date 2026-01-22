@@ -73,18 +73,39 @@ src/
 ├── config.py          # Configuration centralisée (constantes, chemins)
 ├── models.py          # Dataclasses uniquement (pas de logique)
 ├── db/                # Accès base de données
+│   ├── connection.py  # Gestion connexions SQLite
 │   ├── loaders.py     # Chargement données + cache Streamlit
 │   ├── parsers.py     # Parsing JSON des matchs
+│   ├── profiles.py    # Gestion profils joueurs
 │   └── queries.py     # Requêtes SQL brutes
 ├── analysis/          # Fonctions d'analyse (pandas)
 │   ├── filters.py     # Filtres playlists/modes
-│   ├── stats.py       # Calculs statistiques
-│   └── sessions.py    # Détection sessions de jeu
+│   ├── killer_victim.py # Analyse confrontations
+│   ├── maps.py        # Stats par carte
+│   ├── sessions.py    # Détection sessions de jeu
+│   └── stats.py       # Calculs statistiques
 ├── ui/                # Helpers interface
-│   ├── translations.py # Traductions FR (PLAYLIST_FR, PAIR_FR)
 │   ├── aliases.py     # Gestion alias joueurs
-│   └── settings.py    # Paramètres utilisateur
-└── visualization/     # Graphiques (Altair/Plotly)
+│   ├── translations.py # Traductions FR (PLAYLIST_FR, PAIR_FR)
+│   ├── medals.py      # Affichage médailles
+│   ├── commendations.py # Citations Halo 5
+│   ├── settings.py    # Paramètres utilisateur (dataclass AppSettings)
+│   ├── components/    # Composants UI réutilisables
+│   │   └── performance.py  # Score de performance
+│   └── pages/         # Pages du dashboard (modulaires)
+│       ├── session_compare.py  # Comparaison sessions
+│       ├── timeseries.py       # Séries temporelles
+│       ├── win_loss.py         # Victoires/Défaites
+│       ├── match_history.py    # Historique parties
+│       ├── teammates.py        # Analyse coéquipiers (~780 lignes)
+│       ├── citations.py        # Citations & Médailles
+│       ├── settings.py         # Page Paramètres (~280 lignes)
+│       └── match_view.py       # Vue détaillée match (~630 lignes)
+└── visualization/     # Graphiques (Plotly)
+    ├── distributions.py # Histogrammes
+    ├── maps.py        # Stats cartes
+    ├── theme.py       # Thème Halo
+    └── timeseries.py  # Graphiques temporels
 ```
 
 ---

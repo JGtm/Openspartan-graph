@@ -265,7 +265,17 @@ openspartan-graph/
 │   │   ├── aliases.py         # Gestion des alias joueurs
 │   │   ├── translations.py    # Traductions FR (313+ modes)
 │   │   ├── medals.py          # Affichage médailles
-│   │   └── settings.py        # Paramètres utilisateur
+│   │   ├── settings.py        # Paramètres utilisateur (dataclass)
+│   │   ├── components/        # Composants réutilisables
+│   │   │   └── performance.py # Score de performance sessions
+│   │   └── pages/             # Pages du dashboard (modulaires)
+│   │       ├── session_compare.py  # Comparaison de sessions
+│   │       ├── timeseries.py       # Séries temporelles
+│   │       ├── win_loss.py         # Victoires/Défaites
+│   │       ├── match_history.py    # Historique des parties
+│   │       ├── teammates.py        # Analyse coéquipiers
+│   │       ├── citations.py        # Citations & Médailles
+│   │       └── settings.py         # Page Paramètres
 │   └── visualization/         # Génération des graphiques
 │       ├── distributions.py   # Histogrammes, box plots
 │       ├── maps.py            # Heatmaps cartes

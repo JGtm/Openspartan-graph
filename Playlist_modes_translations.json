@@ -1637,5 +1637,23 @@
       "fr": "Baptême du feu : Roi de la colline héroïque",
       "category": "ght"
     }
-  ]
+  ],
+  "categories": {
+    "Arena": "Arène",
+    "Assault": "Assaut",
+    "BTB": "Grande bataille en équipe",
+    "BTB Heavies": "Grande bataille en équipe Heavies",
+    "Community": "Communauté",
+    "Event": "Événement",
+    "Fiesta": "Mode Fiesta",
+    "Firefight": "Baptême du feu",
+    "Gruntpocalypse": "Grogarpocalypse",
+    "Husky Raid": "Husky Raid",
+    "Other": "Autres",
+    "Ranked": "Classé",
+    "Super Fiesta": "Super Fiesta",
+    "Super Husky Raid": "Super Husky Raid",
+    "Tactical": "SWAT",
+    "ght": "Baptême du feu"
+  }
 }
