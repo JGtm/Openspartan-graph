@@ -266,12 +266,17 @@ def _refresh_spnkr_db_via_api(
     match_type: str,
     max_matches: int,
     rps: int,
-    with_highlight_events: bool,
+    with_highlight_events: bool = True,
+    with_aliases: bool = True,
     timeout_seconds: int = 180,
 ) -> tuple[bool, str]:
     """Rafraîchit une DB SPNKr en appelant scripts/spnkr_import_db.py.
 
     Retourne (ok, message) pour affichage UI.
+    
+    Args:
+        with_highlight_events: Activer les highlight events (défaut: True)
+        with_aliases: Activer le refresh des aliases (défaut: True)
     """
     repo_root = Path(__file__).resolve().parent
     importer = repo_root / "scripts" / "spnkr_import_db.py"
@@ -306,8 +311,12 @@ def _refresh_spnkr_db_via_api(
         str(int(rps)),
         "--resume",
     ]
-    if with_highlight_events:
-        cmd.append("--with-highlight-events")
+    # Highlight events et aliases sont activés par défaut côté import
+    # On n'ajoute les flags --no-* que si explicitement désactivés
+    if not with_highlight_events:
+        cmd.append("--no-highlight-events")
+    if not with_aliases:
+        cmd.append("--no-aliases")
 
     try:
         proc = subprocess.run(

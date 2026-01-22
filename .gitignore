@@ -25,3 +25,8 @@ data/spnkr_gt_Chocoboflor.db-journal
 data/spnkr_JGtm.db
 data/investigation/
 data/cache/*
+
+# Documentation locale (non trackée)
+ROADMAP_*.md
+NOTES_*.md
+TODO_LOCAL.md

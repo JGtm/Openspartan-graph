@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import json
 import os
+import sqlite3
 from functools import lru_cache
-from typing import Dict
+from typing import Dict, Optional
 
 from src.config import XUID_ALIASES_DEFAULT, get_aliases_file_path
 from src.db.parsers import parse_xuid_input
@@ -16,6 +17,49 @@ def _safe_mtime(path: str) -> float | None:
         return os.path.getmtime(path)
     except OSError:
         return None
+
+
+def load_aliases_from_db(db_path: str) -> Dict[str, str]:
+    """Charge les alias depuis la table XuidAliases d'une DB SQLite.
+    
+    Args:
+        db_path: Chemin vers la DB SQLite.
+        
+    Returns:
+        Dictionnaire {xuid: gamertag}.
+    """
+    if not db_path or not os.path.exists(db_path):
+        return {}
+    
+    mtime = _safe_mtime(db_path)
+    return dict(_load_aliases_from_db_cached(db_path, mtime))
+
+
+@lru_cache(maxsize=16)
+def _load_aliases_from_db_cached(db_path: str, mtime: float | None) -> Dict[str, str]:
+    """Version cachée de load_aliases_from_db."""
+    try:
+        con = sqlite3.connect(db_path)
+        cur = con.cursor()
+        # Vérifie si la table existe
+        cur.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='XuidAliases' LIMIT 1"
+        )
+        if cur.fetchone() is None:
+            con.close()
+            return {}
+        
+        cur.execute("SELECT Xuid, Gamertag FROM XuidAliases WHERE Gamertag IS NOT NULL AND Gamertag != ''")
+        result = {str(row[0]).strip(): str(row[1]).strip() for row in cur.fetchall()}
+        con.close()
+        return result
+    except Exception:
+        return {}
+
+
+def clear_db_aliases_cache() -> None:
+    """Invalide le cache des aliases DB."""
+    _load_aliases_from_db_cached.cache_clear()
 
 
 def load_aliases_file(path: str | None = None) -> Dict[str, str]:
@@ -71,22 +115,36 @@ def save_aliases_file(aliases: Dict[str, str], path: str | None = None) -> None:
     _load_aliases_cached.cache_clear()
 
 
-def get_xuid_aliases() -> Dict[str, str]:
-    """Retourne les alias fusionnés (par défaut + fichier).
+def get_xuid_aliases(db_path: Optional[str] = None) -> Dict[str, str]:
+    """Retourne les alias fusionnés (DB > fichier > défaut).
+    
+    L'ordre de priorité est:
+    1. Table XuidAliases de la DB (si db_path fourni et table existe)
+    2. Fichier xuid_aliases.json
+    3. Constantes XUID_ALIASES_DEFAULT
+    
+    Args:
+        db_path: Chemin optionnel vers une DB SQLite avec table XuidAliases.
     
     Returns:
         Dictionnaire {xuid: gamertag}.
     """
     merged = dict(XUID_ALIASES_DEFAULT)
     merged.update(load_aliases_file())
+    
+    # Les aliases de la DB ont la priorité (plus récents)
+    if db_path:
+        merged.update(load_aliases_from_db(db_path))
+    
     return merged
 
 
-def display_name_from_xuid(xuid: str) -> str:
+def display_name_from_xuid(xuid: str, db_path: Optional[str] = None) -> str:
     """Convertit un XUID en nom d'affichage.
     
     Args:
         xuid: XUID du joueur.
+        db_path: Chemin optionnel vers une DB SQLite avec table XuidAliases.
         
     Returns:
         Gamertag si un alias existe, sinon le XUID tel quel.
@@ -95,4 +153,4 @@ def display_name_from_xuid(xuid: str) -> str:
     # SPNKr/OpenSpartan stockent souvent l'identifiant sous forme "xuid(2533...)".
     # Normaliser ici permet aux alias (clés = XUID numérique) de fonctionner partout.
     normalized = parse_xuid_input(raw) or raw
-    return get_xuid_aliases().get(normalized, normalized)
+    return get_xuid_aliases(db_path=db_path).get(normalized, normalized)

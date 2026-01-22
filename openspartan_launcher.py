@@ -18,8 +18,11 @@ Exemples
 - Refresh SPNKr (safe tmp + replace) pour un joueur:
   python openspartan_launcher.py refresh --player JGtm --out-db data/spnkr_gt_JGtm.db
 
-- Refresh toutes les DB data/spnkr*.db:
-  python openspartan_launcher.py refresh-all --max-matches 200 --match-type matchmaking --rps 5 --with-highlight-events
+- Refresh toutes les DB data/spnkr*.db (highlight events + aliases activés par défaut):
+  python openspartan_launcher.py refresh-all --max-matches 200 --match-type matchmaking --rps 5
+
+- Refresh rapide (sans highlight events ni aliases):
+  python openspartan_launcher.py refresh --player JGtm --no-highlight-events --no-aliases
 """
 
 from __future__ import annotations
@@ -127,7 +130,8 @@ class RefreshOptions:
     rps: int
     no_assets: bool
     no_skill: bool
-    with_highlight_events: bool
+    with_highlight_events: bool  # True = activer (défaut), False = désactiver
+    with_aliases: bool = True    # True = activer (défaut), False = désactiver
 
 
 def _run_spnkr_import(opts: RefreshOptions) -> int:
@@ -164,8 +168,12 @@ def _run_spnkr_import(opts: RefreshOptions) -> int:
         cmd.append("--no-assets")
     if opts.no_skill:
         cmd.append("--no-skill")
-    if opts.with_highlight_events:
-        cmd.append("--with-highlight-events")
+    # Highlight events: activés par défaut, désactivables via --no-highlight-events
+    if not opts.with_highlight_events:
+        cmd.append("--no-highlight-events")
+    # Aliases: activés par défaut, désactivables via --no-aliases
+    if not opts.with_aliases:
+        cmd.append("--no-aliases")
 
     print("[SPNKr] Import…")
     print("- player:", opts.player)
@@ -173,8 +181,8 @@ def _run_spnkr_import(opts: RefreshOptions) -> int:
     print("- match_type:", opts.match_type)
     print("- max_matches:", opts.max_matches)
     print("- rps:", opts.rps)
-    if opts.with_highlight_events:
-        print("- highlight_events: ON")
+    print("- highlight_events:", "ON" if opts.with_highlight_events else "OFF")
+    print("- aliases:", "ON" if opts.with_aliases else "OFF")
 
     proc = subprocess.run(cmd, cwd=str(REPO_ROOT))
     if proc.returncode != 0:
@@ -476,7 +484,8 @@ def _cmd_refresh(args: argparse.Namespace) -> int:
         rps=int(args.rps),
         no_assets=bool(args.no_assets),
         no_skill=bool(args.no_skill),
-        with_highlight_events=bool(args.with_highlight_events),
+        with_highlight_events=not bool(getattr(args, "no_highlight_events", False)),
+        with_aliases=not bool(getattr(args, "no_aliases", False)),
     )
     return _run_spnkr_import(opts)
 
@@ -503,7 +512,8 @@ def _cmd_refresh_all(args: argparse.Namespace) -> int:
             rps=int(args.rps),
             no_assets=bool(args.no_assets),
             no_skill=bool(args.no_skill),
-            with_highlight_events=bool(args.with_highlight_events),
+            with_highlight_events=not bool(getattr(args, "no_highlight_events", False)),
+            with_aliases=not bool(getattr(args, "no_aliases", False)),
         )
         rc = _run_spnkr_import(opts)
         if rc != 0:
@@ -518,9 +528,10 @@ def _cmd_refresh_all(args: argparse.Namespace) -> int:
 
 def _cmd_run_with_refresh(args: argparse.Namespace) -> int:
     # Par défaut, run+refresh est utilisé quand on veut un dashboard complet.
-    # On force highlight events, sinon des données sont souvent absentes.
+    # Highlight events et aliases sont activés par défaut.
     try:
-        args.with_highlight_events = True
+        args.no_highlight_events = False
+        args.no_aliases = False
     except Exception:
         pass
     rc = _cmd_refresh(args)
@@ -806,9 +817,14 @@ def _build_parser() -> argparse.ArgumentParser:
     p_ref.add_argument("--no-assets", action="store_true", help="Désactive l'import des assets")
     p_ref.add_argument("--no-skill", action="store_true", help="Désactive l'import du skill")
     p_ref.add_argument(
-        "--with-highlight-events",
+        "--no-highlight-events",
         action="store_true",
-        help="Inclut highlight events (film) (plus lent)",
+        help="Désactive l'import des highlight events (accélère l'import)",
+    )
+    p_ref.add_argument(
+        "--no-aliases",
+        action="store_true",
+        help="Désactive le refresh des aliases (XUID → Gamertag)",
     )
     p_ref.set_defaults(func=_cmd_refresh)
 
@@ -825,9 +841,14 @@ def _build_parser() -> argparse.ArgumentParser:
     p_ra.add_argument("--no-assets", action="store_true", help="Désactive l'import des assets")
     p_ra.add_argument("--no-skill", action="store_true", help="Désactive l'import du skill")
     p_ra.add_argument(
-        "--with-highlight-events",
+        "--no-highlight-events",
         action="store_true",
-        help="Inclut highlight events (film) (plus lent)",
+        help="Désactive l'import des highlight events (accélère l'import)",
+    )
+    p_ra.add_argument(
+        "--no-aliases",
+        action="store_true",
+        help="Désactive le refresh des aliases (XUID → Gamertag)",
     )
     p_ra.set_defaults(func=_cmd_refresh_all)
 
@@ -845,9 +866,14 @@ def _build_parser() -> argparse.ArgumentParser:
     p_runref.add_argument("--no-assets", action="store_true", help="Désactive l'import des assets")
     p_runref.add_argument("--no-skill", action="store_true", help="Désactive l'import du skill")
     p_runref.add_argument(
-        "--with-highlight-events",
+        "--no-highlight-events",
         action="store_true",
-        help="Inclut highlight events (film) (plus lent)",
+        help="Désactive l'import des highlight events (accélère l'import)",
+    )
+    p_runref.add_argument(
+        "--no-aliases",
+        action="store_true",
+        help="Désactive le refresh des aliases (XUID → Gamertag)",
     )
     p_runref.add_argument("--port", type=int, default=None, help="Port (sinon auto)")
     p_runref.add_argument("--no-browser", action="store_true", help="N'ouvre pas le navigateur")
