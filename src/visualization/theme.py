@@ -1,5 +1,7 @@
 """Thème et style des graphiques Plotly."""
 
+from __future__ import annotations
+
 import plotly.graph_objects as go
 
 from src.config import HALO_COLORS, PLOT_CONFIG
