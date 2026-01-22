@@ -46,11 +46,8 @@
 }
 
 section.main {
-    /* Fond global : gradient sombre + accents discrets */
-    background:
-        radial-gradient(900px 520px at 12% -10%, rgba(51, 214, 255, 0.12) 0%, transparent 55%),
-        radial-gradient(700px 420px at 90% 15%, rgba(0, 167, 255, 0.10) 0%, transparent 55%),
-        linear-gradient(180deg, var(--bg0) 0%, var(--bg1) 55%, #06080c 100%);
+    /* Fond global : couleur unie RGB 29, 35, 40 */
+    background: rgb(29, 35, 40);
     color: var(--text);
     position: relative;
     z-index: 1;
@@ -168,7 +165,7 @@ section.main:after {
 }
 
 /* =============================================================================
-   Hero banner
+   Hero banner (fallback sans joueur)
    ============================================================================= */
 
 .hero {
@@ -183,103 +180,6 @@ section.main:after {
     margin-bottom: 14px;
 }
 
-.hero--player {
-    position: relative;
-    overflow: hidden;
-    background-size: cover;
-    background-position: center;
-}
-
-.hero--player .hero__overlay {
-    position: absolute;
-    inset: 0;
-    background:
-        linear-gradient(90deg, rgba(8, 10, 14, 0.86) 0%, rgba(8, 10, 14, 0.55) 55%, rgba(8, 10, 14, 0.86) 100%),
-        radial-gradient(820px 520px at 10% 0%, rgba(51, 214, 255, 0.18) 0%, transparent 58%);
-    pointer-events: none;
-}
-
-.hero-player {
-    position: relative;
-    display: flex;
-    gap: 14px;
-    align-items: center;
-}
-
-.hero-player__emblem {
-    width: 72px;
-    height: 72px;
-    border-radius: 14px;
-    border: 1px solid rgba(255,255,255,0.16);
-    background: rgba(10, 14, 20, 0.35);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    overflow: hidden;
-    flex: 0 0 auto;
-}
-
-.hero-player__emblem img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-}
-
-.hero-player__text {
-    min-width: 0;
-}
-
-.hero-player__badge {
-    position: relative;
-    display: inline-block;
-    border-radius: 14px;
-    border: 1px solid rgba(255,255,255,0.14);
-    overflow: hidden;
-    background: rgba(10, 14, 20, 0.30);
-    box-shadow: 0 10px 22px rgba(0,0,0,0.28);
-}
-
-.hero-player__nameplate {
-    position: absolute;
-    inset: 0;
-    background-size: cover;
-    background-position: center;
-    opacity: 0.95;
-    filter: saturate(1.05) contrast(1.02);
-}
-
-.hero-player__id {
-    position: relative;
-    padding: 10px 12px;
-    min-width: 260px;
-}
-
-.hero-player__gamertag {
-    font-size: 22px;
-    font-weight: 800;
-    letter-spacing: -0.02em;
-    line-height: 1.08;
-    margin: 0;
-    text-shadow: 0 2px 14px rgba(0,0,0,0.55);
-}
-
-.hero-player__servicetag {
-    margin-top: 2px;
-    font-size: 12px;
-    font-weight: 700;
-    letter-spacing: 0.18em;
-    opacity: 0.92;
-    text-shadow: 0 2px 14px rgba(0,0,0,0.55);
-}
-
-.hero-player__servicetag:empty {
-    display: none;
-}
-
-.hero-player__chips {
-    margin-top: 10px;
-}
-
 .hero .title {
     font-size: 28px;
     font-weight: 750;
@@ -291,6 +191,125 @@ section.main:after {
     margin-top: 4px;
     color: var(--muted);
     font-size: 14px;
+}
+
+/* =============================================================================
+   Spartan ID Card (nouveau design épuré)
+   ============================================================================= */
+
+/* Police Industry (si disponible, sinon fallback) */
+@font-face {
+    font-family: 'Industry';
+    src: local('Industry'), local('Industry-Bold');
+    font-weight: 700;
+    font-style: normal;
+}
+
+.spartan-id-wrapper {
+    display: flex;
+    justify-content: flex-start;
+    margin-top: 3.5rem; /* Espace pour la navbar Streamlit */
+    margin-bottom: 1rem;
+}
+
+.spartan-id {
+    position: relative;
+    width: 360px;
+    height: 80px;
+    /* Pas de bordure, pas de cadre */
+}
+
+/* Backdrop : 2/3 de la largeur (240px), centré, en arrière-plan */
+.spartan-id__backdrop {
+    position: absolute;
+    width: 240px;
+    height: 100%;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 1;
+    overflow: hidden;
+}
+
+.spartan-id__backdrop img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    opacity: 0.85;
+}
+
+/* Nameplate : 360px, au-dessus du backdrop */
+.spartan-id__nameplate {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    left: 0;
+    top: 0;
+    z-index: 2;
+}
+
+.spartan-id__nameplate img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+/* Emblème : par-dessus, aligné à gauche avec padding 10px, centré verticalement */
+.spartan-id__emblem {
+    position: absolute;
+    left: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 3;
+    width: 56px;
+    height: 56px;
+}
+
+.spartan-id__emblem img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+/* Texte : gamertag + service tag, à droite de l'emblème */
+.spartan-id__text {
+    position: absolute;
+    left: 76px; /* 10px padding + 56px emblem + 10px gap */
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 3;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.spartan-id__gamertag {
+    font-family: 'Industry', 'Segoe UI', 'Roboto Condensed', Arial, sans-serif;
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    color: #fff;
+    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.7);
+    line-height: 1.2;
+    white-space: nowrap;
+}
+
+.spartan-id__servicetag {
+    font-family: 'Industry', 'Segoe UI', 'Roboto Condensed', Arial, sans-serif;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.15em;
+    color: rgba(255, 255, 255, 0.85);
+    text-shadow: 0 1px 6px rgba(0, 0, 0, 0.6);
+    margin-top: 2px;
+    white-space: nowrap;
+}
+
+/* Variante grille : pas de margin-top, centrée */
+.spartan-id-wrapper--grid {
+    margin-top: 0;
+    margin-bottom: 0.5rem;
+    justify-content: center;
 }
 
 /* =============================================================================

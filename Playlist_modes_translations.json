@@ -7,27 +7,27 @@
     },
     {
       "en": "Big Team Battle: Refresh",
-      "fr": "Grande bataille en équipe : Refresh",
+      "fr": "Grande bataille en équipe",
       "uuid": "4eb8503b-6e09-4fce-98d6-b5b711d2cd32"
     },
     {
       "en": "Big Team Social",
-      "fr": "Grande bataille sociale",
+      "fr": "Grande bataille en équipe",
       "uuid": "7de5ed5b-381e-49e5-b334-d959056dbc2b"
     },
     {
       "en": "Firefight",
-      "fr": "Firefight",
+      "fr": "Baptême du feu",
       "uuid": "57f4f0c0-bce9-4a34-b1b0-6188ed0f0198"
     },
     {
       "en": "Firefight: Heroic King of the Hill",
-      "fr": "Firefight : Roi de la colline héroïque",
+      "fr": "Baptême du feu : Roi de la colline héroïque",
       "uuid": "d8ac67e8-647c-4602-8af0-f42012ba8dd8"
     },
     {
       "en": "Firefight: Legendary King of the Hill",
-      "fr": "Firefight : Roi de la colline légendaire",
+      "fr": "Baptême du feu : Roi de la colline légendaire",
       "uuid": "759021fe-1d82-470f-a2e6-e431300b384b"
     },
     {
@@ -47,7 +47,7 @@
     },
     {
       "en": "Rumble Pit",
-      "fr": "Mêlée générale",
+      "fr": "Chacun pour soi",
       "uuid": "a7d20ef6-ebdc-4c01-b96c-69b27afa88d7"
     },
     {
@@ -57,7 +57,7 @@
     },
     {
       "en": "Squad Battle",
-      "fr": "Combat d'escouade",
+      "fr": "Doubles",
       "uuid": "f5580605-660c-43f9-ac69-4075c4a05c5d"
     },
     {
@@ -729,672 +729,672 @@
     },
     {
       "en": "BTB:CTF on Breaker",
-      "fr": "BTB : Capture du drapeau",
+      "fr": "Grande bataille en équipe : Capture du drapeau",
       "category": "BTB"
     },
     {
       "en": "BTB:CTF on Command",
-      "fr": "BTB : Capture du drapeau",
+      "fr": "Grande bataille en équipe : Capture du drapeau",
       "category": "BTB"
     },
     {
       "en": "BTB:CTF on Credence",
-      "fr": "BTB : Capture du drapeau",
+      "fr": "Grande bataille en équipe : Capture du drapeau",
       "category": "BTB"
     },
     {
       "en": "BTB:CTF on Deadlock",
-      "fr": "BTB : Capture du drapeau",
+      "fr": "Grande bataille en équipe : Capture du drapeau",
       "category": "BTB"
     },
     {
       "en": "BTB:CTF on Flood Gulch",
-      "fr": "BTB : Capture du drapeau",
+      "fr": "Grande bataille en équipe : Capture du drapeau",
       "category": "BTB"
     },
     {
       "en": "BTB:CTF on Fortitude",
-      "fr": "BTB : Capture du drapeau",
+      "fr": "Grande bataille en équipe : Capture du drapeau",
       "category": "BTB"
     },
     {
       "en": "BTB:CTF on Fragmentation",
-      "fr": "BTB : Capture du drapeau",
+      "fr": "Grande bataille en équipe : Capture du drapeau",
       "category": "BTB"
     },
     {
       "en": "BTB:CTF on Highpower",
-      "fr": "BTB : Capture du drapeau",
+      "fr": "Grande bataille en équipe : Capture du drapeau",
       "category": "BTB"
     },
     {
       "en": "BTB:CTF on Insolence",
-      "fr": "BTB : Capture du drapeau",
+      "fr": "Grande bataille en équipe : Capture du drapeau",
       "category": "BTB"
     },
     {
       "en": "BTB:CTF on Oasis",
-      "fr": "BTB : Capture du drapeau",
+      "fr": "Grande bataille en équipe : Capture du drapeau",
       "category": "BTB"
     },
     {
       "en": "BTB:CTF on Obituary",
-      "fr": "BTB : Capture du drapeau",
+      "fr": "Grande bataille en équipe : Capture du drapeau",
       "category": "BTB"
     },
     {
       "en": "BTB:CTF on Scarr",
-      "fr": "BTB : Capture du drapeau",
+      "fr": "Grande bataille en équipe : Capture du drapeau",
       "category": "BTB"
     },
     {
       "en": "BTB:CTF on Threshold",
-      "fr": "BTB : Capture du drapeau",
+      "fr": "Grande bataille en équipe : Capture du drapeau",
       "category": "BTB"
     },
     {
       "en": "BTB:Escalation Slayer on Insolence",
-      "fr": "BTB : Escalade",
+      "fr": "Grande bataille en équipe : Escalade",
       "category": "BTB"
     },
     {
       "en": "BTB:Extraction on FG",
-      "fr": "BTB : Extraction",
+      "fr": "Grande bataille en équipe : Extraction",
       "category": "BTB"
     },
     {
       "en": "BTB:Extraction on Refuge",
-      "fr": "BTB : Extraction",
+      "fr": "Grande bataille en équipe : Extraction",
       "category": "BTB"
     },
     {
       "en": "BTB:Fiesta CTF on Breaker",
-      "fr": "BTB : Fiesta CDD",
+      "fr": "Grande fiesta en équipe : CDD",
       "category": "BTB"
     },
     {
       "en": "BTB:Fiesta CTF on Command",
-      "fr": "BTB : Fiesta CDD",
+      "fr": "Grande fiesta en équipe : CDD",
       "category": "BTB"
     },
     {
       "en": "BTB:Fiesta CTF on Flood Gulch",
-      "fr": "BTB : Fiesta CDD",
+      "fr": "Grande fiesta en équipe : CDD",
       "category": "BTB"
     },
     {
       "en": "BTB:Fiesta CTF on Fragmentation",
-      "fr": "BTB : Fiesta CDD",
+      "fr": "Grande fiesta en équipe : CDD",
       "category": "BTB"
     },
     {
       "en": "BTB:Fiesta CTF on Highpower",
-      "fr": "BTB : Fiesta CDD",
+      "fr": "Grande fiesta en équipe : CDD",
       "category": "BTB"
     },
     {
       "en": "BTB:Fiesta CTF on Obituary",
-      "fr": "BTB : Fiesta CDD",
+      "fr": "Grande fiesta en équipe : CDD",
       "category": "BTB"
     },
     {
       "en": "BTB:Fiesta CTF on Threshold",
-      "fr": "BTB : Fiesta CDD",
+      "fr": "Grande fiesta en équipe : CDD",
       "category": "BTB"
     },
     {
       "en": "BTB:Fiesta Slayer on Breaker",
-      "fr": "BTB : Fiesta Assassin",
+      "fr": "Grande fiesta en équipe : Assassin",
       "category": "BTB"
     },
     {
       "en": "BTB:Fiesta Slayer on Command",
-      "fr": "BTB : Fiesta Assassin",
+      "fr": "Grande fiesta en équipe : Assassin",
       "category": "BTB"
     },
     {
       "en": "BTB:Fiesta Slayer on Dawnbreaker",
-      "fr": "BTB : Fiesta Assassin",
+      "fr": "Grande fiesta en équipe : Assassin",
       "category": "BTB"
     },
     {
       "en": "BTB:Fiesta Slayer on Deadlock",
-      "fr": "BTB : Fiesta Assassin",
+      "fr": "Grande fiesta en équipe : Assassin",
       "category": "BTB"
     },
     {
       "en": "BTB:Fiesta Slayer on Flood Gulch",
-      "fr": "BTB : Fiesta Assassin",
+      "fr": "Grande fiesta en équipe : Assassin",
       "category": "BTB"
     },
     {
       "en": "BTB:Fiesta Slayer on Fortitude",
-      "fr": "BTB : Fiesta Assassin",
+      "fr": "Grande fiesta en équipe : Assassin",
       "category": "BTB"
     },
     {
       "en": "BTB:Fiesta Slayer on Fragmentation",
-      "fr": "BTB : Fiesta Assassin",
+      "fr": "Grande fiesta en équipe : Assassin",
       "category": "BTB"
     },
     {
       "en": "BTB:Fiesta Slayer on Insolence",
-      "fr": "BTB : Fiesta Assassin",
+      "fr": "Grande fiesta en équipe : Assassin",
       "category": "BTB"
     },
     {
       "en": "BTB:Fiesta Slayer on Obituary",
-      "fr": "BTB : Fiesta Assassin",
+      "fr": "Grande fiesta en équipe : Assassin",
       "category": "BTB"
     },
     {
       "en": "BTB:Fiesta Slayer on Refuge",
-      "fr": "BTB : Fiesta Assassin",
+      "fr": "Grande fiesta en équipe : Assassin",
       "category": "BTB"
     },
     {
       "en": "BTB:Fiesta Slayer on Scarr",
-      "fr": "BTB : Fiesta Assassin",
+      "fr": "Grande fiesta en équipe : Assassin",
       "category": "BTB"
     },
     {
       "en": "BTB:Fiesta Slayer on Threshold",
-      "fr": "BTB : Fiesta Assassin",
+      "fr": "Grande fiesta en équipe : Assassin",
       "category": "BTB"
     },
     {
       "en": "BTB:Fiesta Slayer on Thunderhead",
-      "fr": "BTB : Fiesta Assassin",
+      "fr": "Grande fiesta en équipe : Assassin",
       "category": "BTB"
     },
     {
       "en": "BTB:Fiesta Total Control on Command",
-      "fr": "BTB : Fiesta Contrôle total",
+      "fr": "Grande fiesta en équipe : Contrôle total",
       "category": "BTB"
     },
     {
       "en": "BTB:Fiesta Total Control on Fortitude",
-      "fr": "BTB : Fiesta Contrôle total",
+      "fr": "Grande fiesta en équipe : Contrôle total",
       "category": "BTB"
     },
     {
       "en": "BTB:Fiesta Total Control on Refuge",
-      "fr": "BTB : Fiesta Contrôle total",
+      "fr": "Grande fiesta en équipe : Contrôle total",
       "category": "BTB"
     },
     {
       "en": "BTB:One Flag CTF on Refuge",
-      "fr": "BTB : Un seul drapeau",
+      "fr": "Grande fiesta en équipe : Un seul drapeau",
       "category": "BTB"
     },
     {
       "en": "BTB:Sentry Defense on Highpower Sentry Defense",
-      "fr": "BTB : Défense sentinelle",
+      "fr": "Grande bataille en équipe : Défense sentinelle",
       "category": "BTB"
     },
     {
       "en": "BTB:Sentry Defense on Oasis Sentry Defense",
-      "fr": "BTB : Défense sentinelle",
+      "fr": "Grande bataille en équipe : Défense sentinelle",
       "category": "BTB"
     },
     {
       "en": "BTB:Slayer on Breaker",
-      "fr": "BTB : Assassin",
+      "fr": "Grande bataille en équipe : Assassin",
       "category": "BTB"
     },
     {
       "en": "BTB:Slayer on Command",
-      "fr": "BTB : Assassin",
+      "fr": "Grande bataille en équipe : Assassin",
       "category": "BTB"
     },
     {
       "en": "BTB:Slayer on Credence",
-      "fr": "BTB : Assassin",
+      "fr": "Grande bataille en équipe : Assassin",
       "category": "BTB"
     },
     {
       "en": "BTB:Slayer on Deadlock",
-      "fr": "BTB : Assassin",
+      "fr": "Grande bataille en équipe : Assassin",
       "category": "BTB"
     },
     {
       "en": "BTB:Slayer on Fragmentation",
-      "fr": "BTB : Assassin",
+      "fr": "Grande bataille en équipe : Assassin",
       "category": "BTB"
     },
     {
       "en": "BTB:Slayer on Highpower",
-      "fr": "BTB : Assassin",
+      "fr": "Grande bataille en équipe : Assassin",
       "category": "BTB"
     },
     {
       "en": "BTB:Slayer on Oasis",
-      "fr": "BTB : Assassin",
+      "fr": "Grande bataille en équipe : Assassin",
       "category": "BTB"
     },
     {
       "en": "BTB:Slayer on Obituary",
-      "fr": "BTB : Assassin",
+      "fr": "Grande bataille en équipe : Assassin",
       "category": "BTB"
     },
     {
       "en": "BTB:Slayer on Refuge",
-      "fr": "BTB : Assassin",
+      "fr": "Grande bataille en équipe : Assassin",
       "category": "BTB"
     },
     {
       "en": "BTB:Slayer on Scarr",
-      "fr": "BTB : Assassin",
+      "fr": "Grande bataille en équipe : Assassin",
       "category": "BTB"
     },
     {
       "en": "BTB:Slayer on Threshold",
-      "fr": "BTB : Assassin",
+      "fr": "Grande bataille en équipe : Assassin",
       "category": "BTB"
     },
     {
       "en": "BTB:Slayer on Thunderhead",
-      "fr": "BTB : Assassin",
+      "fr": "Grande bataille en équipe : Assassin",
       "category": "BTB"
     },
     {
       "en": "BTB:Stockpile on Deadlock",
-      "fr": "BTB : Stockage",
+      "fr": "Grande bataille en équipe : Stockage",
       "category": "BTB"
     },
     {
       "en": "BTB:Stockpile on Fragmentation",
-      "fr": "BTB : Stockage",
+      "fr": "Grande bataille en équipe : Stockage",
       "category": "BTB"
     },
     {
       "en": "BTB:Stockpile on Highpower",
-      "fr": "BTB : Stockage",
+      "fr": "Grande bataille en équipe : Stockage",
       "category": "BTB"
     },
     {
       "en": "BTB:Team Snipers on Obituary",
-      "fr": "BTB : Snipers en équipe",
+      "fr": "Grande bataille en équipe : Snipers en équipe",
       "category": "BTB"
     },
     {
       "en": "BTB:Team Snipers on Refuge",
-      "fr": "BTB : Snipers en équipe",
+      "fr": "Grande bataille en équipe : Snipers en équipe",
       "category": "BTB"
     },
     {
       "en": "BTB:Total Control on Breaker",
-      "fr": "BTB : Contrôle total",
+      "fr": "Grande bataille en équipe : Contrôle total",
       "category": "BTB"
     },
     {
       "en": "BTB:Total Control on Command",
-      "fr": "BTB : Contrôle total",
+      "fr": "Grande bataille en équipe : Contrôle total",
       "category": "BTB"
     },
     {
       "en": "BTB:Total Control on Deadlock",
-      "fr": "BTB : Contrôle total",
+      "fr": "Grande bataille en équipe : Contrôle total",
       "category": "BTB"
     },
     {
       "en": "BTB:Total Control on Fragmentation",
-      "fr": "BTB : Contrôle total",
+      "fr": "Grande bataille en équipe : Contrôle total",
       "category": "BTB"
     },
     {
       "en": "BTB:Total Control on Highpower",
-      "fr": "BTB : Contrôle total",
+      "fr": "Grande bataille en équipe : Contrôle total",
       "category": "BTB"
     },
     {
       "en": "BTB:Total Control on Oasis",
-      "fr": "BTB : Contrôle total",
+      "fr": "Grande bataille en équipe : Contrôle total",
       "category": "BTB"
     },
     {
       "en": "BTB:Total Control on Obituary",
-      "fr": "BTB : Contrôle total",
+      "fr": "Grande bataille en équipe : Contrôle total",
       "category": "BTB"
     },
     {
       "en": "BTB:Total Control on Scarr",
-      "fr": "BTB : Contrôle total",
+      "fr": "Grande bataille en équipe : Contrôle total",
       "category": "BTB"
     },
     {
       "en": "BTB:Total Control on Thunderhead",
-      "fr": "BTB : Contrôle total",
+      "fr": "Grande bataille en équipe : Contrôle total",
       "category": "BTB"
     },
     {
       "en": "BTB Heavies:CTF on Breaker Heavies",
-      "fr": "BTB Heavies : Capture du drapeau",
+      "fr": "Grande bataille en équipe Heavies : Capture du drapeau",
       "category": "BTB Heavies"
     },
     {
       "en": "BTB Heavies:CTF on Fortitude Heavies",
-      "fr": "BTB Heavies : Capture du drapeau",
+      "fr": "Grande bataille en équipe Heavies : Capture du drapeau",
       "category": "BTB Heavies"
     },
     {
       "en": "BTB Heavies:CTF on Fragmentation Heavies",
-      "fr": "BTB Heavies : Capture du drapeau",
+      "fr": "Grande bataille en équipe Heavies : Capture du drapeau",
       "category": "BTB Heavies"
     },
     {
       "en": "BTB Heavies:CTF on Highpower Heavies",
-      "fr": "BTB Heavies : Capture du drapeau",
+      "fr": "Grande bataille en équipe Heavies : Capture du drapeau",
       "category": "BTB Heavies"
     },
     {
       "en": "BTB Heavies:CTF on Insolence Heavies",
-      "fr": "BTB Heavies : Capture du drapeau",
+      "fr": "Grande bataille en équipe Heavies : Capture du drapeau",
       "category": "BTB Heavies"
     },
     {
       "en": "BTB Heavies:CTF on Oasis Heavies",
-      "fr": "BTB Heavies : Capture du drapeau",
+      "fr": "Grande bataille en équipe Heavies : Capture du drapeau",
       "category": "BTB Heavies"
     },
     {
       "en": "BTB Heavies:CTF on Obituary Heavies",
-      "fr": "BTB Heavies : Capture du drapeau",
+      "fr": "Grande bataille en équipe Heavies : Capture du drapeau",
       "category": "BTB Heavies"
     },
     {
       "en": "BTB Heavies:CTF on Thunderhead Heavies",
-      "fr": "BTB Heavies : Capture du drapeau",
+      "fr": "Grande bataille en équipe Heavies : Capture du drapeau",
       "category": "BTB Heavies"
     },
     {
       "en": "BTB Heavies:Slayer on Breaker Heavies",
-      "fr": "BTB Heavies : Assassin",
+      "fr": "Grande bataille en équipe Heavies : Assassin",
       "category": "BTB Heavies"
     },
     {
       "en": "BTB Heavies:Slayer on Deadlock Heavies",
-      "fr": "BTB Heavies : Assassin",
+      "fr": "Grande bataille en équipe Heavies : Assassin",
       "category": "BTB Heavies"
     },
     {
       "en": "BTB Heavies:Slayer on Fortitude Heavies",
-      "fr": "BTB Heavies : Assassin",
+      "fr": "Grande bataille en équipe Heavies : Assassin",
       "category": "BTB Heavies"
     },
     {
       "en": "BTB Heavies:Slayer on Fragmentation Heavies",
-      "fr": "BTB Heavies : Assassin",
+      "fr": "Grande bataille en équipe Heavies : Assassin",
       "category": "BTB Heavies"
     },
     {
       "en": "BTB Heavies:Slayer on Oasis Heavies",
-      "fr": "BTB Heavies : Assassin",
+      "fr": "Grande bataille en équipe Heavies : Assassin",
       "category": "BTB Heavies"
     },
     {
       "en": "BTB Heavies:Slayer on Obituary Heavies",
-      "fr": "BTB Heavies : Assassin",
+      "fr": "Grande bataille en équipe Heavies : Assassin",
       "category": "BTB Heavies"
     },
     {
       "en": "BTB Heavies:Slayer on Refuge Heavies",
-      "fr": "BTB Heavies : Assassin",
+      "fr": "Grande bataille en équipe Heavies : Assassin",
       "category": "BTB Heavies"
     },
     {
       "en": "BTB Heavies:Slayer on Thunderhead Heavies",
-      "fr": "BTB Heavies : Assassin",
+      "fr": "Grande bataille en équipe Heavies : Assassin",
       "category": "BTB Heavies"
     },
     {
       "en": "BTB Heavies:Total Control on Breaker Heavies",
-      "fr": "BTB Heavies : Contrôle total",
+      "fr": "Grande bataille en équipe Heavies : Contrôle total",
       "category": "BTB Heavies"
     },
     {
       "en": "BTB Heavies:Total Control on Fragmentation Heavies",
-      "fr": "BTB Heavies : Contrôle total",
+      "fr": "Grande bataille en équipe Heavies : Contrôle total",
       "category": "BTB Heavies"
     },
     {
       "en": "BTB Heavies:Total Control on Highpower Heavies",
-      "fr": "BTB Heavies : Contrôle total",
+      "fr": "Grande bataille en équipe Heavies : Contrôle total",
       "category": "BTB Heavies"
     },
     {
       "en": "BTB Heavies:Total Control on Oasis Heavies",
-      "fr": "BTB Heavies : Contrôle total",
+      "fr": "Grande bataille en équipe Heavies : Contrôle total",
       "category": "BTB Heavies"
     },
     {
       "en": "Community:Shotty Snipe Slayer FFA on Dynasty",
-      "fr": "Communauté : Shotty Snipers FFA",
+      "fr": "Chacun pour soi : Fusils snipers à grenaille",
       "category": "Community"
     },
     {
       "en": "Community:Slayer on Absolution",
-      "fr": "Communauté : Assassin",
+      "fr": "Assassin",
       "category": "Community"
     },
     {
       "en": "Community:Slayer on Critical Dewpoint",
-      "fr": "Communauté : Assassin",
+      "fr": "Assassin",
       "category": "Community"
     },
     {
       "en": "Community:Slayer on Curfew",
-      "fr": "Communauté : Assassin",
+      "fr": "Assassin",
       "category": "Community"
     },
     {
       "en": "Community:Slayer on Domicile",
-      "fr": "Communauté : Assassin",
+      "fr": "Assassin",
       "category": "Community"
     },
     {
       "en": "Community:Slayer on Dynasty",
-      "fr": "Communauté : Assassin",
+      "fr": "Assassin",
       "category": "Community"
     },
     {
       "en": "Community:Slayer on Fortress",
-      "fr": "Communauté : Assassin",
+      "fr": "Assassin",
       "category": "Community"
     },
     {
       "en": "Community:Slayer on Goliath",
-      "fr": "Communauté : Assassin",
+      "fr": "Assassin",
       "category": "Community"
     },
     {
       "en": "Community:Slayer on Isolation",
-      "fr": "Communauté : Assassin",
+      "fr": "Assassin",
       "category": "Community"
     },
     {
       "en": "Community:Slayer on Salvation",
-      "fr": "Communauté : Assassin",
+      "fr": "Assassin",
       "category": "Community"
     },
     {
       "en": "Community:Slayer on Shiro",
-      "fr": "Communauté : Assassin",
+      "fr": "Assassin",
       "category": "Community"
     },
     {
       "en": "Community:Slayer on Smallhalla",
-      "fr": "Communauté : Assassin",
+      "fr": "Assassin",
       "category": "Community"
     },
     {
       "en": "Community:Slayer on Snowbound",
-      "fr": "Communauté : Assassin",
+      "fr": "Assassin",
       "category": "Community"
     },
     {
       "en": "Community:Slayer on Sylvanus",
-      "fr": "Communauté : Assassin",
+      "fr": "Assassin",
       "category": "Community"
     },
     {
       "en": "Community:Slayer on Takamanohara",
-      "fr": "Communauté : Assassin",
+      "fr": "Assassin",
       "category": "Community"
     },
     {
       "en": "Community:Slayer on The Pit",
-      "fr": "Communauté : Assassin",
+      "fr": "Assassin",
       "category": "Community"
     },
     {
       "en": "Community:Slayer on Vagabond",
-      "fr": "Communauté : Assassin",
+      "fr": "Assassin",
       "category": "Community"
     },
     {
       "en": "Community:Team Slayer on Absolution",
-      "fr": "Communauté : Assassin en équipe",
+      "fr": "Assassin en équipe",
       "category": "Community"
     },
     {
       "en": "Community:Team Slayer on Banished Narrows",
-      "fr": "Communauté : Assassin en équipe",
+      "fr": "Assassin en équipe",
       "category": "Community"
     },
     {
       "en": "Community:Team Slayer on Cliffside",
-      "fr": "Communauté : Assassin en équipe",
+      "fr": "Assassin en équipe",
       "category": "Community"
     },
     {
       "en": "Community:Team Slayer on Curfew",
-      "fr": "Communauté : Assassin en équipe",
+      "fr": "Assassin en équipe",
       "category": "Community"
     },
     {
       "en": "Community:Team Slayer on Dynasty",
-      "fr": "Communauté : Assassin en équipe",
+      "fr": "Assassin en équipe",
       "category": "Community"
     },
     {
       "en": "Community:Team Slayer on Fortress",
-      "fr": "Communauté : Assassin en équipe",
+      "fr": "Assassin en équipe",
       "category": "Community"
     },
     {
       "en": "Community:Team Slayer on Goliath",
-      "fr": "Communauté : Assassin en équipe",
+      "fr": "Assassin en équipe",
       "category": "Community"
     },
     {
       "en": "Community:Team Slayer on High Ground",
-      "fr": "Communauté : Assassin en équipe",
+      "fr": "Assassin en équipe",
       "category": "Community"
     },
     {
       "en": "Community:Team Slayer on Houseki",
-      "fr": "Communauté : Assassin en équipe",
+      "fr": "Assassin en équipe",
       "category": "Community"
     },
     {
       "en": "Community:Team Slayer on Kaiketsu",
-      "fr": "Communauté : Assassin en équipe",
+      "fr": "Assassin en équipe",
       "category": "Community"
     },
     {
       "en": "Community:Team Slayer on Kiken'na",
-      "fr": "Communauté : Assassin en équipe",
+      "fr": "Assassin en équipe",
       "category": "Community"
     },
     {
       "en": "Community:Team Slayer on Opulence",
-      "fr": "Communauté : Assassin en équipe",
+      "fr": "Assassin en équipe",
       "category": "Community"
     },
     {
       "en": "Community:Team Slayer on Perilous",
-      "fr": "Communauté : Assassin en équipe",
+      "fr": "Assassin en équipe",
       "category": "Community"
     },
     {
       "en": "Community:Team Slayer on Shiro",
-      "fr": "Communauté : Assassin en équipe",
+      "fr": "Assassin en équipe",
       "category": "Community"
     },
     {
       "en": "Community:Team Slayer on Shogun",
-      "fr": "Communauté : Assassin en équipe",
+      "fr": "Assassin en équipe",
       "category": "Community"
     },
     {
       "en": "Community:Team Slayer on Snowbound",
-      "fr": "Communauté : Assassin en équipe",
+      "fr": "Assassin en équipe",
       "category": "Community"
     },
     {
       "en": "Community:Team Slayer on Solution",
-      "fr": "Communauté : Assassin en équipe",
+      "fr": "Assassin en équipe",
       "category": "Community"
     },
     {
       "en": "Community:Team Slayer on Starboard",
-      "fr": "Communauté : Assassin en équipe",
+      "fr": "Assassin en équipe",
       "category": "Community"
     },
     {
       "en": "Community:Team Slayer on Sylvanus",
-      "fr": "Communauté : Assassin en équipe",
+      "fr": "Assassin en équipe",
       "category": "Community"
     },
     {
       "en": "Community:Team Slayer on Takamanohara",
-      "fr": "Communauté : Assassin en équipe",
+      "fr": "Assassin en équipe",
       "category": "Community"
     },
     {
       "en": "Community:Team Slayer on The Pit",
-      "fr": "Communauté : Assassin en équipe",
+      "fr": "Assassin en équipe",
       "category": "Community"
     },
     {
       "en": "Community:Team Slayer on Vagabond",
-      "fr": "Communauté : Assassin en équipe",
+      "fr": "Assassin en équipe",
       "category": "Community"
     },
     {
       "en": "Event:Escalation Slayer on Chasm",
-      "fr": "Événement : Escalade",
+      "fr": "Escalade",
       "category": "Event"
     },
     {
       "en": "Event:Escalation Slayer on Cliffhanger",
-      "fr": "Événement : Escalade",
+      "fr": "Escalade",
       "category": "Event"
     },
     {
       "en": "Event:Escalation Slayer on Streets",
-      "fr": "Événement : Escalade",
+      "fr": "Escalade",
       "category": "Event"
     },
     {
       "en": "Fiesta:FFA Slayer on Forest",
-      "fr": "Fiesta : Assassin FFA",
+      "fr": "Fiesta : Chacun pour soi",
       "category": "Fiesta"
     },
     {
       "en": "Firefight:Heroic King of the Hill on Oasis",
-      "fr": "Firefight : Roi de la colline héroïque",
+      "fr": "Baptême du feu : Roi de la colline héroïque",
       "category": "Firefight"
     },
     {
       "en": "Firefight:Legendary King of the Hill on Oasis",
-      "fr": "Firefight : Roi de la colline légendaire",
+      "fr": "Baptême du feu : Roi de la colline légendaire",
       "category": "Firefight"
     },
     {
       "en": "Gruntpocalypse:Heroic KOTH on Vallaheim Firefight",
-      "fr": "Gruntpocalypse : Roi de la colline héroïque",
+      "fr": "Grogarpocalypse : Roi de la colline héroïque",
       "category": "Gruntpocalypse"
     },
     {
@@ -1403,13 +1403,13 @@
       "category": "Husky Raid"
     },
     {
-      "en": "urvive The Undead 3.0 on TFF | Night Of The Undead",
-      "fr": "Survivre aux morts-vivants 3.0",
+      "en": "Survive The Undead 3.0 on TFF | Night Of The Undead",
+      "fr": "Survivre aux morts-vivants",
       "category": "Other"
     },
     {
       "en": "Ranked:CTF 3 Captures on Argyle",
-      "fr": "Classé : CDD 3 captures",
+      "fr": "Classé : Capture du drapeau",
       "category": "Ranked"
     },
     {
@@ -1574,67 +1574,67 @@
     },
     {
       "en": "Tactical:Slayer on Aquarius - Forge",
-      "fr": "Tactique : Assassin",
+      "fr": "Assassin tactique",
       "category": "Tactical"
     },
     {
       "en": "Tactical:Slayer on Bazaar - Forge",
-      "fr": "Tactique : Assassin",
+      "fr": "Assassin tactique",
       "category": "Tactical"
     },
     {
       "en": "Tactical:Slayer on Cliffhanger - Forge",
-      "fr": "Tactique : Assassin",
+      "fr": "Assassin tactique",
       "category": "Tactical"
     },
     {
       "en": "Tactical:Slayer on Cliffside",
-      "fr": "Tactique : Assassin",
+      "fr": "Assassin tactique",
       "category": "Tactical"
     },
     {
       "en": "Tactical:Slayer on Dredge",
-      "fr": "Tactique : Assassin",
+      "fr": "Assassin tactique",
       "category": "Tactical"
     },
     {
       "en": "Tactical:Slayer on Illusion - Forge",
-      "fr": "Tactique : Assassin",
+      "fr": "Assassin tactique",
       "category": "Tactical"
     },
     {
       "en": "Tactical:Slayer on Recharge",
-      "fr": "Tactique : Assassin",
+      "fr": "Assassin tactique",
       "category": "Tactical"
     },
     {
       "en": "Tactical:Slayer on Salvation",
-      "fr": "Tactique : Assassin",
+      "fr": "Assassin tactique",
       "category": "Tactical"
     },
     {
       "en": "Tactical:Slayer on Solitude",
-      "fr": "Tactique : Assassin",
+      "fr": "Assassin tactique",
       "category": "Tactical"
     },
     {
       "en": "Tactical:Slayer on Starboard",
-      "fr": "Tactique : Assassin",
+      "fr": "Assassin tactique",
       "category": "Tactical"
     },
     {
       "en": "Tactical:Slayer on Takamanohara",
-      "fr": "Tactique : Assassin",
+      "fr": "Assassin tactique",
       "category": "Tactical"
     },
     {
       "en": "Tactical:Slayer on The Pit",
-      "fr": "Tactique : Assassin",
+      "fr": "Assassin tactique",
       "category": "Tactical"
     },
     {
       "en": "ght:Heroic King of the Hill on Vallaheim Firefight",
-      "fr": "Firefight : Roi de la colline héroïque",
+      "fr": "Baptême du feu : Roi de la colline héroïque",
       "category": "ght"
     }
   ]

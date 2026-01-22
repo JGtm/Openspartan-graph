@@ -151,6 +151,9 @@ def _inventory_emblem_to_waypoint_png(emblem_path: str | None, configuration_id:
     Pattern observé:
     - Inventory/Spartan/Emblems/<stem>.json + configuration_id ->
       /hi/Waypoint/file/images/emblems/<stem>_<configuration_id>.png
+    
+    Note: Ce pattern ne fonctionne pas pour tous les emblèmes (ex: ranked, certains events).
+    Dans ces cas, il faut appeler l'API progression pour récupérer le PNG via DisplayPath.
     """
 
     p = str(emblem_path or "").strip()
@@ -176,11 +179,93 @@ def _inventory_emblem_to_waypoint_png(emblem_path: str | None, configuration_id:
     return f"{host}/hi/Waypoint/file/images/emblems/{stem}_{cfg}.png"
 
 
+def _inventory_json_to_cms_url(inventory_path: str | None) -> str | None:
+    """Construit l'URL vers le fichier JSON CMS pour un chemin d'inventaire.
+    
+    Ex: Inventory/Spartan/Emblems/104-001-olympus-stuck-3d208338.json
+      -> https://gamecms-hacs.svc.halowaypoint.com/hi/progression/file/Inventory/Spartan/Emblems/104-001-olympus-stuck-3d208338.json
+    """
+    p = str(inventory_path or "").strip()
+    if not p:
+        return None
+    
+    # Normaliser le chemin
+    if p.startswith("/"):
+        p = p[1:]
+    
+    # Vérifier que c'est un chemin d'inventaire
+    p_lower = p.lower()
+    if not (p_lower.startswith("inventory/") or "/inventory/" in p_lower):
+        return None
+    
+    host = "https://gamecms-hacs.svc.halowaypoint.com"
+    return f"{host}/hi/progression/file/{p}"
+
+
+async def _resolve_inventory_png_via_api(
+    session,
+    inventory_path: str | None,
+    *,
+    spartan_token: str,
+    clearance_token: str,
+) -> str | None:
+    """Résout un chemin Inventory/*.json vers l'URL du PNG réel via l'API progression.
+    
+    Appelle /hi/progression/file/Inventory/... pour récupérer le JSON de métadonnées,
+    puis extrait CommonData.DisplayPath.Media.MediaUrl.Path pour construire l'URL du PNG.
+    
+    Retourne l'URL complète vers le PNG, ou None si non résolu.
+    """
+    cms_url = _inventory_json_to_cms_url(inventory_path)
+    if not cms_url:
+        return None
+    
+    headers = {
+        "Accept": "application/json",
+        "X-343-Authorization-Spartan": spartan_token,
+        "343-Clearance": clearance_token,
+    }
+    
+    try:
+        async with session.get(cms_url, headers=headers) as resp:
+            if resp.status != 200:
+                return None
+            data = await resp.json()
+    except Exception:
+        return None
+    
+    # Extraire CommonData.DisplayPath.Media.MediaUrl.Path
+    common_data = data.get("CommonData", {})
+    display_path = common_data.get("DisplayPath", {})
+    media = display_path.get("Media", {})
+    media_url = media.get("MediaUrl", {})
+    png_path = media_url.get("Path", "")
+    
+    if not png_path:
+        # Fallback: essayer FolderPath + FileName
+        folder = display_path.get("FolderPath", "")
+        filename = display_path.get("FileName", "")
+        if folder and filename:
+            png_path = f"{folder}/{filename}"
+    
+    if not png_path:
+        return None
+    
+    # Construire l'URL complète
+    png_path = png_path.lstrip("/")
+    host = "https://gamecms-hacs.svc.halowaypoint.com"
+    return f"{host}/hi/images/file/{png_path}"
+
+
 def _waypoint_nameplate_png_from_emblem(emblem_path: str | None, configuration_id: int | None) -> str | None:
     """Best-effort: construit une URL nameplate Waypoint basée sur l'emblem.
 
     Pattern observé:
     - /hi/Waypoint/file/images/nameplates/<emblem_stem>_<configuration_id>.png
+    
+    Note: Le configuration_id est un entier 32 bits signé dans l'API.
+    Nous utilisons la valeur signée directement car c'est ce que Waypoint attend.
+    Certaines combinaisons emblem + configuration_id n'ont pas de nameplate générée.
     """
 
     p = str(emblem_path or "").strip()
@@ -190,7 +275,8 @@ def _waypoint_nameplate_png_from_emblem(emblem_path: str | None, configuration_i
         cfg = int(configuration_id)
     except Exception:
         return None
-    if cfg <= 0:
+    # Accepter tous les configuration_id non-nuls (positifs ou négatifs)
+    if cfg == 0:
         return None
 
     if "/Spartan/Emblems/" not in p:
@@ -212,7 +298,12 @@ def _inventory_backdrop_to_waypoint_png(backdrop_path: str | None) -> str | None
     - Inventory/Spartan/BackdropImages/<stem>.json ->
       /hi/Waypoint/file/images/backdrops/<stem>.png
     
-    Le pattern peut varier selon les items, on essaie plusieurs variantes.
+    ATTENTION: Ce pattern ne fonctionne PAS pour la majorité des backdrops !
+    Les backdrops utilisent généralement des chemins comme `progression/backgrounds/...`
+    qui ne sont pas dans le mapping Waypoint.
+    
+    Cette fonction ne retourne une URL que si le backdrop est déjà un chemin PNG direct.
+    Pour les autres cas, utiliser _resolve_inventory_png_via_api().
     """
 
     p = str(backdrop_path or "").strip()
@@ -224,18 +315,9 @@ def _inventory_backdrop_to_waypoint_png(backdrop_path: str | None) -> str | None
     if p_lower.endswith(".png") or p_lower.endswith(".jpg") or p_lower.endswith(".jpeg"):
         return _to_image_url(p)
 
-    # Extraire le stem du fichier JSON
-    if "/Spartan/BackdropImages/" not in p:
-        return None
-
-    name = p.split("/Spartan/BackdropImages/", 1)[1].split("/", 1)[-1]
-    stem = name.rsplit(".", 1)[0]
-    if not stem:
-        return None
-
-    host = "https://gamecms-hacs.svc.halowaypoint.com"
-    # Essayer le pattern Waypoint standard
-    return f"{host}/hi/Waypoint/file/images/backdrops/{stem}.png"
+    # Pour les fichiers JSON, ne pas utiliser le pattern Waypoint (ne fonctionne pas)
+    # -> Laisser le caller utiliser _resolve_inventory_png_via_api() à la place
+    return None
 
 
 def ensure_spnkr_tokens(*, timeout_seconds: int = 12) -> tuple[bool, str | None]:
@@ -628,11 +710,33 @@ def fetch_appearance_via_spnkr(
 
             emblem_path = getattr(appearance.emblem, "emblem_path", None)
             emblem_cfg = getattr(appearance.emblem, "configuration_id", None)
-            emblem_url = _inventory_emblem_to_waypoint_png(emblem_path, emblem_cfg) or _to_image_url(emblem_path)
+            
+            # Essayer d'abord le pattern Waypoint (rapide, pas d'appel API supplémentaire)
+            emblem_url = _inventory_emblem_to_waypoint_png(emblem_path, emblem_cfg)
+            
+            # Si le pattern Waypoint ne fonctionne pas, résoudre via l'API progression
+            if not emblem_url and emblem_path:
+                emblem_url = await _resolve_inventory_png_via_api(
+                    session, emblem_path, spartan_token=st, clearance_token=ct
+                )
+            
+            # Dernier fallback: URL vers le JSON (sera résolu au moment du téléchargement)
+            if not emblem_url:
+                emblem_url = _to_image_url(emblem_path)
             
             # Backdrop: convertir le chemin JSON en URL PNG Waypoint
             backdrop_raw = getattr(appearance, "backdrop_image_path", None)
-            backdrop_url = _inventory_backdrop_to_waypoint_png(backdrop_raw) or _to_image_url(backdrop_raw)
+            backdrop_url = _inventory_backdrop_to_waypoint_png(backdrop_raw)
+            
+            # Si le pattern Waypoint ne fonctionne pas, résoudre via l'API progression
+            if not backdrop_url and backdrop_raw:
+                backdrop_url = await _resolve_inventory_png_via_api(
+                    session, backdrop_raw, spartan_token=st, clearance_token=ct
+                )
+            
+            # Dernier fallback
+            if not backdrop_url:
+                backdrop_url = _to_image_url(backdrop_raw)
             
             player_title_path = getattr(appearance, "player_title_path", None)
             nameplate_url = _to_image_url(player_title_path) or _waypoint_nameplate_png_from_emblem(

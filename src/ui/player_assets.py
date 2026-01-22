@@ -125,6 +125,7 @@ def download_image_to_cache(url: str, *, prefix: str, timeout_seconds: int = 12)
 
         `target` peut être:
         - une URL /hi/images/file/<relative>
+        - une URL /hi/Waypoint/file/images/<relative>
         - un chemin relatif Inventory/... (ou /Inventory/...)
         """
 
@@ -142,9 +143,15 @@ def download_image_to_cache(url: str, *, prefix: str, timeout_seconds: int = 12)
             if rel.startswith("http://") or rel.startswith("https://"):
                 p = urllib.parse.urlparse(rel)
                 path_lower = (p.path or "").lower()
-                marker = "/hi/images/file/"
-                if marker in path_lower:
-                    rel = (p.path or "")[path_lower.index(marker) + len(marker) :]
+                
+                # Pattern 1: /hi/images/file/<rel>
+                marker1 = "/hi/images/file/"
+                if marker1 in path_lower:
+                    rel = (p.path or "")[path_lower.index(marker1) + len(marker1) :]
+                # Pattern 2: /hi/Waypoint/file/images/<rel>
+                marker2 = "/hi/waypoint/file/images/"
+                if marker2 in path_lower:
+                    rel = (p.path or "")[path_lower.index(marker2) + len("/hi/Waypoint/file/images/") :]
         except Exception:
             pass
 
@@ -228,11 +235,16 @@ def download_image_to_cache(url: str, *, prefix: str, timeout_seconds: int = 12)
             content_type = ""
 
             # Certains endpoints renvoient 401/403 en accès direct; on tente SPNKr en fallback.
-            if (
-                ("/hi/images/file/" in str(target_url))
-                or str(target_url).strip().lower().startswith("inventory/")
+            # Inclut: /hi/images/file/, /hi/Waypoint/file/images/nameplates/, et chemins Inventory/
+            url_lower = str(target_url).lower()
+            needs_auth = (
+                ("/hi/images/file/" in url_lower)
+                or ("/hi/waypoint/file/images/nameplates/" in url_lower)
+                or url_lower.strip().startswith("inventory/")
                 or str(target_url).strip().startswith("/Inventory/")
-            ):
+            )
+            
+            if needs_auth:
                 data_spnkr, spnkr_err = _try_spnkr_fetch_bytes(target_url)
                 if data_spnkr:
                     data = bytes(data_spnkr)

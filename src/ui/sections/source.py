@@ -145,19 +145,34 @@ def render_source_section(
                     st.session_state["xuid_input"] = secret_player
             st.rerun()
 
-    # UI simplifiée: on garde uniquement la sélection SPNKr (pratique pour basculer entre DB joueurs).
+    # UI simplifiée: sélection directe parmi les DB SPNKr détectées.
     if spnkr_candidates:
         with st.expander("DB détectées (SPNKr)", expanded=False):
-            opts_s = ["(garder actuelle)"] + [p.name for p in spnkr_candidates]
-            pick_s = st.selectbox("DB", options=opts_s, index=0)
-            if st.button("Utiliser cette DB SPNKr", width="stretch") and pick_s != "(garder actuelle)":
-                sel_p = next((p for p in spnkr_candidates if p.name == pick_s), None)
+            # Déterminer l'index actuel
+            current_name = Path(current_db_path).name if current_db_path else ""
+            db_names = [p.name for p in spnkr_candidates]
+            try:
+                current_idx = db_names.index(current_name)
+            except ValueError:
+                current_idx = 0
+
+            def _on_db_change():
+                pick = st.session_state.get("_spnkr_db_picker", "")
+                sel_p = next((p for p in spnkr_candidates if p.name == pick), None)
                 if sel_p:
                     st.session_state["db_path"] = str(sel_p)
                     inferred = infer_spnkr_player_from_db_path(str(sel_p)) or ""
                     if inferred:
                         st.session_state["xuid_input"] = inferred
-                    st.rerun()
+                    on_clear_caches()
+
+            st.selectbox(
+                "DB",
+                options=db_names,
+                index=current_idx,
+                key="_spnkr_db_picker",
+                on_change=_on_db_change,
+            )
 
     # Mémoriser l'ancienne DB pour détecter un changement
     previous_db = str(st.session_state.get("db_path", "") or "").strip()
