@@ -868,6 +868,57 @@ def _extract_team_scores(match_obj: Dict[str, Any], my_team_id: Optional[int]) -
     return my_score, enemy_score
 
 
+def _extract_player_mmrs(player: Dict[str, Any], my_team_id: Optional[int]) -> tuple[Optional[float], Optional[float]]:
+    """Extrait les MMRs depuis les stats du joueur.
+
+    Le payload contient typiquement:
+    - PlayerTeamStats[].Stats.TeamMmr : MMR de l'équipe du joueur
+    - PlayerTeamStats[].Stats.TeamMmrs : dict {"0": float, "1": float} avec MMR par équipe
+
+    Returns:
+        (team_mmr, enemy_mmr)
+    """
+    team_stats = player.get("PlayerTeamStats")
+    if not isinstance(team_stats, list):
+        return None, None
+
+    team_mmr: Optional[float] = None
+    enemy_mmr: Optional[float] = None
+
+    for ts in team_stats:
+        if not isinstance(ts, dict):
+            continue
+        stats = ts.get("Stats")
+        if not isinstance(stats, dict):
+            continue
+
+        # MMR de l'équipe du joueur
+        raw_team_mmr = stats.get("TeamMmr")
+        if raw_team_mmr is not None:
+            try:
+                team_mmr = float(raw_team_mmr)
+            except (TypeError, ValueError):
+                pass
+
+        # MMRs par équipe (pour calculer l'ennemi)
+        team_mmrs_raw = stats.get("TeamMmrs")
+        if isinstance(team_mmrs_raw, dict) and my_team_id is not None:
+            my_key = str(my_team_id)
+            for k, v in team_mmrs_raw.items():
+                if k != my_key:
+                    try:
+                        enemy_mmr = float(v)
+                        break
+                    except (TypeError, ValueError):
+                        continue
+
+        # On a trouvé les données, on peut sortir
+        if team_mmr is not None or enemy_mmr is not None:
+            break
+
+    return team_mmr, enemy_mmr
+
+
 def load_matches(
     db_path: str,
     xuid: str,
@@ -972,6 +1023,9 @@ def load_matches(
 
             my_team_score, enemy_team_score = _extract_team_scores(obj, last_team_id)
 
+            # Extraire les MMRs
+            team_mmr, enemy_mmr = _extract_player_mmrs(me, last_team_id)
+
             # Fallback important pour les DB générées sans import d'assets (SPNKr --no-assets).
             # Sans ça, playlist/pair/map sont None => filtres UI vides.
             playlist_name = playlist_names.get(playlist_id) if playlist_id else None
@@ -1016,6 +1070,8 @@ def load_matches(
 
                     my_team_score=my_team_score,
                     enemy_team_score=enemy_team_score,
+                    team_mmr=team_mmr,
+                    enemy_mmr=enemy_mmr,
                 )
             )
 

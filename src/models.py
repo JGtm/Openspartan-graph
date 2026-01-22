@@ -58,6 +58,10 @@ class MatchRow:
     my_team_score: Optional[int] = None
     enemy_team_score: Optional[int] = None
 
+    # MMR (Matchmaking Rating) - utilisé pour les analyses de matchmaking
+    team_mmr: Optional[float] = None
+    enemy_mmr: Optional[float] = None
+
     @property
     def ratio(self) -> float:
         """Calcule le ratio (Frags + assists/2) / morts.

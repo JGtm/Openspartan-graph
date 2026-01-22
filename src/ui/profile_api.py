@@ -568,7 +568,7 @@ def fetch_appearance_via_spnkr(
                             return None, None, None
                         
                         # 2. Appeler l'API Economy pour la progression du joueur
-                        # Essayer plusieurs formats d'endpoint connus
+                        # Endpoint documenté par den.dev: https://den.dev/blog/halo-infinite-career-api/
                         economy_host = "https://economy.svc.halowaypoint.com"
                         
                         # Utiliser la session avec les headers d'authentification
@@ -584,46 +584,53 @@ def fetch_appearance_via_spnkr(
                         logger = logging.getLogger(__name__)
                         
                         career_progress = None
+                        response_format = None  # Pour adapter le parsing selon le format
                         
-                        # Format 1: POST avec body (comme Grunt semble faire)
-                        # POST /hi/rewardtracks/careerRank1
+                        # Format 1 (den.dev): GET /hi/players/xuid({XUID})/rewardtracks/careerranks/careerrank1
+                        # Réponse directe: { "CurrentProgress": { "Rank": N, "PartialProgress": XP }}
                         try:
-                            career_url = f"{economy_host}/hi/rewardtracks/careerRank1"
-                            body = {"Users": [f"xuid({xu})"]}
-                            logger.info(f"Career Rank API attempt 1 (POST): {career_url}")
-                            async with session.post(career_url, headers=headers, json=body) as resp:
+                            career_url = f"{economy_host}/hi/players/xuid({xu})/rewardtracks/careerranks/careerrank1"
+                            logger.info(f"Career Rank API attempt 1 (den.dev format): {career_url}")
+                            async with session.get(career_url, headers=headers) as resp:
                                 logger.info(f"Career Rank API response status: {resp.status}")
                                 if resp.status == 200:
                                     career_progress = await resp.json()
-                                    logger.info(f"Career Rank API response keys: {list(career_progress.keys()) if isinstance(career_progress, dict) else type(career_progress)}")
+                                    response_format = "direct"  # CurrentProgress au premier niveau
+                                    logger.info(f"Career Rank API success (format 1)")
                         except Exception as e:
-                            logger.warning(f"Career Rank POST failed: {e}")
+                            logger.warning(f"Career Rank GET (den.dev) failed: {e}")
                         
-                        # Format 2: GET simple
+                        # Format 2 (fallback Grunt): POST /hi/rewardtracks/careerRank1 avec body
+                        # Réponse encapsulée: { "RewardTracks": [{ "Result": { "CurrentProgress": {...}}}]}
                         if career_progress is None:
                             try:
-                                career_url = f"{economy_host}/hi/players/xuid({xu})/careerrank"
-                                logger.info(f"Career Rank API attempt 2 (GET): {career_url}")
-                                async with session.get(career_url, headers=headers) as resp:
+                                career_url = f"{economy_host}/hi/rewardtracks/careerRank1"
+                                body = {"Users": [f"xuid({xu})"]}
+                                logger.info(f"Career Rank API attempt 2 (Grunt format POST): {career_url}")
+                                async with session.post(career_url, headers=headers, json=body) as resp:
                                     logger.info(f"Career Rank API response status: {resp.status}")
                                     if resp.status == 200:
                                         career_progress = await resp.json()
-                                        logger.info(f"Career Rank API response keys: {list(career_progress.keys()) if isinstance(career_progress, dict) else type(career_progress)}")
+                                        response_format = "wrapped"  # RewardTracks[0].Result.CurrentProgress
+                                        logger.info(f"Career Rank API success (format 2)")
                             except Exception as e:
-                                logger.warning(f"Career Rank GET failed: {e}")
+                                logger.warning(f"Career Rank POST (Grunt) failed: {e}")
                         
                         if career_progress is None:
                             return None, None, None
                         
-                        # Extraire la progression
-                        # Structure attendue: { "RewardTracks": [{ "Result": { "CurrentProgress": { "Rank": N, "PartialProgress": XP }}}]}
-                        reward_tracks = career_progress.get("RewardTracks", [])
-                        if not reward_tracks:
-                            return None, None, None
-                        
-                        track0 = reward_tracks[0]
-                        result = track0.get("Result", {})
-                        current_progress = result.get("CurrentProgress", {})
+                        # Extraire la progression selon le format de réponse
+                        if response_format == "direct":
+                            # Format den.dev: { "CurrentProgress": { "Rank": N, "PartialProgress": XP }}
+                            current_progress = career_progress.get("CurrentProgress", {})
+                        else:
+                            # Format Grunt: { "RewardTracks": [{ "Result": { "CurrentProgress": {...}}}]}
+                            reward_tracks = career_progress.get("RewardTracks", [])
+                            if not reward_tracks:
+                                return None, None, None
+                            track0 = reward_tracks[0]
+                            result = track0.get("Result", {})
+                            current_progress = result.get("CurrentProgress", {})
                         
                         current_rank = current_progress.get("Rank")
                         partial_xp = current_progress.get("PartialProgress", 0)

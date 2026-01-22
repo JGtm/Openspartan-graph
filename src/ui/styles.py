@@ -70,10 +70,12 @@ def get_hero_html(
     """Retourne le HTML du banner hero (Spartan ID card style).
 
     Structure visuelle (de l'arrière vers l'avant):
-    1. Backdrop (240px, 2/3 de la nameplate, centré)
-    2. Nameplate (360px)
-    3. Emblème (par-dessus, aligné à gauche avec padding 10px)
-    4. Gamertag + Service tag (à droite de l'emblème)
+    1. Career Rank icon (à gauche, aligné horizontalement)
+    2. Spartan ID card:
+       - Backdrop (240px, 2/3 de la nameplate, centré)
+       - Nameplate (360px)
+       - Emblème (par-dessus, aligné à gauche avec padding 10px)
+       - Gamertag + Service tag (à droite de l'emblème)
     
     Args:
         grid_mode: Si True, utilise un style compact pour les grilles (sans margin-top, centré).
@@ -94,6 +96,7 @@ def get_hero_html(
     backdrop_data = file_to_data_url(backdrop_path, max_bytes=8 * 1024 * 1024)
     emblem_data = file_to_data_url(emblem_path)
     nameplate_data = file_to_data_url(nameplate_path)
+    rank_icon_data = file_to_data_url(rank_icon_path)
 
     st = (service_tag or "").strip()
 
@@ -126,9 +129,38 @@ def get_hero_html(
     # Notches uniquement en mode normal (pas en grille)
     notches = "" if grid_mode else "<div class='wp-notch-top'></div><div class='wp-notch-bottom'></div>"
 
+    # Career Rank (icône + label, à gauche du Spartan ID)
+    rank_html = ""
+    if rank_icon_data or rank_label:
+        safe_rank_label = html.escape(rank_label or "") if rank_label else ""
+        safe_rank_subtitle = html.escape(rank_subtitle or "") if rank_subtitle else ""
+        
+        rank_icon_html = ""
+        if rank_icon_data:
+            rank_icon_html = f"<img src='{rank_icon_data}' alt='rank' class='career-rank__icon' />"
+        
+        rank_label_html = ""
+        if safe_rank_label:
+            rank_label_html = f"<div class='career-rank__label'>{safe_rank_label}</div>"
+        
+        rank_subtitle_html = ""
+        if safe_rank_subtitle:
+            rank_subtitle_html = f"<div class='career-rank__subtitle'>{safe_rank_subtitle}</div>"
+        
+        rank_html = (
+            "<div class='career-rank'>"
+            f"  {rank_icon_html}"
+            "  <div class='career-rank__text'>"
+            f"    {rank_label_html}"
+            f"    {rank_subtitle_html}"
+            "  </div>"
+            "</div>"
+        )
+
     return (
         f"{notches}"
         f"<div class='{wrapper_class}'>"
+        f"  {rank_html}"
         "  <div class='spartan-id'>"
         f"    {backdrop_html}"
         f"    {nameplate_html}"

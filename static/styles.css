@@ -207,10 +207,66 @@ section.main:after {
 
 .spartan-id-wrapper {
     display: flex;
+    align-items: center;
     justify-content: flex-start;
+    gap: 16px;
     margin-top: 3.5rem; /* Espace pour la navbar Streamlit */
     margin-bottom: 1rem;
 }
+
+/* =============================================================================
+   Career Rank (à gauche du Spartan ID)
+   ============================================================================= */
+
+.career-rank {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-width: 80px;
+    gap: 4px;
+}
+
+.career-rank__icon {
+    /* Taille originale de l'image */
+    max-width: 120px;
+    max-height: 120px;
+    object-fit: contain;
+    filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.5));
+}
+
+.career-rank__text {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+}
+
+.career-rank__label {
+    font-family: 'Industry', 'Segoe UI', 'Roboto Condensed', Arial, sans-serif;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    color: rgba(255, 255, 255, 0.9);
+    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
+    white-space: nowrap;
+    line-height: 1.1;
+}
+
+.career-rank__subtitle {
+    font-family: 'Industry', 'Segoe UI', 'Roboto Condensed', Arial, sans-serif;
+    font-size: 9px;
+    font-weight: 500;
+    letter-spacing: 0.03em;
+    color: rgba(255, 255, 255, 0.65);
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+    white-space: nowrap;
+    line-height: 1.1;
+}
+
+/* =============================================================================
+   Spartan ID Card
+   ============================================================================= */
 
 .spartan-id {
     position: relative;

@@ -22,16 +22,36 @@
 
 ### 1. Career Rank - Progression du joueur
 
-**Endpoint probable** (basé sur le code OpenSpartan Workshop) :
+**Endpoint confirmé** (source: [den.dev/blog/halo-infinite-career-api](https://den.dev/blog/halo-infinite-career-api/)) :
 ```
-GET https://economy.svc.halowaypoint.com/hi/players/xuid({XUID})/rewardtracks/careerRank1
+GET https://economy.svc.halowaypoint.com/hi/players/xuid({XUID})/rewardtracks/careerranks/careerrank1
 ```
+
+> ⚠️ **Note** : L'URL utilise `careerranks/careerrank1` (avec un 's' et en minuscules)
 
 **Headers requis** :
 - `x-343-authorization-spartan: {SPARTAN_TOKEN}`
 - `343-clearance: {CLEARANCE_TOKEN}`
 
-**Réponse attendue** (structure C#) :
+**Réponse attendue** (format den.dev - confirmé) :
+```json
+{
+  "RewardTrackPath": "RewardTracks/CareerRanks/careerRank1.json",
+  "TrackType": "CareerRank",
+  "CurrentProgress": {
+    "Rank": 167,
+    "PartialProgress": 8050,
+    "IsOwned": false,
+    "HasReachedMaxRank": false
+  },
+  "PreviousProgress": null,
+  "IsOwned": false,
+  "BaseXp": null,
+  "BoostXp": null
+}
+```
+
+**Réponse alternative** (format Grunt/batch - POST) :
 ```json
 {
   "RewardTracks": [
@@ -47,19 +67,22 @@ GET https://economy.svc.halowaypoint.com/hi/players/xuid({XUID})/rewardtracks/ca
 }
 ```
 
-**Code C# de référence** (UserContextManager.cs:263-340) :
-```csharp
-var careerRankTask = SafeAPICall(() => 
-    HaloClient.EconomyGetPlayerCareerRank([$"xuid({xuid})"], "careerRank1"));
+**Code Python implémenté** :
+```python
+# Format 1 (den.dev) - GET direct par joueur
+career_url = f"https://economy.svc.halowaypoint.com/hi/players/xuid({xuid})/rewardtracks/careerranks/careerrank1"
+async with session.get(career_url, headers=headers) as resp:
+    if resp.status == 200:
+        data = await resp.json()
+        current_progress = data.get("CurrentProgress", {})
+        rank = current_progress.get("Rank")
+        partial_xp = current_progress.get("PartialProgress", 0)
+```
 
-// Extraction du rang
-var currentRank = careerTrackResult.Result.RewardTracks[0].Result.CurrentProgress.Rank;
-var partialXp = careerTrackResult.Result.RewardTracks[0].Result.CurrentProgress.PartialProgress;
-
-// Note: Rank 272 = Hero (rang max), sinon rank+1 pour l'affichage
-if (currentRank != 272) {
-    currentRank = currentRank + 1;
-}
+**Logique d'affichage du rang** :
+```python
+# Note: Rank 272 = Hero (rang max), sinon rank+1 pour l'affichage
+display_rank = current_rank if current_rank == 272 else current_rank + 1
 ```
 
 ---

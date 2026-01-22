@@ -274,6 +274,8 @@ def load_df(db_path: str, xuid: str, db_key: tuple[int, int] | None = None) -> p
             "assists": [m.assists for m in matches],
             "accuracy": [m.accuracy for m in matches],
             "ratio": [m.ratio for m in matches],
+            "team_mmr": [m.team_mmr for m in matches],
+            "enemy_mmr": [m.enemy_mmr for m in matches],
         }
     )
     # Facilite les filtres date
