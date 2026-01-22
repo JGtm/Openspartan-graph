@@ -10,6 +10,7 @@ import html
 import re
 import subprocess
 import sys
+import time as time_module
 import urllib.parse
 from pathlib import Path
 import uuid
@@ -258,6 +259,44 @@ def _is_spnkr_db_path(db_path: str) -> bool:
         return p.suffix.lower() == ".db" and p.name.lower().startswith("spnkr")
     except Exception:
         return False
+
+
+def _cleanup_orphan_tmp_dbs() -> None:
+    """Nettoie les fichiers .tmp.*.db orphelins dans le dossier data/.
+    
+    Ces fichiers peuvent rester si un import SPNKr a été interrompu
+    (crash, timeout, fermeture de l'app). On supprime ceux de plus de 1h.
+    """
+    if st.session_state.get("_tmp_db_cleanup_done"):
+        return
+    st.session_state["_tmp_db_cleanup_done"] = True
+    
+    try:
+        repo_root = Path(__file__).resolve().parent
+        data_dir = repo_root / "data"
+        if not data_dir.exists():
+            return
+        
+        now = time_module.time()
+        one_hour_ago = now - 3600  # 1 heure
+        
+        # Pattern: *.tmp.*.db (ex: spnkr_gt_Madina.db.tmp.1234567890.12345.db)
+        for tmp_file in data_dir.glob("*.tmp.*.db"):
+            try:
+                if tmp_file.stat().st_mtime < one_hour_ago:
+                    tmp_file.unlink()
+            except Exception:
+                pass
+        
+        # Pattern alternatif: *.db.tmp.* sans extension finale
+        for tmp_file in data_dir.glob("*.db.tmp.*"):
+            try:
+                if tmp_file.stat().st_mtime < one_hour_ago:
+                    tmp_file.unlink()
+            except Exception:
+                pass
+    except Exception:
+        pass
 
 
 def _render_sync_indicator(db_path: str) -> None:
@@ -2445,6 +2484,9 @@ def main() -> None:
     st.set_page_config(page_title="OpenSpartan Graphs", layout="wide")
 
     perf_reset_run()
+
+    # Nettoyage des fichiers temporaires orphelins (une fois par session)
+    _cleanup_orphan_tmp_dbs()
 
     with perf_section("css"):
         st.markdown(load_css(), unsafe_allow_html=True)

@@ -26,6 +26,10 @@ data/spnkr_JGtm.db
 data/investigation/
 data/cache/*
 
+# Fichiers temporaires d'import SPNKr
+*.tmp.*.db
+data/*.tmp.*
+
 # Documentation locale (non trackée)
 ROADMAP_*.md
 NOTES_*.md

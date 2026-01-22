@@ -159,6 +159,9 @@ def render_source_section(
                         st.session_state["xuid_input"] = inferred
                     st.rerun()
 
+    # Mémoriser l'ancienne DB pour détecter un changement
+    previous_db = str(st.session_state.get("db_path", "") or "").strip()
+
     db_path = file_input(
         "Chemin du .db",
         key="db_path",
@@ -166,6 +169,20 @@ def render_source_section(
         help="Sélectionne un fichier SQLite (.db).",
         placeholder="Ex: C:\\Users\\Guillaume\\AppData\\Local\\OpenSpartan.Workshop\\data\\2533....db",
     )
+
+    # Détection de changement de DB: mettre à jour le xuid_input automatiquement
+    current_db = str(st.session_state.get("db_path", "") or "").strip()
+    if current_db and current_db != previous_db and os.path.exists(current_db):
+        # La DB a changé → déduire le nouveau joueur
+        inferred = infer_spnkr_player_from_db_path(current_db)
+        if not inferred:
+            inferred = guess_xuid_from_db_path(current_db)
+        if inferred:
+            st.session_state["xuid_input"] = inferred
+        # Vider les caches pour forcer le rechargement avec la nouvelle DB
+        on_clear_caches()
+        st.rerun()
+
     # Identité: UI masquée (on résout et affiche uniquement le XUID effectif)
     raw_identity = str(st.session_state.get("xuid_input", "") or "").strip()
     xuid = resolve_xuid_from_db(str(db_path), raw_identity) or raw_identity
