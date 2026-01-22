@@ -218,6 +218,75 @@ def _run_spnkr_import(opts: RefreshOptions) -> int:
     return 0
 
 
+def _fetch_profile_assets(*, player: str, xuid: str | None = None) -> int:
+    """Récupère les assets profil (emblem, backdrop, nameplate) via SPNKr.
+    
+    Cette fonction est appelée après un refresh pour mettre à jour le cache
+    des assets visuels du joueur.
+    """
+    print("[Profile] Fetch assets profil...")
+    print("- player:", player)
+    
+    try:
+        # Import dynamique pour éviter les erreurs si spnkr n'est pas installé
+        from src.ui.profile_api import (
+            fetch_appearance_via_spnkr,
+            fetch_xuid_via_spnkr,
+            save_cached_appearance,
+            save_cached_xuid,
+        )
+    except ImportError as e:
+        print(f"[Profile] Module profile_api non disponible: {e}")
+        return 0  # Non bloquant
+    
+    # Résoudre le XUID si on a un gamertag
+    resolved_xuid = xuid
+    if not resolved_xuid or not str(resolved_xuid).strip().isdigit():
+        player_str = str(player).strip()
+        if player_str.isdigit():
+            resolved_xuid = player_str
+        else:
+            print(f"[Profile] Résolution XUID pour {player}...")
+            try:
+                resolved_xuid, canonical_gt = fetch_xuid_via_spnkr(gamertag=player_str)
+                if resolved_xuid:
+                    save_cached_xuid(player_str, resolved_xuid)
+                    print(f"[Profile] XUID résolu: {resolved_xuid} ({canonical_gt})")
+            except Exception as e:
+                print(f"[Profile] Échec résolution XUID: {e}")
+                return 0  # Non bloquant
+    
+    if not resolved_xuid:
+        print("[Profile] Impossible de résoudre le XUID, skip fetch assets.")
+        return 0
+    
+    # Fetch les assets
+    try:
+        print(f"[Profile] Fetch appearance pour XUID {resolved_xuid}...")
+        appearance = fetch_appearance_via_spnkr(xuid=resolved_xuid)
+        
+        if appearance:
+            save_cached_appearance(resolved_xuid, appearance)
+            print("[Profile] Assets mis en cache:")
+            if appearance.service_tag:
+                print(f"  - Service tag: {appearance.service_tag}")
+            if appearance.emblem_image_url:
+                print(f"  - Emblem: OK")
+            if appearance.backdrop_image_url:
+                print(f"  - Backdrop: OK")
+            if appearance.nameplate_image_url:
+                print(f"  - Nameplate: OK")
+            if appearance.rank_label:
+                print(f"  - Rank: {appearance.rank_label}")
+        else:
+            print("[Profile] Aucune donnée retournée")
+            
+        return 0
+    except Exception as e:
+        print(f"[Profile] Échec fetch assets: {e}")
+        return 0  # Non bloquant
+
+
 def _launch_streamlit(*, db_path: Path | None, port: int | None, no_browser: bool) -> int:
     if not DEFAULT_STREAMLIT_APP.exists():
         raise SystemExit(f"Introuvable: {DEFAULT_STREAMLIT_APP}")
@@ -602,6 +671,10 @@ def _cmd_refresh_with_aliases(args: argparse.Namespace) -> int:
         if proc.returncode != 0:
             print(f"[WARN] Repair aliases échoué sur {mid} (code={proc.returncode})")
 
+    # Fetch des assets profil (emblem, backdrop, nameplate)
+    if not getattr(args, "no_fetch_profile", False):
+        _fetch_profile_assets(player=str(player))
+
     return 0
 
 
@@ -927,6 +1000,11 @@ def _build_parser() -> argparse.ArgumentParser:
     p_refa.add_argument("--max-type2-chunks", type=int, default=0, help="Limite chunks type2 (défaut: 0)")
     p_refa.add_argument("--max-total-chunks", type=int, default=None, help="Limite totale chunks")
     p_refa.add_argument("--print-limit", type=int, default=20, help="Limite logs (défaut: 20)")
+    p_refa.add_argument(
+        "--no-fetch-profile",
+        action="store_true",
+        help="Désactive le fetch des assets profil (emblem, backdrop, nameplate)",
+    )
     p_refa.set_defaults(func=_cmd_refresh_with_aliases)
 
     p_runrefa = sub.add_parser(
@@ -960,6 +1038,11 @@ def _build_parser() -> argparse.ArgumentParser:
     p_runrefa.add_argument("--max-type2-chunks", type=int, default=0, help="Limite chunks type2 (défaut: 0)")
     p_runrefa.add_argument("--max-total-chunks", type=int, default=None, help="Limite totale chunks")
     p_runrefa.add_argument("--print-limit", type=int, default=20, help="Limite logs (défaut: 20)")
+    p_runrefa.add_argument(
+        "--no-fetch-profile",
+        action="store_true",
+        help="Désactive le fetch des assets profil (emblem, backdrop, nameplate)",
+    )
     p_runrefa.add_argument("--port", type=int, default=None, help="Port (sinon auto)")
     p_runrefa.add_argument("--no-browser", action="store_true", help="N'ouvre pas le navigateur")
     p_runrefa.set_defaults(func=_cmd_run_with_refresh_and_aliases)

@@ -205,6 +205,39 @@ def _waypoint_nameplate_png_from_emblem(emblem_path: str | None, configuration_i
     return f"{host}/hi/Waypoint/file/images/nameplates/{stem}_{cfg}.png"
 
 
+def _inventory_backdrop_to_waypoint_png(backdrop_path: str | None) -> str | None:
+    """Best-effort: convertit un chemin Inventory/Spartan/BackdropImages/<name>.json vers une image PNG Waypoint.
+
+    Pattern observé:
+    - Inventory/Spartan/BackdropImages/<stem>.json ->
+      /hi/Waypoint/file/images/backdrops/<stem>.png
+    
+    Le pattern peut varier selon les items, on essaie plusieurs variantes.
+    """
+
+    p = str(backdrop_path or "").strip()
+    if not p:
+        return None
+
+    # Si c'est déjà un PNG/une vraie image, retourner tel quel
+    p_lower = p.lower()
+    if p_lower.endswith(".png") or p_lower.endswith(".jpg") or p_lower.endswith(".jpeg"):
+        return _to_image_url(p)
+
+    # Extraire le stem du fichier JSON
+    if "/Spartan/BackdropImages/" not in p:
+        return None
+
+    name = p.split("/Spartan/BackdropImages/", 1)[1].split("/", 1)[-1]
+    stem = name.rsplit(".", 1)[0]
+    if not stem:
+        return None
+
+    host = "https://gamecms-hacs.svc.halowaypoint.com"
+    # Essayer le pattern Waypoint standard
+    return f"{host}/hi/Waypoint/file/images/backdrops/{stem}.png"
+
+
 def ensure_spnkr_tokens(*, timeout_seconds: int = 12) -> tuple[bool, str | None]:
     """Best-effort: s'assure que SPNKR_SPARTAN_TOKEN + SPNKR_CLEARANCE_TOKEN sont disponibles.
 
@@ -351,6 +384,33 @@ def load_cached_appearance(xuid: str, *, refresh_hours: int) -> ProfileAppearanc
     )
 
 
+def save_cached_appearance(xuid: str, appearance: ProfileAppearance) -> None:
+    """Sauvegarde l'apparence dans le cache disque."""
+    cp = _cache_path(xuid)
+    data = {
+        "fetched_at": time.time(),
+        "service_tag": appearance.service_tag,
+        "emblem_image_url": appearance.emblem_image_url,
+        "backdrop_image_url": appearance.backdrop_image_url,
+        "nameplate_image_url": appearance.nameplate_image_url,
+        "rank_label": appearance.rank_label,
+        "rank_subtitle": appearance.rank_subtitle,
+        "rank_image_url": appearance.rank_image_url,
+    }
+    _safe_write_json(cp, data)
+
+
+def save_cached_xuid(gamertag: str, xuid: str) -> None:
+    """Sauvegarde le mapping gamertag → xuid dans le cache disque."""
+    cp = _xuid_cache_path(gamertag)
+    data = {
+        "fetched_at": time.time(),
+        "gamertag": gamertag,
+        "xuid": xuid,
+    }
+    _safe_write_json(cp, data)
+
+
 def fetch_appearance_via_spnkr(
     *,
     xuid: str,
@@ -396,165 +456,149 @@ def fetch_appearance_via_spnkr(
                 resp = await client.economy.get_player_customization(str(xuid).strip(), view_type="public")
                 customization = await _parse(resp)
 
-                # Best-effort: Career Rank (pas bloquant si endpoints indisponibles)
+                # Best-effort: Career Rank du joueur
                 rank_label: str | None = None
                 rank_subtitle: str | None = None
                 rank_image_url: str | None = None
 
-                async def _try_call(call):
-                    try:
-                        return await call()
-                    except TypeError:
-                        return None
-                    except Exception:
-                        return None
-
-                async def _get_career_snapshot() -> object | None:
-                    econ = getattr(client, "economy", None)
-                    if econ is None:
-                        return None
-                    m = getattr(econ, "get_player_career_rank", None)
-                    if m is None:
-                        return None
-
+                async def _get_career_rank_for_player() -> tuple[str | None, str | None, str | None]:
+                    """Récupère le Career Rank du joueur via les APIs Halo.
+                    
+                    1. Appelle gamecms_hacs.get_career_reward_track() pour les métadonnées des rangs
+                    2. Appelle l'endpoint Economy pour la progression du joueur
+                    """
                     xu = str(xuid).strip()
-                    selectors = [f"xuid({xu})"]
-
-                    for call in (
-                        lambda: m(selectors, "careerRank1"),
-                        lambda: m(selectors, "career_rank1"),
-                        lambda: m(selectors),
-                        lambda: m(selectors[0], "careerRank1"),
-                        lambda: m(selectors[0]),
-                    ):
-                        resp0 = await _try_call(call)
-                        if resp0 is not None:
-                            return await _parse(resp0)
-                    return None
-
-                async def _get_career_ranks_metadata() -> object | None:
-                    gc = getattr(client, "gamecms_hacs", None) or getattr(client, "gamecms", None)
-                    if gc is None:
-                        return None
-                    m = getattr(gc, "get_career_ranks", None) or getattr(gc, "get_career_rank", None)
-                    if m is None:
-                        return None
-
-                    for call in (
-                        lambda: m("careerRank1"),
-                        lambda: m("career_rank1"),
-                        lambda: m(),
-                    ):
-                        resp0 = await _try_call(call)
-                        if resp0 is not None:
-                            return await _parse(resp0)
-                    return None
-
-                career_snapshot = await _get_career_snapshot()
-                ranks_meta = await _get_career_ranks_metadata()
-
-                def _get_attr(obj: object, *names: str):
-                    for n in names:
-                        if obj is None:
-                            return None
-                        if isinstance(obj, dict) and n in obj:
-                            return obj.get(n)
-                        if hasattr(obj, n):
-                            return getattr(obj, n)
-                    return None
-
-                def _get_value_string(v: object) -> str | None:
-                    if v is None:
-                        return None
-                    if isinstance(v, str):
-                        s = v.strip()
-                        return s or None
-                    # Beaucoup de modèles CMS ont .value
-                    vv = _get_attr(v, "value", "Value")
-                    if isinstance(vv, str):
-                        s = vv.strip()
-                        return s or None
-                    return None
-
-                def _get_int(v: object) -> int | None:
+                    
                     try:
-                        if v is None:
-                            return None
-                        if isinstance(v, bool):
-                            return None
-                        return int(v)
-                    except Exception:
-                        return None
-
-                current_rank: int | None = None
-                partial_xp: int | None = None
-                if career_snapshot is not None:
-                    reward_tracks = _get_attr(career_snapshot, "reward_tracks", "RewardTracks")
-                    if isinstance(reward_tracks, list) and reward_tracks:
+                        # 1. Récupérer les métadonnées des rangs via SPNKr
+                        gamecms = getattr(client, "gamecms_hacs", None)
+                        if gamecms is None:
+                            return None, None, None
+                        
+                        career_track_resp = await gamecms.get_career_reward_track()
+                        career_track = await _parse(career_track_resp)
+                        
+                        if career_track is None:
+                            return None, None, None
+                        
+                        ranks_list = getattr(career_track, "ranks", None)
+                        if not ranks_list:
+                            return None, None, None
+                        
+                        # 2. Appeler l'API Economy pour la progression du joueur
+                        # Essayer plusieurs formats d'endpoint connus
+                        economy_host = "https://economy.svc.halowaypoint.com"
+                        
+                        # Utiliser la session avec les headers d'authentification
+                        headers = {
+                            "Accept": "application/json",
+                        }
+                        if st_in:
+                            headers["X-343-Authorization-Spartan"] = st_in
+                        if ct_in:
+                            headers["343-Clearance"] = ct_in
+                        
+                        import logging
+                        logger = logging.getLogger(__name__)
+                        
+                        career_progress = None
+                        
+                        # Format 1: POST avec body (comme Grunt semble faire)
+                        # POST /hi/rewardtracks/careerRank1
+                        try:
+                            career_url = f"{economy_host}/hi/rewardtracks/careerRank1"
+                            body = {"Users": [f"xuid({xu})"]}
+                            logger.info(f"Career Rank API attempt 1 (POST): {career_url}")
+                            async with session.post(career_url, headers=headers, json=body) as resp:
+                                logger.info(f"Career Rank API response status: {resp.status}")
+                                if resp.status == 200:
+                                    career_progress = await resp.json()
+                                    logger.info(f"Career Rank API response keys: {list(career_progress.keys()) if isinstance(career_progress, dict) else type(career_progress)}")
+                        except Exception as e:
+                            logger.warning(f"Career Rank POST failed: {e}")
+                        
+                        # Format 2: GET simple
+                        if career_progress is None:
+                            try:
+                                career_url = f"{economy_host}/hi/players/xuid({xu})/careerrank"
+                                logger.info(f"Career Rank API attempt 2 (GET): {career_url}")
+                                async with session.get(career_url, headers=headers) as resp:
+                                    logger.info(f"Career Rank API response status: {resp.status}")
+                                    if resp.status == 200:
+                                        career_progress = await resp.json()
+                                        logger.info(f"Career Rank API response keys: {list(career_progress.keys()) if isinstance(career_progress, dict) else type(career_progress)}")
+                            except Exception as e:
+                                logger.warning(f"Career Rank GET failed: {e}")
+                        
+                        if career_progress is None:
+                            return None, None, None
+                        
+                        # Extraire la progression
+                        # Structure attendue: { "RewardTracks": [{ "Result": { "CurrentProgress": { "Rank": N, "PartialProgress": XP }}}]}
+                        reward_tracks = career_progress.get("RewardTracks", [])
+                        if not reward_tracks:
+                            return None, None, None
+                        
                         track0 = reward_tracks[0]
-                        track_result = _get_attr(track0, "result", "Result") or track0
-                        current_progress = _get_attr(track_result, "current_progress", "CurrentProgress")
-                        if current_progress is not None:
-                            current_rank = _get_int(_get_attr(current_progress, "rank", "Rank"))
-                            partial_xp = _get_int(_get_attr(current_progress, "partial_progress", "PartialProgress"))
-
-                # Workshop: rank affiché = rank+1 sauf Hero (272)
-                display_rank = None
-                if current_rank is not None:
-                    display_rank = current_rank if current_rank == 272 else current_rank + 1
-
-                stage = None
-                if display_rank is not None and ranks_meta is not None:
-                    ranks_list = _get_attr(ranks_meta, "ranks", "Ranks")
-                    if isinstance(ranks_list, list):
-                        for it in ranks_list:
-                            if _get_int(_get_attr(it, "rank", "Rank")) == display_rank:
-                                stage = it
+                        result = track0.get("Result", {})
+                        current_progress = result.get("CurrentProgress", {})
+                        
+                        current_rank = current_progress.get("Rank")
+                        partial_xp = current_progress.get("PartialProgress", 0)
+                        
+                        if current_rank is None:
+                            return None, None, None
+                        
+                        # 3. Trouver le stage correspondant dans les métadonnées
+                        # Note: rank affiché = rank+1 sauf Hero (272)
+                        display_rank = current_rank if current_rank == 272 else current_rank + 1
+                        
+                        current_stage = None
+                        for rank_obj in ranks_list:
+                            r = getattr(rank_obj, "rank", None)
+                            if r == display_rank:
+                                current_stage = rank_obj
                                 break
+                        
+                        if current_stage is None:
+                            return f"Career Rank {display_rank}", f"XP {partial_xp}", None
+                        
+                        # 4. Construire le label du rang
+                        tier_type = getattr(current_stage, "tier_type", None)
+                        rank_title_obj = getattr(current_stage, "rank_title", None)
+                        rank_tier_obj = getattr(current_stage, "rank_tier", None)
+                        xp_required = getattr(current_stage, "xp_required_for_rank", None)
+                        rank_large_icon = getattr(current_stage, "rank_large_icon", None)
+                        
+                        # Extraire les valeurs des objets TranslatableString
+                        rank_title = getattr(rank_title_obj, "value", None) if rank_title_obj else None
+                        rank_tier = getattr(rank_tier_obj, "value", None) if rank_tier_obj else None
+                        
+                        # Construire le label
+                        if current_rank == 272:
+                            # Hero rank
+                            r_label = rank_title or "Hero"
+                            r_subtitle = f"XP {partial_xp}/{xp_required}" if xp_required else f"XP {partial_xp}"
+                        else:
+                            # Rang normal: "Bronze Private 1" -> "Bronze Private 1"
+                            parts = [p for p in [tier_type, rank_title, rank_tier] if p]
+                            r_label = " ".join(parts) if parts else f"Rank {display_rank}"
+                            r_subtitle = f"XP {partial_xp}/{xp_required}" if xp_required else f"XP {partial_xp}"
+                        
+                        # 5. Construire l'URL de l'icône
+                        r_icon = None
+                        if rank_large_icon:
+                            # rank_large_icon ex: "career_rank/CelebrationMoment/19_Cadet_Onyx_III.png"
+                            host = "https://gamecms-hacs.svc.halowaypoint.com"
+                            icon_path = str(rank_large_icon).lstrip("/")
+                            r_icon = f"{host}/hi/images/file/{icon_path}"
+                        
+                        return r_label, r_subtitle, r_icon
+                        
+                    except Exception:
+                        return None, None, None
 
-                if stage is not None:
-                    # Best-effort: icône du rang (si présente dans les métadonnées)
-                    icon_raw = (
-                        _get_attr(
-                            stage,
-                            "icon_image_path",
-                            "IconImagePath",
-                            "icon_path",
-                            "IconPath",
-                            "rank_icon",
-                            "RankIcon",
-                            "icon",
-                            "Icon",
-                            "image_path",
-                            "ImagePath",
-                            "image_url",
-                            "ImageUrl",
-                        )
-                        if stage is not None
-                        else None
-                    )
-                    icon_s = _get_value_string(icon_raw)
-                    if icon_s:
-                        rank_image_url = _to_image_url(icon_s)
-
-                    if _get_int(_get_attr(stage, "rank", "Rank")) == 272:
-                        rank_label = _get_value_string(_get_attr(stage, "rank_title", "RankTitle")) or "Hero"
-                        xp_req = _get_int(_get_attr(stage, "xp_required_for_rank", "XpRequiredForRank"))
-                        if partial_xp is not None and xp_req is not None:
-                            rank_subtitle = f"XP {partial_xp}/{xp_req}"
-                    else:
-                        tier_type = _get_value_string(_get_attr(stage, "tier_type", "TierType"))
-                        rank_title = _get_value_string(_get_attr(stage, "rank_title", "RankTitle"))
-                        rank_tier = _get_value_string(_get_attr(stage, "rank_tier", "RankTier"))
-                        parts = [p for p in [tier_type, rank_title, rank_tier] if p]
-                        rank_label = " ".join(parts) or None
-                        xp_req = _get_int(_get_attr(stage, "xp_required_for_rank", "XpRequiredForRank"))
-                        if partial_xp is not None and xp_req is not None:
-                            rank_subtitle = f"XP {partial_xp}/{xp_req}"
-                elif display_rank is not None:
-                    rank_label = f"Career Rank {display_rank}"
-                    if partial_xp is not None:
-                        rank_subtitle = f"XP {partial_xp}"
+                rank_label, rank_subtitle, rank_image_url = await _get_career_rank_for_player()
 
                 return customization, rank_label, rank_subtitle, rank_image_url
 
@@ -585,7 +629,11 @@ def fetch_appearance_via_spnkr(
             emblem_path = getattr(appearance.emblem, "emblem_path", None)
             emblem_cfg = getattr(appearance.emblem, "configuration_id", None)
             emblem_url = _inventory_emblem_to_waypoint_png(emblem_path, emblem_cfg) or _to_image_url(emblem_path)
-            backdrop_url = _to_image_url(getattr(appearance, "backdrop_image_path", None))
+            
+            # Backdrop: convertir le chemin JSON en URL PNG Waypoint
+            backdrop_raw = getattr(appearance, "backdrop_image_path", None)
+            backdrop_url = _inventory_backdrop_to_waypoint_png(backdrop_raw) or _to_image_url(backdrop_raw)
+            
             player_title_path = getattr(appearance, "player_title_path", None)
             nameplate_url = _to_image_url(player_title_path) or _waypoint_nameplate_png_from_emblem(
                 emblem_path,
