@@ -32,6 +32,8 @@ from src.config import (
     HALO_COLORS,
     SESSION_CONFIG,
     OUTCOME_CODES,
+    BOT_MAP,
+    TEAM_MAP,
 )
 from src.db import (
     load_matches,
@@ -41,6 +43,7 @@ from src.db import (
     guess_xuid_from_db_path,
     load_player_match_result,
     load_match_medals_for_player,
+    load_match_rosters,
     load_top_medals,
     load_highlight_events_for_match,
     load_match_player_gamertags,
@@ -90,7 +93,10 @@ from src.ui import (
     save_settings,
     directory_input,
     file_input,
+    get_profile_appearance,
+    ensure_spnkr_tokens,
 )
+from src.ui.player_assets import download_image_to_cache, ensure_local_image_path
 from src.ui.medals import (
     load_medal_name_maps,
     medal_has_known_label,
@@ -1022,6 +1028,17 @@ def cached_load_match_medals_for_player(
 
 
 @st.cache_data(show_spinner=False)
+def cached_load_match_rosters(
+    db_path: str,
+    match_id: str,
+    xuid: str,
+    db_key: tuple[int, int] | None,
+):
+    _ = db_key
+    return load_match_rosters(db_path, match_id, xuid)
+
+
+@st.cache_data(show_spinner=False)
 def cached_load_highlight_events_for_match(db_path: str, match_id: str, *, db_key: str | None = None):
     _ = db_key
     return load_highlight_events_for_match(db_path, match_id)
@@ -1146,10 +1163,17 @@ def _render_settings_page(settings: AppSettings) -> AppSettings:
             help="Impacte les filtres et tous les onglets basés sur les matchs.",
         )
         st.toggle(
-            "Limiter aux playlists (Quick Play / Ranked Slayer / Ranked Arena)",
+            "Limiter aux playlists (Partie rapide / Assassin classé / Arène classée)",
             key="restrict_playlists",
             value=bool(st.session_state.get("restrict_playlists", True)),
             help="Réduit les playlists/modes/cartes aux valeurs attendues (utile si la DB est hétérogène).",
+        )
+
+        show_profile_player_settings = st.toggle(
+            "Afficher les réglages du profil joueur (avancé)",
+            value=bool(st.session_state.get("show_profile_player_settings", False)),
+            key="show_profile_player_settings",
+            help="Masque les options bannière/emblème/rang + téléchargement. Active uniquement si tu en as besoin.",
         )
 
     with st.expander("SPNKr (API → DB)", expanded=False):
@@ -1245,6 +1269,126 @@ def _render_settings_page(settings: AppSettings) -> AppSettings:
             placeholder="Ex: C:\\...\\db_profiles.json",
         )
 
+    # Profil joueur (bannière / rang)
+    # Par défaut, on masque ces réglages et on garde les valeurs actuelles.
+    profile_assets_download_enabled = bool(getattr(settings, "profile_assets_download_enabled", False))
+    profile_assets_auto_refresh_hours = int(getattr(settings, "profile_assets_auto_refresh_hours", 24) or 0)
+    profile_api_enabled = bool(getattr(settings, "profile_api_enabled", False))
+    profile_api_auto_refresh_hours = int(getattr(settings, "profile_api_auto_refresh_hours", 6) or 0)
+    profile_banner = str(getattr(settings, "profile_banner", "") or "").strip()
+    profile_emblem = str(getattr(settings, "profile_emblem", "") or "").strip()
+    profile_backdrop = str(getattr(settings, "profile_backdrop", "") or "").strip()
+    profile_nameplate = str(getattr(settings, "profile_nameplate", "") or "").strip()
+    profile_service_tag = str(getattr(settings, "profile_service_tag", "") or "").strip()
+    profile_id_badge_text_color = str(getattr(settings, "profile_id_badge_text_color", "") or "").strip()
+    profile_rank_label = str(getattr(settings, "profile_rank_label", "") or "").strip()
+    profile_rank_subtitle = str(getattr(settings, "profile_rank_subtitle", "") or "").strip()
+
+    if bool(show_profile_player_settings):
+        with st.expander("Profil joueur (avancé)", expanded=False):
+            st.caption(
+                "Affichage en haut de page. Si tu actives le téléchargement, les URLs seront mises en cache automatiquement."
+            )
+            profile_assets_download_enabled = st.toggle(
+                "Autoriser le téléchargement d'images depuis une URL",
+                value=bool(profile_assets_download_enabled),
+                help="Si désactivé, seules les images déjà en cache ou des chemins locaux sont utilisés.",
+            )
+            profile_assets_auto_refresh_hours = st.number_input(
+                "Rafraîchissement auto (heures)",
+                min_value=0,
+                max_value=24 * 30,
+                value=int(profile_assets_auto_refresh_hours),
+                step=1,
+                help="0 = ne re-télécharge jamais si le cache existe. Sinon, re-télécharge si le cache est plus vieux que N heures.",
+            )
+
+            st.markdown("---")
+            profile_api_enabled = st.toggle(
+                "Récupérer automatiquement depuis l'API (SPNKr)",
+                value=bool(profile_api_enabled),
+                help=(
+                    "Récupère service tag + emblem/backdrop/nameplate à partir du XUID (opt-in réseau). "
+                    "Nécessite des tokens dans l'environnement: SPNKR_SPARTAN_TOKEN et SPNKR_CLEARANCE_TOKEN."
+                ),
+            )
+            profile_api_auto_refresh_hours = st.number_input(
+                "Rafraîchissement API (heures)",
+                min_value=0,
+                max_value=24 * 30,
+                value=int(profile_api_auto_refresh_hours),
+                step=1,
+                help="Cache disque des URLs d'apparence. 0 = désactivé (re-fetch à chaque run).",
+            )
+            profile_banner = st.text_input(
+                "Bannière (URL ou chemin local)",
+                value=str(profile_banner or "").strip(),
+                placeholder="https://.../banner.png ou C:\\...\\banner.png",
+            )
+            profile_emblem = st.text_input(
+                "Emblème (URL ou chemin local)",
+                value=str(profile_emblem or "").strip(),
+                placeholder="https://.../emblem.png ou C:\\...\\emblem.png",
+            )
+            profile_backdrop = st.text_input(
+                "Backdrop (fond) (URL ou chemin local)",
+                value=str(profile_backdrop or "").strip(),
+                placeholder="https://.../backdrop.png ou C:\\...\\backdrop.png",
+                help="Si défini, utilisé en priorité comme image de fond du header.",
+            )
+            profile_nameplate = st.text_input(
+                "Nameplate (plaque) (URL ou chemin local)",
+                value=str(profile_nameplate or "").strip(),
+                placeholder="https://.../nameplate.png ou C:\\...\\nameplate.png",
+                help="Optionnel: affiché derrière le gamertag/service tag.",
+            )
+            profile_service_tag = st.text_input(
+                "Service tag",
+                value=str(profile_service_tag or "").strip(),
+                placeholder="Ex: JGTM",
+            )
+            profile_id_badge_text_color = st.text_input(
+                "Couleur de texte (ID badge)",
+                value=str(profile_id_badge_text_color or "").strip(),
+                placeholder="Ex: #FFFFFF",
+                help="Optionnel: couleur de texte sur la plaque (par défaut: texte standard).",
+            )
+            profile_rank_label = st.text_input(
+                "Rang (libellé)",
+                value=str(profile_rank_label or "").strip(),
+                placeholder="Ex: Diamond III",
+            )
+            profile_rank_subtitle = st.text_input(
+                "Rang (détail)",
+                value=str(profile_rank_subtitle or "").strip(),
+                placeholder="Ex: CSR 1540",
+            )
+
+            if st.button("Forcer téléchargement maintenant (si URL)", width="stretch"):
+                if not profile_assets_download_enabled:
+                    st.info("Active d'abord l'option de téléchargement.")
+                else:
+                    ok_any = False
+                    for (label, url, prefix) in (
+                        ("bannière", profile_banner, "banner"),
+                        ("emblème", profile_emblem, "emblem"),
+                        ("backdrop", profile_backdrop, "backdrop"),
+                        ("nameplate", profile_nameplate, "nameplate"),
+                    ):
+                        u = str(url or "").strip()
+                        if not u:
+                            continue
+                        if not (u.startswith("http://") or u.startswith("https://")):
+                            continue
+                        ok, err, out_path = download_image_to_cache(u, prefix=prefix)
+                        if ok:
+                            ok_any = True
+                            st.success(f"Téléchargement OK ({label}).")
+                        else:
+                            st.warning(f"Téléchargement KO ({label}): {err}")
+                    if ok_any:
+                        st.info("Les images sont mises en cache localement et seront utilisées par le header.")
+
 
 
     cols = st.columns(2)
@@ -1264,6 +1408,18 @@ def _render_settings_page(settings: AppSettings) -> AppSettings:
             spnkr_refresh_with_highlight_events=bool(with_he),
             aliases_path=str(aliases_path or "").strip(),
             profiles_path=str(profiles_path or "").strip(),
+            profile_assets_download_enabled=bool(profile_assets_download_enabled),
+            profile_assets_auto_refresh_hours=int(profile_assets_auto_refresh_hours),
+            profile_api_enabled=bool(profile_api_enabled),
+            profile_api_auto_refresh_hours=int(profile_api_auto_refresh_hours),
+            profile_banner=str(profile_banner or "").strip(),
+            profile_emblem=str(profile_emblem or "").strip(),
+            profile_backdrop=str(profile_backdrop or "").strip(),
+            profile_nameplate=str(profile_nameplate or "").strip(),
+            profile_service_tag=str(profile_service_tag or "").strip(),
+            profile_id_badge_text_color=str(profile_id_badge_text_color or "").strip(),
+            profile_rank_label=str(profile_rank_label or "").strip(),
+            profile_rank_subtitle=str(profile_rank_subtitle or "").strip(),
         )
         ok, err = save_settings(new_settings)
         if ok:
@@ -1730,21 +1886,6 @@ def _render_match_view(
             ),
             secondary_y=True,
         )
-        if exp_ratio_f is not None:
-            exp_fig.add_trace(
-                go.Scatter(
-                    x=labels,
-                    y=[exp_ratio_f] * len(labels),
-                    mode="lines+markers",
-                    name="Ratio attendu",
-                    line=dict(color=HALO_COLORS.violet, width=3, dash="dot"),
-                    marker=dict(size=6),
-                    hovertemplate="ratio (attendu): %{y:.2f}<extra></extra>",
-                ),
-                secondary_y=True,
-            )
-        else:
-            st.caption("Ratio attendu indisponible (Assists attendues manquantes dans PlayerMatchStats).")
 
         exp_fig.update_layout(
             barmode="group",
@@ -1931,6 +2072,113 @@ def _render_match_view(
                     sub_style="color: rgba(245, 248, 255, 0.92); font-weight: 800; font-size: 16px; line-height: 1.15;",
                     min_h=110,
                 )
+
+    # ----------------------------------------------------------------------
+    # Roster (mon équipe vs adverse) — juste avant les médailles
+    # ----------------------------------------------------------------------
+    st.subheader("Joueurs")
+    rosters = cached_load_match_rosters(db_path, match_id.strip(), xuid.strip(), db_key=db_key)
+    if not rosters:
+        st.info("Roster indisponible pour ce match (payload MatchStats manquant ou équipe introuvable).")
+    else:
+        gt_map = cached_load_match_player_gamertags(db_path, match_id.strip(), db_key=db_key)
+        me_xu = str(parse_xuid_input(str(xuid or "").strip()) or str(xuid or "").strip()).strip()
+
+        my_team_id = rosters.get("my_team_id")
+        my_team_name = rosters.get("my_team_name")
+        enemy_team_ids = rosters.get("enemy_team_ids") or []
+        enemy_team_names = rosters.get("enemy_team_names") or []
+
+        def _team_label(team_id_value) -> str:
+            try:
+                tid = int(team_id_value)
+            except Exception:
+                return "-"
+            return TEAM_MAP.get(tid) or f"Team {tid}"
+
+        def _roster_name(xu: str, gt: str | None) -> str:
+            xu_s = str(parse_xuid_input(str(xu or "").strip()) or str(xu or "").strip()).strip()
+
+            # 0) BotId -> nom de bot
+            if xu_s:
+                # xu_s peut être un bid(...) si OpenSpartan encode les bots ainsi
+                bot_key = xu_s.strip()
+                if bot_key.lower().startswith("bid("):
+                    bot_name = BOT_MAP.get(bot_key)
+                    if isinstance(bot_name, str) and bot_name.strip():
+                        return bot_name.strip()
+
+            # 1) Gamertag fiable depuis MatchStats (mapping)
+            if xu_s and isinstance(gt_map, dict):
+                mapped = gt_map.get(xu_s)
+                if isinstance(mapped, str) and mapped.strip():
+                    return mapped.strip()
+            # 2) Gamertag extrait du roster
+            g = str(gt or "").strip()
+            if g and g != "?" and (not g.isdigit()) and (not g.lower().startswith("xuid(")):
+                return g
+            # 3) Alias local (fallback)
+            if xu_s:
+                return display_name_from_xuid(xu_s)
+            return "-"
+
+        my_rows = rosters.get("my_team") or []
+        en_rows = rosters.get("enemy_team") or []
+
+        my_names: list[tuple[str, bool]] = []
+        en_names: list[tuple[str, bool]] = []
+
+        for r in my_rows:
+            xu = str(r.get("xuid") or "").strip()
+            name = str(r.get("display_name") or "").strip() or _roster_name(xu, r.get("gamertag"))
+            is_self = bool(me_xu and xu and (str(parse_xuid_input(xu) or xu).strip() == me_xu)) or bool(r.get("is_me"))
+            my_names.append((name, is_self))
+
+        for r in en_rows:
+            xu = str(r.get("xuid") or "").strip()
+            name = str(r.get("display_name") or "").strip() or _roster_name(xu, r.get("gamertag"))
+            en_names.append((name, False))
+
+        # Pad pour tableau 2 colonnes
+        rows_n = max(len(my_names), len(en_names), 1)
+        my_names += [("", False)] * (rows_n - len(my_names))
+        en_names += [("", False)] * (rows_n - len(en_names))
+
+        def _pill_html(name: str, *, side: str, is_self: bool) -> str:
+            if not name:
+                return "<span class='os-roster-empty'>—</span>"
+            safe = html.escape(str(name))
+            extra = " os-roster-pill--self" if is_self else ""
+            return (
+                f"<span class='os-roster-pill os-roster-pill--{side}{extra}'>"
+                "<span class='os-roster-pill__dot'></span>"
+                f"<span>{safe}</span>"
+                "</span>"
+            )
+
+        body_rows = []
+        for i in range(rows_n):
+            n_me, is_self = my_names[i]
+            n_en, _ = en_names[i]
+            body_rows.append(
+                "<tr>"
+                f"<td>{_pill_html(n_me, side='me', is_self=is_self)}</td>"
+                f"<td>{_pill_html(n_en, side='enemy', is_self=False)}</td>"
+                "</tr>"
+            )
+
+        st.markdown(
+            "<div class='os-table-wrap os-roster-wrap'>"
+            "<table class='os-table os-roster'>"
+            "<thead><tr>"
+            f"<th class='os-roster-th os-roster-th--me'>Mon équipe — {html.escape(str(my_team_name or _team_label(my_team_id)))} ({len([n for n, _ in my_names if n])})</th>"
+            f"<th class='os-roster-th os-roster-th--enemy'>Équipe adverse — {html.escape(str(enemy_team_names[0] if (isinstance(enemy_team_names, list) and len(enemy_team_names)==1 and enemy_team_names[0]) else (' / '.join([_team_label(t) for t in enemy_team_ids]) if enemy_team_ids else 'Adversaires')))} ({len([n for n, _ in en_names if n])})</th>"
+            "</tr></thead>"
+            "<tbody>" + "".join(body_rows) + "</tbody>"
+            "</table>"
+            "</div>",
+            unsafe_allow_html=True,
+        )
 
     st.subheader("Médailles")
     if not medals_last:
@@ -2281,6 +2529,122 @@ def main() -> None:
     me_name = display_name_from_xuid(xuid.strip()) if str(xuid or "").strip() else "(joueur)"
     aliases_key = _aliases_cache_key()
 
+    # Auto-profil (SPNKr) : récupère des URLs d'apparence (service tag / emblem / backdrop / nameplate)
+    # et ne remplace pas les champs manuels si déjà remplis.
+    api_enabled = bool(getattr(settings, "profile_api_enabled", False))
+    api_refresh_h = int(getattr(settings, "profile_api_auto_refresh_hours", 0) or 0)
+    api_app = None
+    api_err = None
+    if api_enabled and str(xuid or "").strip():
+        try:
+            api_app, api_err = get_profile_appearance(
+                xuid=str(xuid).strip(),
+                enabled=True,
+                refresh_hours=api_refresh_h,
+            )
+        except Exception as e:
+            api_app, api_err = None, str(e)
+        if api_err:
+            st.caption(f"Profil auto (SPNKr): {api_err}")
+
+    # Header (profil joueur):
+    # - chemins locaux OK
+    # - URLs: mise en cache automatique uniquement si l'option est activée
+    dl_enabled = bool(getattr(settings, "profile_assets_download_enabled", False)) or bool(api_enabled)
+    refresh_h = int(getattr(settings, "profile_assets_auto_refresh_hours", 0) or 0)
+
+    # Valeurs manuelles (prioritaires) / sinon auto depuis API.
+    banner_value = str(getattr(settings, "profile_banner", "") or "").strip()
+    emblem_value = str(getattr(settings, "profile_emblem", "") or "").strip() or (getattr(api_app, "emblem_image_url", None) if api_app else "")
+    backdrop_value = str(getattr(settings, "profile_backdrop", "") or "").strip() or (getattr(api_app, "backdrop_image_url", None) if api_app else "")
+    nameplate_value = str(getattr(settings, "profile_nameplate", "") or "").strip() or (getattr(api_app, "nameplate_image_url", None) if api_app else "")
+    service_tag_value = str(getattr(settings, "profile_service_tag", "") or "").strip() or (getattr(api_app, "service_tag", None) if api_app else "")
+    rank_label_value = str(getattr(settings, "profile_rank_label", "") or "").strip() or (getattr(api_app, "rank_label", None) if api_app else "")
+    rank_subtitle_value = str(getattr(settings, "profile_rank_subtitle", "") or "").strip() or (getattr(api_app, "rank_subtitle", None) if api_app else "")
+    rank_icon_value = (getattr(api_app, "rank_image_url", None) if api_app else "") or ""
+
+    def _needs_halo_auth(url: str) -> bool:
+        u = str(url or "").strip().lower()
+        if not u:
+            return False
+        return (
+            ("/hi/images/file/" in u)
+            or u.startswith("inventory/")
+            or u.startswith("/inventory/")
+            or ("gamecms-hacs.svc.halowaypoint.com/hi/images/file/" in u)
+        )
+
+    # Si on doit télécharger des assets protégés et qu'on vient du cache, les tokens peuvent manquer.
+    if dl_enabled and (not str(os.environ.get("SPNKR_CLEARANCE_TOKEN") or "").strip()):
+        if _needs_halo_auth(backdrop_value) or _needs_halo_auth(rank_icon_value):
+            _ok, _err = ensure_spnkr_tokens(timeout_seconds=12)
+
+    banner_path = ensure_local_image_path(
+        banner_value,
+        prefix="banner",
+        download_enabled=dl_enabled,
+        auto_refresh_hours=refresh_h,
+    )
+    emblem_path = ensure_local_image_path(
+        emblem_value,
+        prefix="emblem",
+        download_enabled=dl_enabled,
+        auto_refresh_hours=refresh_h,
+    )
+    backdrop_path = ensure_local_image_path(
+        backdrop_value,
+        prefix="backdrop",
+        download_enabled=dl_enabled,
+        auto_refresh_hours=refresh_h,
+    )
+    nameplate_path = ensure_local_image_path(
+        nameplate_value,
+        prefix="nameplate",
+        download_enabled=dl_enabled,
+        auto_refresh_hours=refresh_h,
+    )
+    rank_icon_path = ensure_local_image_path(
+        rank_icon_value,
+        prefix="rank",
+        download_enabled=dl_enabled,
+        auto_refresh_hours=refresh_h,
+    )
+
+    # Diagnostics non bloquants (aide à comprendre pourquoi une image ne s'affiche pas)
+    def _warn_asset(prefix: str, url: str, path: str | None) -> None:
+        if not dl_enabled:
+            return
+        u = str(url or "").strip()
+        if not u or (not u.startswith("http://") and not u.startswith("https://")):
+            return
+        if path:
+            return
+        key = f"_warned_asset_{prefix}_{hash(u)}"
+        if st.session_state.get(key):
+            return
+        st.session_state[key] = True
+        ok, err, _out = download_image_to_cache(u, prefix=prefix, timeout_seconds=12)
+        if not ok:
+            st.caption(f"Asset '{prefix}' non téléchargé: {err}")
+
+    _warn_asset("backdrop", backdrop_value, backdrop_path)
+    _warn_asset("rank", rank_icon_value, rank_icon_path)
+    st.markdown(
+        get_hero_html(
+            player_name=me_name,
+            service_tag=str(service_tag_value or "").strip() or None,
+            rank_label=str(rank_label_value or "").strip() or None,
+            rank_subtitle=str(rank_subtitle_value or "").strip() or None,
+            rank_icon_path=rank_icon_path,
+            banner_path=banner_path,
+            backdrop_path=backdrop_path,
+            nameplate_path=nameplate_path,
+            id_badge_text_color=str(getattr(settings, "profile_id_badge_text_color", "") or "").strip() or None,
+            emblem_path=emblem_path,
+        ),
+        unsafe_allow_html=True,
+    )
+
     # ==========================================================================
     # Chargement des données
     # ==========================================================================
@@ -2608,7 +2972,7 @@ def main() -> None:
             dff = dff.loc[allowed_mask].copy()
         else:
             st.sidebar.warning(
-                "Aucune playlist n'a matché Quick Play / Ranked Slayer / Ranked Arena. "
+                "Aucune playlist n'a matché Partie rapide / Assassin classé / Arène classée. "
                 "Désactive ce filtre si tes libellés sont différents."
             )
             

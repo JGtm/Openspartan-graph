@@ -410,6 +410,48 @@ def _latest_match_id_from_db(db_path: Path) -> str | None:
             pass
 
 
+def _latest_match_ids_from_db(db_path: Path, *, limit: int) -> list[str]:
+    """Retourne les N MatchId les plus récents selon MatchStats.MatchInfo.StartTime."""
+    n = max(1, int(limit))
+    try:
+        con = sqlite3.connect(str(db_path))
+    except Exception:
+        return []
+    try:
+        cur = con.cursor()
+        cur.execute(
+            """
+            SELECT
+              json_extract(ResponseBody,'$.MatchId') as MatchId,
+              json_extract(ResponseBody,'$.MatchInfo.StartTime') as Start
+            FROM MatchStats
+            WHERE json_extract(ResponseBody,'$.MatchId') IS NOT NULL
+              AND json_extract(ResponseBody,'$.MatchInfo.StartTime') IS NOT NULL
+            ORDER BY Start DESC
+            LIMIT ?
+            """,
+            (n,),
+        )
+        rows = cur.fetchall() or []
+        out: list[str] = []
+        for r in rows:
+            mid = r[0] if r else None
+            if isinstance(mid, str) and mid.strip():
+                out.append(mid.strip())
+        return out
+    except Exception:
+        return []
+    finally:
+        try:
+            con.close()
+        except Exception:
+            pass
+
+
+def _resolve_out_db(*, player: str, out_db_arg: str | None) -> Path:
+    return Path(out_db_arg).expanduser().resolve() if out_db_arg else _default_spnkr_db_path_for_player(player)
+
+
 def _cmd_run(args: argparse.Namespace) -> int:
     db = Path(args.db).expanduser().resolve() if args.db else None
     return _launch_streamlit(db_path=db, port=args.port, no_browser=args.no_browser)
@@ -420,7 +462,12 @@ def _cmd_refresh(args: argparse.Namespace) -> int:
     if not player:
         raise SystemExit("Fournis --player (ou SPNKR_PLAYER)")
 
-    out_db = Path(args.out_db).expanduser().resolve() if args.out_db else _default_spnkr_db_path_for_player(player)
+    out_db = _resolve_out_db(player=str(player), out_db_arg=getattr(args, "out_db", None))
+    # Rend le chemin visible aux commandes suivantes (run+refresh, run+refresh+aliases, etc.)
+    try:
+        args.out_db = str(out_db)
+    except Exception:
+        pass
     opts = RefreshOptions(
         player=str(player),
         out_db=out_db,
@@ -470,11 +517,81 @@ def _cmd_refresh_all(args: argparse.Namespace) -> int:
 
 
 def _cmd_run_with_refresh(args: argparse.Namespace) -> int:
+    # Par défaut, run+refresh est utilisé quand on veut un dashboard complet.
+    # On force highlight events, sinon des données sont souvent absentes.
+    try:
+        args.with_highlight_events = True
+    except Exception:
+        pass
     rc = _cmd_refresh(args)
     if rc not in (0, 2):
         # 2 = erreur de paramétrage, on ne lance pas.
         print("[WARN] Refresh en échec, lancement du dashboard quand même…")
-    db = Path(args.out_db).expanduser().resolve() if args.out_db else None
+    db = Path(args.out_db).expanduser().resolve() if getattr(args, "out_db", None) else None
+    return _launch_streamlit(db_path=db, port=args.port, no_browser=args.no_browser)
+
+
+def _cmd_refresh_with_aliases(args: argparse.Namespace) -> int:
+    """Refresh SPNKr + highlight events, puis répare les aliases sur les N derniers matchs."""
+
+    # Force highlight events: indispensable pour certaines données.
+    args.with_highlight_events = True
+
+    player = args.player or os.environ.get("SPNKR_PLAYER")
+    if not player:
+        raise SystemExit("Fournis --player (ou SPNKR_PLAYER)")
+
+    out_db = _resolve_out_db(player=str(player), out_db_arg=getattr(args, "out_db", None))
+    try:
+        args.out_db = str(out_db)
+    except Exception:
+        pass
+
+    rc = _cmd_refresh(args)
+    if rc == 2:
+        return 2
+
+    # Réparation aliases (sur les N derniers matchs)
+    aliases_last = int(getattr(args, "aliases_last", 0) or 0)
+    if aliases_last <= 0:
+        aliases_last = int(getattr(args, "max_matches", 10) or 10)
+    aliases_last = max(1, min(aliases_last, 200))
+
+    match_ids = _latest_match_ids_from_db(out_db, limit=aliases_last)
+    if not match_ids:
+        print("[Aliases] Aucun match trouvé pour réparer les aliases.")
+        return 0
+
+    print("[Aliases] Film roster -> xuid_aliases.json")
+    print("- db:", out_db)
+    print("- matches:", len(match_ids))
+
+    for i, mid in enumerate(match_ids, start=1):
+        cmd = [sys.executable, str(DEFAULT_FILM_ROSTER_REFETCH), "--db", str(out_db), "--write-aliases", "--match-id", str(mid)]
+        if getattr(args, "patch_highlight_events", False):
+            cmd.append("--patch-highlight-events")
+        if getattr(args, "include_type2", False):
+            cmd.append("--include-type2")
+        if getattr(args, "max_type2_chunks", None) is not None:
+            cmd += ["--max-type2-chunks", str(int(args.max_type2_chunks))]
+        if getattr(args, "max_total_chunks", None) is not None:
+            cmd += ["--max-total-chunks", str(int(args.max_total_chunks))]
+        if getattr(args, "print_limit", None) is not None:
+            cmd += ["--print-limit", str(int(args.print_limit))]
+
+        print(f"[Aliases] {i}/{len(match_ids)} match_id={mid}")
+        proc = subprocess.run(cmd, cwd=str(REPO_ROOT))
+        if proc.returncode != 0:
+            print(f"[WARN] Repair aliases échoué sur {mid} (code={proc.returncode})")
+
+    return 0
+
+
+def _cmd_run_with_refresh_and_aliases(args: argparse.Namespace) -> int:
+    rc = _cmd_refresh_with_aliases(args)
+    if rc == 2:
+        return 2
+    db = Path(args.out_db).expanduser().resolve() if getattr(args, "out_db", None) else None
     return _launch_streamlit(db_path=db, port=args.port, no_browser=args.no_browser)
 
 
@@ -549,9 +666,10 @@ def _interactive(argv0: str) -> int:
     print("  3) Refresh SPNKr (une DB)")
     print("  4) Refresh SPNKr (toutes les DB data/spnkr*.db)")
     print("  5) Réparer les aliases (film -> xuid_aliases.json)")
+    print("  6) Refresh SPNKr + aliases + dashboard (recommandé)")
     print("  Q) Quitter")
 
-    choice = input("\nTon choix (1/2/3/4/5/Q): ").strip().lower()
+    choice = input("\nTon choix (1/2/3/4/5/6/Q): ").strip().lower()
     if choice in {"q", "quit", "exit"}:
         return 0
 
@@ -603,6 +721,28 @@ def _interactive(argv0: str) -> int:
             db=None,
         )
         return _cmd_run_with_refresh(args)
+
+    if choice == "6":
+        args = argparse.Namespace(
+            player=player,
+            out_db=None,
+            match_type="matchmaking",
+            max_matches=50,
+            rps=2,
+            no_assets=False,
+            no_skill=False,
+            with_highlight_events=True,
+            aliases_last=50,
+            patch_highlight_events=False,
+            include_type2=False,
+            max_type2_chunks=0,
+            max_total_chunks=None,
+            print_limit=20,
+            port=None,
+            no_browser=False,
+            db=None,
+        )
+        return _cmd_run_with_refresh_and_aliases(args)
 
     if choice == "3":
         args = argparse.Namespace(
@@ -712,6 +852,74 @@ def _build_parser() -> argparse.ArgumentParser:
     p_runref.add_argument("--port", type=int, default=None, help="Port (sinon auto)")
     p_runref.add_argument("--no-browser", action="store_true", help="N'ouvre pas le navigateur")
     p_runref.set_defaults(func=_cmd_run_with_refresh)
+
+    p_refa = sub.add_parser(
+        "refresh+aliases",
+        help="Refresh SPNKr (avec highlight events) puis répare les aliases sur les N derniers matchs",
+    )
+    p_refa.add_argument("--player", default=None, help="Gamertag ou XUID (sinon: SPNKR_PLAYER)")
+    p_refa.add_argument("--out-db", default=None, help="DB cible (sinon: data/spnkr_<player>.db)")
+    p_refa.add_argument(
+        "--match-type",
+        default="matchmaking",
+        choices=["all", "matchmaking", "custom", "local"],
+        help="Type de matchs (défaut: matchmaking)",
+    )
+    p_refa.add_argument("--max-matches", type=int, default=50, help="Max matchs importés (défaut: 50)")
+    p_refa.add_argument("--rps", type=int, default=2, help="Requests/sec (défaut: 2)")
+    p_refa.add_argument("--no-assets", action="store_true", help="Désactive l'import des assets")
+    p_refa.add_argument("--no-skill", action="store_true", help="Désactive l'import du skill")
+    p_refa.add_argument(
+        "--aliases-last",
+        type=int,
+        default=0,
+        help="Répare les aliases sur les N derniers matchs (défaut: = --max-matches).",
+    )
+    p_refa.add_argument(
+        "--patch-highlight-events",
+        action="store_true",
+        help="Optionnel: patch HighlightEvents.ResponseBody.gamertag en plus des aliases",
+    )
+    p_refa.add_argument("--include-type2", action="store_true", help="Inclut aussi des chunks type2")
+    p_refa.add_argument("--max-type2-chunks", type=int, default=0, help="Limite chunks type2 (défaut: 0)")
+    p_refa.add_argument("--max-total-chunks", type=int, default=None, help="Limite totale chunks")
+    p_refa.add_argument("--print-limit", type=int, default=20, help="Limite logs (défaut: 20)")
+    p_refa.set_defaults(func=_cmd_refresh_with_aliases)
+
+    p_runrefa = sub.add_parser(
+        "run+refresh+aliases",
+        help="Refresh SPNKr (avec highlight events) + répare aliases, puis lance le dashboard",
+    )
+    p_runrefa.add_argument("--player", default=None, help="Gamertag ou XUID (sinon: SPNKR_PLAYER)")
+    p_runrefa.add_argument("--out-db", default=None, help="DB cible (sinon: data/spnkr_<player>.db)")
+    p_runrefa.add_argument(
+        "--match-type",
+        default="matchmaking",
+        choices=["all", "matchmaking", "custom", "local"],
+        help="Type de matchs (défaut: matchmaking)",
+    )
+    p_runrefa.add_argument("--max-matches", type=int, default=50, help="Max matchs importés (défaut: 50)")
+    p_runrefa.add_argument("--rps", type=int, default=2, help="Requests/sec (défaut: 2)")
+    p_runrefa.add_argument("--no-assets", action="store_true", help="Désactive l'import des assets")
+    p_runrefa.add_argument("--no-skill", action="store_true", help="Désactive l'import du skill")
+    p_runrefa.add_argument(
+        "--aliases-last",
+        type=int,
+        default=0,
+        help="Répare les aliases sur les N derniers matchs (défaut: = --max-matches).",
+    )
+    p_runrefa.add_argument(
+        "--patch-highlight-events",
+        action="store_true",
+        help="Optionnel: patch HighlightEvents.ResponseBody.gamertag en plus des aliases",
+    )
+    p_runrefa.add_argument("--include-type2", action="store_true", help="Inclut aussi des chunks type2")
+    p_runrefa.add_argument("--max-type2-chunks", type=int, default=0, help="Limite chunks type2 (défaut: 0)")
+    p_runrefa.add_argument("--max-total-chunks", type=int, default=None, help="Limite totale chunks")
+    p_runrefa.add_argument("--print-limit", type=int, default=20, help="Limite logs (défaut: 20)")
+    p_runrefa.add_argument("--port", type=int, default=None, help="Port (sinon auto)")
+    p_runrefa.add_argument("--no-browser", action="store_true", help="N'ouvre pas le navigateur")
+    p_runrefa.set_defaults(func=_cmd_run_with_refresh_and_aliases)
 
     p_rep = sub.add_parser(
         "repair-aliases",
