@@ -183,6 +183,103 @@ section.main:after {
     margin-bottom: 14px;
 }
 
+.hero--player {
+    position: relative;
+    overflow: hidden;
+    background-size: cover;
+    background-position: center;
+}
+
+.hero--player .hero__overlay {
+    position: absolute;
+    inset: 0;
+    background:
+        linear-gradient(90deg, rgba(8, 10, 14, 0.86) 0%, rgba(8, 10, 14, 0.55) 55%, rgba(8, 10, 14, 0.86) 100%),
+        radial-gradient(820px 520px at 10% 0%, rgba(51, 214, 255, 0.18) 0%, transparent 58%);
+    pointer-events: none;
+}
+
+.hero-player {
+    position: relative;
+    display: flex;
+    gap: 14px;
+    align-items: center;
+}
+
+.hero-player__emblem {
+    width: 72px;
+    height: 72px;
+    border-radius: 14px;
+    border: 1px solid rgba(255,255,255,0.16);
+    background: rgba(10, 14, 20, 0.35);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    flex: 0 0 auto;
+}
+
+.hero-player__emblem img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.hero-player__text {
+    min-width: 0;
+}
+
+.hero-player__badge {
+    position: relative;
+    display: inline-block;
+    border-radius: 14px;
+    border: 1px solid rgba(255,255,255,0.14);
+    overflow: hidden;
+    background: rgba(10, 14, 20, 0.30);
+    box-shadow: 0 10px 22px rgba(0,0,0,0.28);
+}
+
+.hero-player__nameplate {
+    position: absolute;
+    inset: 0;
+    background-size: cover;
+    background-position: center;
+    opacity: 0.95;
+    filter: saturate(1.05) contrast(1.02);
+}
+
+.hero-player__id {
+    position: relative;
+    padding: 10px 12px;
+    min-width: 260px;
+}
+
+.hero-player__gamertag {
+    font-size: 22px;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    line-height: 1.08;
+    margin: 0;
+    text-shadow: 0 2px 14px rgba(0,0,0,0.55);
+}
+
+.hero-player__servicetag {
+    margin-top: 2px;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    opacity: 0.92;
+    text-shadow: 0 2px 14px rgba(0,0,0,0.55);
+}
+
+.hero-player__servicetag:empty {
+    display: none;
+}
+
+.hero-player__chips {
+    margin-top: 10px;
+}
+
 .hero .title {
     font-size: 28px;
     font-weight: 750;
@@ -658,6 +755,63 @@ div[data-testid="stNumberInput"] input:focus {
 
 .os-table a:hover {
     text-decoration: underline;
+}
+
+/* =============================================================================
+   Roster (Mon équipe vs adverse)
+   ============================================================================= */
+
+.os-roster-wrap {
+    max-height: none;
+}
+
+.os-table.os-roster th.os-roster-th {
+    background: rgba(10, 14, 20, 0.84);
+}
+
+.os-table.os-roster th.os-roster-th--me {
+    background: linear-gradient(90deg, rgba(35, 209, 139, 0.22), rgba(10, 14, 20, 0.84));
+    border-bottom-color: rgba(35, 209, 139, 0.30);
+}
+
+.os-table.os-roster th.os-roster-th--enemy {
+    background: linear-gradient(90deg, rgba(255, 77, 77, 0.18), rgba(10, 14, 20, 0.84));
+    border-bottom-color: rgba(255, 77, 77, 0.26);
+}
+
+.os-roster-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    border-radius: 999px;
+    border: 1px solid rgba(255,255,255,0.12);
+    background: rgba(18, 26, 36, 0.25);
+    font-weight: 800;
+}
+
+.os-roster-pill__dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.32);
+}
+
+.os-roster-pill--me .os-roster-pill__dot {
+    background: var(--good);
+}
+
+.os-roster-pill--enemy .os-roster-pill__dot {
+    background: var(--bad);
+}
+
+.os-roster-pill--self {
+    border-color: rgba(51, 214, 255, 0.42);
+    box-shadow: 0 0 0 2px rgba(51, 214, 255, 0.12);
+}
+
+.os-roster-empty {
+    color: rgba(182, 196, 214, 0.72);
 }
 
 /* Citations (Halo 5) */

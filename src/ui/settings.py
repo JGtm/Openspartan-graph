@@ -49,6 +49,23 @@ class AppSettings:
     aliases_path: str = ""
     profiles_path: str = ""
 
+    # Profil joueur (bannière/rang) — aucun accès réseau implicite
+    profile_assets_download_enabled: bool = False
+    profile_assets_auto_refresh_hours: int = 24  # 0 = désactivé (ne rafraîchit pas)
+
+    # Profil joueur (auto depuis API Waypoint via SPNKr) — opt-in
+    profile_api_enabled: bool = False
+    profile_api_auto_refresh_hours: int = 6  # cache disque des URLs/paths d'apparence
+
+    profile_banner: str = ""  # URL https://... ou chemin local
+    profile_emblem: str = ""  # URL https://... ou chemin local
+    profile_backdrop: str = ""  # URL https://... ou chemin local
+    profile_nameplate: str = ""  # URL https://... ou chemin local
+    profile_service_tag: str = ""  # ex: "JGTM"
+    profile_id_badge_text_color: str = ""  # ex: "#FFFFFF"
+    profile_rank_label: str = ""  # ex: "Diamond III" / "Héros" / etc.
+    profile_rank_subtitle: str = ""  # ex: "CSR 1540" / "Saison 5" / etc.
+
 
 def _coerce_bool(v: Any, default: bool) -> bool:
     if isinstance(v, bool):
@@ -112,6 +129,27 @@ def load_settings() -> AppSettings:
 
     s.aliases_path = str(obj.get("aliases_path") or "").strip()
     s.profiles_path = str(obj.get("profiles_path") or "").strip()
+
+    s.profile_assets_download_enabled = _coerce_bool(
+        obj.get("profile_assets_download_enabled"), s.profile_assets_download_enabled
+    )
+    s.profile_assets_auto_refresh_hours = max(
+        0, _coerce_int(obj.get("profile_assets_auto_refresh_hours"), s.profile_assets_auto_refresh_hours)
+    )
+
+    s.profile_api_enabled = _coerce_bool(obj.get("profile_api_enabled"), s.profile_api_enabled)
+    s.profile_api_auto_refresh_hours = max(
+        0, _coerce_int(obj.get("profile_api_auto_refresh_hours"), s.profile_api_auto_refresh_hours)
+    )
+
+    s.profile_banner = str(obj.get("profile_banner") or "").strip()
+    s.profile_emblem = str(obj.get("profile_emblem") or "").strip()
+    s.profile_backdrop = str(obj.get("profile_backdrop") or "").strip()
+    s.profile_nameplate = str(obj.get("profile_nameplate") or "").strip()
+    s.profile_service_tag = str(obj.get("profile_service_tag") or "").strip()
+    s.profile_id_badge_text_color = str(obj.get("profile_id_badge_text_color") or "").strip()
+    s.profile_rank_label = str(obj.get("profile_rank_label") or "").strip()
+    s.profile_rank_subtitle = str(obj.get("profile_rank_subtitle") or "").strip()
     return s
 
 

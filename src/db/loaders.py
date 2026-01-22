@@ -5,6 +5,7 @@ import re
 import sqlite3
 from typing import Any, Dict, List, Optional
 
+from src.config import BOT_MAP, TEAM_MAP
 from src.db.connection import get_connection
 from src.db.parsers import (
     coerce_duration_seconds,
@@ -228,6 +229,185 @@ def load_match_player_gamertags(db_path: str, match_id: str) -> Dict[str, str]:
             out[str(xuid_norm)] = gt
 
     return out
+
+
+def load_match_rosters(
+    db_path: str,
+    match_id: str,
+    xuid: str,
+) -> Optional[Dict[str, Any]]:
+    """Retourne les rosters du match (mon équipe vs équipe adverse).
+
+    Source: table MatchStats (Players[] / LastTeamId).
+
+    Returns:
+        None si indisponible ou si l'équipe du joueur ne peut pas être déterminée.
+        Sinon un dict:
+            {
+              "my_team_id": int,
+              "my_team": [{"xuid": str, "gamertag": str|None, "team_id": int|None, "is_me": bool}],
+              "enemy_team": [...],
+            }
+    """
+    if not match_id or not xuid:
+        return None
+
+    with get_connection(db_path) as con:
+        cur = con.cursor()
+        cur.execute(queries.LOAD_MATCH_STATS_BY_MATCH_ID, (match_id,))
+        row = cur.fetchone()
+        if not row or not isinstance(row[0], str) or not row[0]:
+            return None
+
+        try:
+            payload = json.loads(row[0])
+        except Exception:
+            return None
+
+    players = payload.get("Players")
+    if not isinstance(players, list) or not players:
+        return None
+
+    _BOT_ID_RE = re.compile(r"^\s*bid\(\s*([0-9]+(?:\.[0-9]+)?)\s*\)\s*$", re.IGNORECASE)
+
+    def _normalize_bot_key(value: Any) -> str | None:
+        if value is None:
+            return None
+        if isinstance(value, str):
+            s = value.strip()
+            m = _BOT_ID_RE.match(s)
+            if not m:
+                return None
+            try:
+                n = float(m.group(1))
+            except Exception:
+                return None
+            return f"bid({n:.1f})"
+        if isinstance(value, (int, float)):
+            try:
+                return f"bid({float(value):.1f})"
+            except Exception:
+                return None
+        return None
+
+    def _extract_bot_name(p: Any) -> tuple[str | None, str | None]:
+        if not isinstance(p, dict):
+            return None, None
+        pid = p.get("PlayerId")
+
+        bot_key = _normalize_bot_key(pid)
+        if bot_key is None and isinstance(pid, dict):
+            bot_key = _normalize_bot_key(pid.get("BotId") or pid.get("botId") or pid.get("Bot"))
+        if bot_key is None:
+            bot_key = _normalize_bot_key(p.get("BotId") or p.get("botId"))
+
+        if not bot_key:
+            return None, None
+        return bot_key, BOT_MAP.get(bot_key)
+
+    def _extract_identity(p: Any) -> tuple[str | None, str | None]:
+        if not isinstance(p, dict):
+            return None, None
+
+        pid = p.get("PlayerId")
+        xuid_val: Any = None
+        gt_val: Any = None
+
+        if isinstance(pid, dict):
+            xuid_val = pid.get("Xuid") or pid.get("xuid")
+            gt_val = pid.get("Gamertag") or pid.get("gamertag")
+        elif isinstance(pid, str):
+            xuid_val = pid
+            gt_val = p.get("Gamertag") or p.get("gamertag")
+
+        if xuid_val is None:
+            xuid_val = p.get("Xuid") or p.get("xuid")
+        if gt_val is None:
+            gt_val = p.get("Gamertag") or p.get("gamertag")
+
+        xuid_s = str(xuid_val or "").strip()
+        xuid_norm = parse_xuid_input(xuid_s) or xuid_s
+        gt_s = _sanitize_gamertag(gt_val)
+        if not isinstance(gt_s, str):
+            gt_s = str(gt_s or "").strip()
+        gt_s = gt_s.strip()
+        return (xuid_norm or None), (gt_s or None)
+
+    out_rows: list[dict[str, Any]] = []
+    my_team_id: int | None = None
+
+    for p in players:
+        if not isinstance(p, dict):
+            continue
+
+        team_raw = p.get("LastTeamId")
+        if team_raw is None:
+            team_raw = p.get("TeamId")
+
+        team_id: int | None = None
+        try:
+            if team_raw is not None and team_raw == team_raw:
+                team_id = int(team_raw)
+        except Exception:
+            team_id = None
+
+        xuid_norm, gt = _extract_identity(p)
+        bot_key, bot_name = _extract_bot_name(p)
+
+        is_me = False
+        try:
+            is_me = _xuid_id_matches(p.get("PlayerId"), xuid)
+        except Exception:
+            is_me = False
+
+        if is_me and team_id is not None:
+            my_team_id = team_id
+
+        # Nom d'affichage: bot > gamertag > vide
+        display_name = bot_name or gt
+
+        out_rows.append(
+            {
+                "xuid": str(xuid_norm) if xuid_norm is not None else "",
+                "gamertag": gt,
+                "bot_id": bot_key,
+                "is_bot": bool(bot_key),
+                "display_name": display_name,
+                "team_id": team_id,
+                "team_name": TEAM_MAP.get(team_id) if team_id is not None else None,
+                "is_me": bool(is_me),
+            }
+        )
+
+    if my_team_id is None:
+        return None
+
+    my_team = [r for r in out_rows if r.get("team_id") == my_team_id]
+    enemy_team = [r for r in out_rows if r.get("team_id") != my_team_id]
+
+    def _sort_key(r: dict[str, Any]) -> tuple[int, str]:
+        # Moi en premier, puis ordre alphabétique stable (gamertag puis xuid)
+        me_rank = 0 if r.get("is_me") else 1
+        name = str(r.get("gamertag") or "").strip().lower()
+        if not name:
+            name = str(r.get("xuid") or "").strip().lower()
+        return (me_rank, name)
+
+    my_team.sort(key=_sort_key)
+    enemy_team.sort(key=_sort_key)
+
+    enemy_team_ids = sorted({int(r["team_id"]) for r in enemy_team if r.get("team_id") is not None})
+    enemy_team_names = [TEAM_MAP.get(tid) for tid in enemy_team_ids]
+    enemy_team_names = [n for n in enemy_team_names if isinstance(n, str) and n]
+
+    return {
+        "my_team_id": int(my_team_id),
+        "my_team_name": TEAM_MAP.get(int(my_team_id)),
+        "my_team": my_team,
+        "enemy_team": enemy_team,
+        "enemy_team_ids": enemy_team_ids,
+        "enemy_team_names": enemy_team_names,
+    }
 
 
 def load_top_medals(

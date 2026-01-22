@@ -21,6 +21,7 @@ from src.ui.formatting import format_date_fr, format_mmss
 
 from src.ui.settings import AppSettings, load_settings, save_settings
 from src.ui.path_picker import directory_input, file_input
+from src.ui.profile_api import ProfileAppearance, get_profile_appearance, get_xuid_for_gamertag, ensure_spnkr_tokens
 
 __all__ = [
     # aliases
@@ -49,6 +50,11 @@ __all__ = [
     "AppSettings",
     "load_settings",
     "save_settings",
+    # profile api
+    "ProfileAppearance",
+    "get_profile_appearance",
+    "get_xuid_for_gamertag",
+    "ensure_spnkr_tokens",
     # path picker
     "directory_input",
     "file_input",
