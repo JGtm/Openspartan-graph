@@ -2814,7 +2814,7 @@ def main() -> None:
         st.toggle(
             "Restreindre aux playlists classiques",
             key="restrict_playlists",
-            help="Limite aux playlists Quick Play, Ranked Arena/Slayer, Big Team Battle.",
+            help="Limite aux playlists Partie rapide, Arène/Assassin classé, Grand combat en équipe.",
         )
         st.markdown("<div style='height: 8px'></div>", unsafe_allow_html=True)
 
