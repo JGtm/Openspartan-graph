@@ -20,6 +20,13 @@ PLAYLIST_FR: dict[str, str] = {
 # NOTE: ce mapping cible surtout MatchStats.PlaylistMapModePairs (pair_name)
 # Exemple: "Arena:CTF on Aquarius" -> "Arène : Capture du drapeau"
 PAIR_FR: dict[str, str] = {
+    # Variantes sans carte (ex: payloads partiels / UI)
+    "Arena:CTF": "Arène : Capture du drapeau",
+    "Arena:King of the Hill": "Arène : Roi de la colline",
+    "Arena:Neutral Flag CTF": "Arène : Drapeau neutre",
+    "Arena:Oddball": "Arène : Oddball",
+    "Arena:Team Slayer": "Arène : Assassin en équipe",
+
     "Arena:CTF on Absolution": "Arène : Capture du drapeau",
     "Arena:CTF on Aquarius": "Arène : Capture du drapeau",
     "Arena:CTF on Banished Narrows": "Arène : Capture du drapeau",

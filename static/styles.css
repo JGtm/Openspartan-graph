@@ -757,6 +757,63 @@ div[data-testid="stNumberInput"] input:focus {
     text-decoration: underline;
 }
 
+/* =============================================================================
+   Roster (Mon équipe vs adverse)
+   ============================================================================= */
+
+.os-roster-wrap {
+    max-height: none;
+}
+
+.os-table.os-roster th.os-roster-th {
+    background: rgba(10, 14, 20, 0.84);
+}
+
+.os-table.os-roster th.os-roster-th--me {
+    background: linear-gradient(90deg, rgba(35, 209, 139, 0.22), rgba(10, 14, 20, 0.84));
+    border-bottom-color: rgba(35, 209, 139, 0.30);
+}
+
+.os-table.os-roster th.os-roster-th--enemy {
+    background: linear-gradient(90deg, rgba(255, 77, 77, 0.18), rgba(10, 14, 20, 0.84));
+    border-bottom-color: rgba(255, 77, 77, 0.26);
+}
+
+.os-roster-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    border-radius: 999px;
+    border: 1px solid rgba(255,255,255,0.12);
+    background: rgba(18, 26, 36, 0.25);
+    font-weight: 800;
+}
+
+.os-roster-pill__dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.32);
+}
+
+.os-roster-pill--me .os-roster-pill__dot {
+    background: var(--good);
+}
+
+.os-roster-pill--enemy .os-roster-pill__dot {
+    background: var(--bad);
+}
+
+.os-roster-pill--self {
+    border-color: rgba(51, 214, 255, 0.42);
+    box-shadow: 0 0 0 2px rgba(51, 214, 255, 0.12);
+}
+
+.os-roster-empty {
+    color: rgba(182, 196, 214, 0.72);
+}
+
 /* Citations (Halo 5) */
 .os-citation-top-gap {
     height: 10px;

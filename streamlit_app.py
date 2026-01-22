@@ -32,6 +32,8 @@ from src.config import (
     HALO_COLORS,
     SESSION_CONFIG,
     OUTCOME_CODES,
+    BOT_MAP,
+    TEAM_MAP,
 )
 from src.db import (
     load_matches,
@@ -41,6 +43,7 @@ from src.db import (
     guess_xuid_from_db_path,
     load_player_match_result,
     load_match_medals_for_player,
+    load_match_rosters,
     load_top_medals,
     load_highlight_events_for_match,
     load_match_player_gamertags,
@@ -1022,6 +1025,17 @@ def cached_load_match_medals_for_player(
     db_key: tuple[int, int] | None,
 ):
     return load_match_medals_for_player(db_path, match_id, xuid)
+
+
+@st.cache_data(show_spinner=False)
+def cached_load_match_rosters(
+    db_path: str,
+    match_id: str,
+    xuid: str,
+    db_key: tuple[int, int] | None,
+):
+    _ = db_key
+    return load_match_rosters(db_path, match_id, xuid)
 
 
 @st.cache_data(show_spinner=False)
@@ -2035,6 +2049,113 @@ def _render_match_view(
                     sub_style="color: rgba(245, 248, 255, 0.92); font-weight: 800; font-size: 16px; line-height: 1.15;",
                     min_h=110,
                 )
+
+    # ----------------------------------------------------------------------
+    # Roster (mon équipe vs adverse) — juste avant les médailles
+    # ----------------------------------------------------------------------
+    st.subheader("Joueurs")
+    rosters = cached_load_match_rosters(db_path, match_id.strip(), xuid.strip(), db_key=db_key)
+    if not rosters:
+        st.info("Roster indisponible pour ce match (payload MatchStats manquant ou équipe introuvable).")
+    else:
+        gt_map = cached_load_match_player_gamertags(db_path, match_id.strip(), db_key=db_key)
+        me_xu = str(parse_xuid_input(str(xuid or "").strip()) or str(xuid or "").strip()).strip()
+
+        my_team_id = rosters.get("my_team_id")
+        my_team_name = rosters.get("my_team_name")
+        enemy_team_ids = rosters.get("enemy_team_ids") or []
+        enemy_team_names = rosters.get("enemy_team_names") or []
+
+        def _team_label(team_id_value) -> str:
+            try:
+                tid = int(team_id_value)
+            except Exception:
+                return "-"
+            return TEAM_MAP.get(tid) or f"Team {tid}"
+
+        def _roster_name(xu: str, gt: str | None) -> str:
+            xu_s = str(parse_xuid_input(str(xu or "").strip()) or str(xu or "").strip()).strip()
+
+            # 0) BotId -> nom de bot
+            if xu_s:
+                # xu_s peut être un bid(...) si OpenSpartan encode les bots ainsi
+                bot_key = xu_s.strip()
+                if bot_key.lower().startswith("bid("):
+                    bot_name = BOT_MAP.get(bot_key)
+                    if isinstance(bot_name, str) and bot_name.strip():
+                        return bot_name.strip()
+
+            # 1) Gamertag fiable depuis MatchStats (mapping)
+            if xu_s and isinstance(gt_map, dict):
+                mapped = gt_map.get(xu_s)
+                if isinstance(mapped, str) and mapped.strip():
+                    return mapped.strip()
+            # 2) Gamertag extrait du roster
+            g = str(gt or "").strip()
+            if g and g != "?" and (not g.isdigit()) and (not g.lower().startswith("xuid(")):
+                return g
+            # 3) Alias local (fallback)
+            if xu_s:
+                return display_name_from_xuid(xu_s)
+            return "-"
+
+        my_rows = rosters.get("my_team") or []
+        en_rows = rosters.get("enemy_team") or []
+
+        my_names: list[tuple[str, bool]] = []
+        en_names: list[tuple[str, bool]] = []
+
+        for r in my_rows:
+            xu = str(r.get("xuid") or "").strip()
+            name = str(r.get("display_name") or "").strip() or _roster_name(xu, r.get("gamertag"))
+            is_self = bool(me_xu and xu and (str(parse_xuid_input(xu) or xu).strip() == me_xu)) or bool(r.get("is_me"))
+            my_names.append((name, is_self))
+
+        for r in en_rows:
+            xu = str(r.get("xuid") or "").strip()
+            name = str(r.get("display_name") or "").strip() or _roster_name(xu, r.get("gamertag"))
+            en_names.append((name, False))
+
+        # Pad pour tableau 2 colonnes
+        rows_n = max(len(my_names), len(en_names), 1)
+        my_names += [("", False)] * (rows_n - len(my_names))
+        en_names += [("", False)] * (rows_n - len(en_names))
+
+        def _pill_html(name: str, *, side: str, is_self: bool) -> str:
+            if not name:
+                return "<span class='os-roster-empty'>—</span>"
+            safe = html.escape(str(name))
+            extra = " os-roster-pill--self" if is_self else ""
+            return (
+                f"<span class='os-roster-pill os-roster-pill--{side}{extra}'>"
+                "<span class='os-roster-pill__dot'></span>"
+                f"<span>{safe}</span>"
+                "</span>"
+            )
+
+        body_rows = []
+        for i in range(rows_n):
+            n_me, is_self = my_names[i]
+            n_en, _ = en_names[i]
+            body_rows.append(
+                "<tr>"
+                f"<td>{_pill_html(n_me, side='me', is_self=is_self)}</td>"
+                f"<td>{_pill_html(n_en, side='enemy', is_self=False)}</td>"
+                "</tr>"
+            )
+
+        st.markdown(
+            "<div class='os-table-wrap os-roster-wrap'>"
+            "<table class='os-table os-roster'>"
+            "<thead><tr>"
+            f"<th class='os-roster-th os-roster-th--me'>Mon équipe — {html.escape(str(my_team_name or _team_label(my_team_id)))} ({len([n for n, _ in my_names if n])})</th>"
+            f"<th class='os-roster-th os-roster-th--enemy'>Équipe adverse — {html.escape(str(enemy_team_names[0] if (isinstance(enemy_team_names, list) and len(enemy_team_names)==1 and enemy_team_names[0]) else (' / '.join([_team_label(t) for t in enemy_team_ids]) if enemy_team_ids else 'Adversaires')))} ({len([n for n, _ in en_names if n])})</th>"
+            "</tr></thead>"
+            "<tbody>" + "".join(body_rows) + "</tbody>"
+            "</table>"
+            "</div>",
+            unsafe_allow_html=True,
+        )
 
     st.subheader("Médailles")
     if not medals_last:
