@@ -6,21 +6,53 @@
 
 ---
 
-## 📋 Résumé des fonctionnalités manquantes dans SPNKr
+## 📋 Résumé des fonctionnalités et stabilité
 
-| Fonctionnalité | Grunt (C#) | SPNKr (Python) | Status |
-|----------------|------------|----------------|--------|
-| Backdrop image path | `EconomyPlayerCustomization` | `economy.get_player_customization` | ✅ Disponible |
-| Backdrop PNG URL | `GameCmsGetItem(backdropPath)` | ❌ Manquant | 🔴 À implémenter |
-| Career rank metadata | `GameCmsGetCareerRanks("careerRank1")` | `gamecms_hacs.get_career_reward_track()` | ✅ Disponible |
-| Player career progression | `EconomyGetPlayerCareerRank(xuid)` | ❌ Manquant | 🔴 À implémenter |
-| CSR (Competitive Skill Rank) | `SkillGetPlaylistCsr` | `skill.get_playlist_csr` | ✅ Disponible |
+| Fonctionnalité | Endpoint | SPNKr | Stabilité |
+|----------------|----------|-------|----------|
+| **Service Tag** | `economy.get_player_customization` | ✅ | 🟢 **Stable** |
+| **Emblem path** | `economy.get_player_customization` | ✅ | 🟢 **Stable** |
+| **Backdrop path** | `economy.get_player_customization` | ✅ | 🟢 **Stable** |
+| **Emblem PNG URL** | Pattern Waypoint + Progression API | ⚠️ Workaround | 🟡 Partiel |
+| **Backdrop PNG URL** | Progression API | ⚠️ Workaround | 🟡 Partiel |
+| **Career Rank metadata** | `gamecms_hacs.get_career_reward_track()` | ✅ | 🟢 **Stable** |
+| **Career Rank progression** | GET `/hi/players/xuid({XUID})/rewardtracks/careerranks/careerrank1` | ⚠️ Custom | 🟢 **Stable** (den.dev) |
+| **CSR (Competitive Skill)** | `skill.get_playlist_csr` | ✅ | 🟢 **Stable** |
 
 ---
 
-## 🔧 Endpoints découverts
+## � Endpoints confirmés STABLES
 
-### 1. Career Rank - Progression du joueur
+### 1. Player Customization (Service Tag, Emblem, Backdrop)
+
+**Endpoint** (SPNKr `economy.get_player_customization`):
+```
+GET https://economy.svc.halowaypoint.com:443/hi/players/xuid({XUID})/customization?view=public
+```
+
+**Headers requis** :
+- `x-343-authorization-spartan: {SPARTAN_TOKEN}`
+- `343-clearance: {CLEARANCE_TOKEN}`
+
+**Réponse** (extrait pertinent):
+```json
+{
+  "Appearance": {
+    "ServiceTag": "JTGM",
+    "BackdropImagePath": "Inventory/Spartan/BackdropImages/103-000-ui-background-e86f6dee.json",
+    "Emblem": {
+      "EmblemPath": "Inventory/Spartan/Emblems/104-001-olympus-stuck-3d208338.json",
+      "ConfigurationId": 12345678
+    }
+  }
+}
+```
+
+**Fiabilité** : 🟢 **Très stable** - C'est l'API officielle utilisée par Halo Waypoint.
+
+---
+
+### 2. Career Rank - Progression du joueur
 
 **Endpoint confirmé** (source: [den.dev/blog/halo-infinite-career-api](https://den.dev/blog/halo-infinite-career-api/)) :
 ```
@@ -126,11 +158,113 @@ async def get_career_rank_metadata(client):
 
 ---
 
-### 3. Backdrop / Item CMS
+## 🟡 Résolution des chemins Inventory → URLs d'images
 
-**Endpoint probable** :
+### Problème
+
+L'API Economy retourne des **chemins JSON** comme :
+- `Inventory/Spartan/BackdropImages/103-000-ui-background.json`
+- `Inventory/Spartan/Emblems/104-001-olympus-stuck.json`
+
+Ces chemins ne sont **pas des URLs d'images**. Il faut les résoudre.
+
+### Solution 1 : Pattern Waypoint (rapide, sans appel API)
+
+Pour certains items, le PNG existe à un chemin prédictible :
+
+```python
+# Emblems
+# Input:  Inventory/Spartan/Emblems/{stem}.json + configuration_id
+# Output: https://gamecms-hacs.svc.halowaypoint.com/hi/Waypoint/file/images/emblems/{stem}_{config_id}.png
+
+# Backdrops (pattern simple - ne fonctionne PAS pour tous)
+# Input:  Inventory/Spartan/BackdropImages/{stem}.json
+# Output: https://gamecms-hacs.svc.halowaypoint.com/hi/Waypoint/file/images/backdrops/{stem}.png
 ```
-GET https://gamecms-hacs.svc.halowaypoint.com/hi/Inventory/file/{ITEM_PATH}
+
+⚠️ **Limitation** : Ce pattern ne fonctionne que pour ~60% des items.
+
+### Solution 2 : API Progression (fiable, appel supplémentaire)
+
+**Endpoint** :
+```
+GET https://gamecms-hacs.svc.halowaypoint.com/hi/progression/file/{INVENTORY_PATH}
+```
+
+Où `{INVENTORY_PATH}` = le chemin retourné par l'API Economy.
+
+**Exemple** :
+```
+GET https://gamecms-hacs.svc.halowaypoint.com/hi/progression/file/Inventory/Spartan/BackdropImages/103-000-ui-background.json
+```
+
+**Réponse** :
+```json
+{
+  "CommonData": {
+    "DisplayPath": {
+      "Media": {
+        "MediaUrl": {
+          "Path": "progression/Backdrops/103-000-ui-background.png"
+        }
+      }
+    }
+  }
+}
+```
+
+**URL finale** :
+```
+https://gamecms-hacs.svc.halowaypoint.com/hi/images/file/progression/Backdrops/103-000-ui-background.png
+```
+
+### Code Python recommandé
+
+```python
+async def resolve_inventory_to_png(session, inventory_path: str, spartan_token: str, clearance_token: str) -> str | None:
+    """Résout un chemin Inventory/*.json vers l'URL du PNG."""
+    if not inventory_path:
+        return None
+    
+    # Construire l'URL de l'API Progression
+    path = inventory_path.lstrip("/")
+    if not path.lower().startswith("inventory/"):
+        return None
+    
+    url = f"https://gamecms-hacs.svc.halowaypoint.com/hi/progression/file/{path}"
+    headers = {
+        "Accept": "application/json",
+        "X-343-Authorization-Spartan": spartan_token,
+        "343-Clearance": clearance_token,
+    }
+    
+    async with session.get(url, headers=headers) as resp:
+        if resp.status != 200:
+            return None
+        data = await resp.json()
+    
+    # Extraire le chemin PNG
+    png_path = (
+        data.get("CommonData", {})
+        .get("DisplayPath", {})
+        .get("Media", {})
+        .get("MediaUrl", {})
+        .get("Path", "")
+    )
+    
+    if not png_path:
+        return None
+    
+    return f"https://gamecms-hacs.svc.halowaypoint.com/hi/images/file/{png_path.lstrip('/')}"
+```
+
+---
+
+### 3. Backdrop / Item CMS (ancienne doc)
+
+**Endpoint** :
+```
+GET https://gamecms-hacs.svc.halowaypoint.com/hi/progression/file/{ITEM_PATH}
 ```
 
 Où `{ITEM_PATH}` = `Inventory/Spartan/BackdropImages/103-000-ui-background-e86f6dee.json`

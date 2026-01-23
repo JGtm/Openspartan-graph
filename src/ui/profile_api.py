@@ -211,8 +211,24 @@ async def _resolve_inventory_png_via_api(
 ) -> str | None:
     """Résout un chemin Inventory/*.json vers l'URL du PNG réel via l'API progression.
     
-    Appelle /hi/progression/file/Inventory/... pour récupérer le JSON de métadonnées,
-    puis extrait CommonData.DisplayPath.Media.MediaUrl.Path pour construire l'URL du PNG.
+    Endpoint: GET https://gamecms-hacs.svc.halowaypoint.com/hi/progression/file/{inventory_path}
+    
+    Cette API retourne un JSON avec la structure :
+    ```json
+    {
+      "CommonData": {
+        "DisplayPath": {
+          "Media": {
+            "MediaUrl": {
+              "Path": "progression/Backdrops/103-000-ui-background.png"
+            }
+          }
+        }
+      }
+    }
+    ```
+    
+    L'URL finale du PNG est : /hi/images/file/{Path}
     
     Retourne l'URL complète vers le PNG, ou None si non résolu.
     """
@@ -242,11 +258,18 @@ async def _resolve_inventory_png_via_api(
     png_path = media_url.get("Path", "")
     
     if not png_path:
-        # Fallback: essayer FolderPath + FileName
+        # Fallback 1: essayer FolderPath + FileName dans DisplayPath
         folder = display_path.get("FolderPath", "")
         filename = display_path.get("FileName", "")
         if folder and filename:
             png_path = f"{folder}/{filename}"
+    
+    if not png_path:
+        # Fallback 2: essayer ImagePath.Media.MediaUrl.Path (structure Grunt/Backdrop)
+        image_path = data.get("ImagePath", {})
+        img_media = image_path.get("Media", {})
+        img_media_url = img_media.get("MediaUrl", {})
+        png_path = img_media_url.get("Path", "")
     
     if not png_path:
         return None
