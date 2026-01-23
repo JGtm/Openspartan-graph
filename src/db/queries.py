@@ -78,6 +78,11 @@ WHERE MatchId = ?
 LIMIT 1;
 """
 
+LOAD_ALL_PLAYER_MATCH_STATS = """
+SELECT MatchId, ResponseBody
+FROM PlayerMatchStats
+"""
+
 
 # =============================================================================
 # Requêtes pour les highlight events (film)

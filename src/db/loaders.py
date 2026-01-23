@@ -919,6 +919,75 @@ def _extract_player_mmrs(player: Dict[str, Any], my_team_id: Optional[int]) -> t
     return team_mmr, enemy_mmr
 
 
+def _load_all_mmrs_from_player_match_stats(
+    con: sqlite3.Connection,
+    xuid: str,
+) -> Dict[str, tuple[Optional[float], Optional[float]]]:
+    """Charge tous les MMR (team, enemy) depuis PlayerMatchStats.
+
+    Args:
+        con: Connexion SQLite.
+        xuid: XUID du joueur.
+
+    Returns:
+        Dict match_id -> (team_mmr, enemy_mmr)
+    """
+    cur = con.cursor()
+    cur.execute(queries.LOAD_ALL_PLAYER_MATCH_STATS)
+
+    result: Dict[str, tuple[Optional[float], Optional[float]]] = {}
+    for match_id, body in cur.fetchall():
+        if not isinstance(body, str) or not match_id:
+            continue
+        try:
+            payload = json.loads(body)
+        except Exception:
+            continue
+
+        values = payload.get("Value")
+        if not isinstance(values, list) or not values:
+            continue
+
+        # Trouver l'entrée du joueur
+        entry: Optional[Dict[str, Any]] = None
+        for v in values:
+            if not isinstance(v, dict):
+                continue
+            if _xuid_id_matches(v.get("Id"), xuid):
+                entry = v
+                break
+
+        if entry is None:
+            continue
+
+        res = entry.get("Result")
+        if not isinstance(res, dict):
+            continue
+
+        team_id = res.get("TeamId")
+        team_id_i = int(team_id) if isinstance(team_id, int) else None
+        team_mmr = coerce_number(res.get("TeamMmr"))
+
+        # MMRs par équipe (dict {"0": float, "1": float})
+        team_mmrs_raw = res.get("TeamMmrs")
+        enemy_mmr: Optional[float] = None
+        if isinstance(team_mmrs_raw, dict) and team_id_i is not None:
+            my_key = str(team_id_i)
+            for k, v in team_mmrs_raw.items():
+                if k != my_key:
+                    fv = coerce_number(v)
+                    if fv is not None:
+                        enemy_mmr = float(fv)
+                        break
+
+        result[str(match_id)] = (
+            float(team_mmr) if team_mmr is not None else None,
+            enemy_mmr,
+        )
+
+    return result
+
+
 def load_matches(
     db_path: str,
     xuid: str,
@@ -945,6 +1014,9 @@ def load_matches(
         playlist_names = load_asset_name_map(con, "Playlists")
         map_mode_pair_names = load_asset_name_map(con, "PlaylistMapModePairs")
         game_variant_names = load_asset_name_map(con, "GameVariants")
+
+        # Charger tous les MMR depuis PlayerMatchStats (source fiable)
+        all_mmrs = _load_all_mmrs_from_player_match_stats(con, xuid)
 
         cur = con.cursor()
         cur.execute(queries.LOAD_MATCH_STATS)
@@ -1023,8 +1095,13 @@ def load_matches(
 
             my_team_score, enemy_team_score = _extract_team_scores(obj, last_team_id)
 
-            # Extraire les MMRs
-            team_mmr, enemy_mmr = _extract_player_mmrs(me, last_team_id)
+            # Extraire les MMRs depuis PlayerMatchStats (source fiable)
+            # Fallback sur MatchStats si PlayerMatchStats n'a pas les données
+            mmr_pair = all_mmrs.get(match_id, (None, None))
+            team_mmr, enemy_mmr = mmr_pair
+            if team_mmr is None and enemy_mmr is None:
+                # Fallback : essayer d'extraire depuis MatchStats (ancienne méthode)
+                team_mmr, enemy_mmr = _extract_player_mmrs(me, last_team_id)
 
             # Fallback important pour les DB générées sans import d'assets (SPNKr --no-assets).
             # Sans ça, playlist/pair/map sont None => filtres UI vides.
