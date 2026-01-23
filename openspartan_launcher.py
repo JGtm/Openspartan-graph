@@ -802,7 +802,7 @@ def _cmd_repair_aliases(args: argparse.Namespace) -> int:
 
 def _interactive(argv0: str) -> int:
     print("=" * 66)
-    print("           OpenSpartan Graphs - Lanceur interactif")
+    print("           LevelUp - Lanceur interactif")
     print("=" * 66)
     print("\n(Astuce: utilise --help pour les options CLI avancees)")
     print("\nChoisis un mode:\n")
@@ -948,7 +948,7 @@ def _build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(
         prog="openspartan",
         description=(
-            "Lanceur OpenSpartan Graphs (dashboard Streamlit + refresh SPNKr).\n"
+            "Lanceur LevelUp (dashboard Streamlit + refresh SPNKr).\n"
             "- Mode interactif si lancé sans sous-commande (max 2 questions).\n"
             "- Mode CLI avec sous-commandes et --help."
         ),

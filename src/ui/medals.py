@@ -163,16 +163,8 @@ def render_medals_grid(medals: list[dict[str, int]], cols_per_row: int = 8) -> N
         st.info("Aucune médaille.")
         return
 
-    missing_labels = sorted(
-        {int(m.get("name_id", 0)) for m in medals if not medal_has_known_label(int(m.get("name_id", 0)))}
-        - {0}
-    )
-    if missing_labels:
-        st.warning(
-            "Libellés manquants pour certaines médailles: "
-            + ", ".join([f"#{x}" for x in missing_labels[:12]])
-            + (" …" if len(missing_labels) > 12 else "")
-        )
+    # Note: on n'affiche plus de warning pour les médailles inconnues
+    # (certaines comme #590706932 sont des médailles internes/test à ignorer)
 
     local_dir = get_local_medals_icons_dir()
     cache_dir = get_medals_cache_dir()

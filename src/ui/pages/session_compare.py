@@ -224,7 +224,7 @@ def render_comparison_radar_chart(perf_a: dict, perf_b: dict) -> None:
         height=400,
     )
     
-    st.plotly_chart(fig_radar, use_container_width=True)
+    st.plotly_chart(fig_radar, width="stretch")
 
 
 def render_comparison_bar_chart(perf_a: dict, perf_b: dict) -> None:
@@ -268,7 +268,7 @@ def render_comparison_bar_chart(perf_a: dict, perf_b: dict) -> None:
         height=350,
     )
     
-    st.plotly_chart(fig_bar, use_container_width=True)
+    st.plotly_chart(fig_bar, width="stretch")
 
 
 def render_session_comparison_page(

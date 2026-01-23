@@ -87,8 +87,8 @@ def get_hero_html(
         <div class="wp-notch-top"></div>
         <div class="wp-notch-bottom"></div>
         <div class="hero">
-            <div class="title">OpenSpartan Graphs</div>
-            <div class="subtitle">Analyse tes parties Halo Infinite depuis la DB OpenSpartan Workshop — filtres, séries temporelles, amis, maps.</div>
+            <div class="title">LevelUp</div>
+            <div class="subtitle">Analyse tes parties Halo Infinite depuis la DB SPNKr — filtres, séries temporelles, amis, maps.</div>
         </div>
         """
 

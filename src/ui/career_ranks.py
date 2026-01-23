@@ -60,6 +60,13 @@ _CAREER_RANK_TITLE_FR: dict[str, str] = {
 }
 
 
+_GRADE_TO_ROMAN: dict[str, str] = {
+    "1": "I",
+    "2": "II",
+    "3": "III",
+}
+
+
 def format_career_rank_label_fr(*, tier: str | None, title: str | None, grade: str | None) -> str:
     """Formate un libellé de rang Career en français.
 
@@ -88,7 +95,8 @@ def format_career_rank_label_fr(*, tier: str | None, title: str | None, grade: s
     if title_fr:
         parts.append(title_fr)
     if raw_grade:
-        parts.append(raw_grade)
+        grade_roman = _GRADE_TO_ROMAN.get(raw_grade, raw_grade)
+        parts.append(grade_roman)
     return " ".join(parts).strip()
 
 
@@ -130,11 +138,12 @@ class CareerRankInfo:
 
     @property
     def display_label_fr(self) -> str:
-        """Retourne un label compact en français (ex: 'Caporal suppléant Bronze 1')."""
+        """Retourne un label compact en français (ex: 'Caporal suppléant Bronze I')."""
         title_fr = _CAREER_RANK_TITLE_FR.get(self.title, self.title)
         tier_fr = _CAREER_RANK_TIER_FR.get(self.subtitle or "", self.subtitle or "")
         if tier_fr and self.tier:
-            return f"{title_fr} {tier_fr} {self.tier}".strip()
+            grade_roman = _GRADE_TO_ROMAN.get(self.tier, self.tier)
+            return f"{title_fr} {tier_fr} {grade_roman}".strip()
         if tier_fr:
             return f"{title_fr} {tier_fr}".strip()
         return title_fr.strip()

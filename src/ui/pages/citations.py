@@ -41,7 +41,7 @@ def render_citations_page(
     if not dff.empty and str(xuid or "").strip():
         match_ids = [str(x) for x in dff["match_id"].dropna().astype(str).tolist()]
         with st.spinner("Agrégation des médailles…"):
-            top_all = top_medals_fn(db_path, xuid.strip(), match_ids, None, db_key)
+            top_all = top_medals_fn(db_path, xuid.strip(), match_ids, top_n=None, db_key=db_key)
         try:
             counts_by_medal = {int(nid): int(cnt) for nid, cnt in (top_all or [])}
         except Exception:

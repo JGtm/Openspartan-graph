@@ -206,14 +206,19 @@ python openspartan_launcher.py repair-aliases --db data/spnkr_gt_MonGamertag.db 
 
 ### Filtres (sidebar)
 
-| Option | Description | Défaut |
-|--------|-------------|--------|
-| **Inclure Firefight** | Afficher les parties Firefight (PvE) | ❌ |
-| **Restreindre playlists** | Limiter à Quick Play, Ranked, BTB | ❌ |
+Les filtres utilisent des **menus dépliables avec cases à cocher** pour une sélection facile parmi de nombreuses valeurs :
+
+| Filtre | Description | Comportement par défaut |
+|--------|-------------|------------------------|
+| **Playlists** | Sélection des playlists à inclure | Tout coché sauf Firefight |
+| **Modes** | Sélection des modes de jeu | Tout coché |
+| **Cartes** | Sélection des cartes | Tout coché |
+
+> **Note** : Firefight (PvE) est décoché par défaut mais peut être activé via les checkboxes Playlists.
 
 ### Playlists supportées
 
-Toutes les playlists sont maintenant affichées par défaut, incluant :
+Toutes les playlists sont affichées dans les filtres, incluant :
 - Quick Play, Ranked Arena, Ranked Slayer
 - **Big Team Battle** (toutes variantes)
 - Firefight, Super Fiesta, Team Snipers

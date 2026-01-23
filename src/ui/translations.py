@@ -15,17 +15,20 @@ PLAYLIST_FR: dict[str, str] = {
     "Big Team Battle": "Grande bataille en équipe",
     "Big Team Battle: Refresh": "Grande bataille en équipe : Refresh",
     "Big Team Social": "Grande bataille sociale",
-    "Firefight": "Firefight",
-    "Firefight: Heroic King of the Hill": "Firefight : Roi de la colline héroïque",
-    "Firefight: Legendary King of the Hill": "Firefight : Roi de la colline légendaire",
+    "Firefight": "Baptême du feu",
+    "Firefight: Heroic King of the Hill": "Baptême du feu : Roi de la colline héroïque",
+    "Firefight: Legendary King of the Hill": "Baptême du feu : Roi de la colline légendaire",
     "Quick Play": "Partie rapide",
     "Ranked Arena": "Arène classée",
     "Ranked Slayer": "Assassin classé",
     "Rumble Pit": "Mêlée générale",
     "SURVIVE THE UNDEAD": "Survivre aux morts-vivants",
     "Squad Battle": "Combat d'escouade",
-    "Super Fiesta": "Super fiesta",
+    "Super Fiesta": "Super Fiesta",
     "Team Snipers": "Snipers en équipe",
+    # IDs de playlists "Partie rapide" (fallback si nom non résolu)
+    "a446725e-b281-414c-a21e": "Partie rapide",
+    "bdceefb3-1c52-4848-a6b7": "Partie rapide",
 }
 
 
@@ -43,7 +46,7 @@ PAIR_FR: dict[str, str] = {
     "Arena:Team Slayer": "Arène : Assassin en équipe",
     "Arena:Strongholds": "Arène : Bases",
     "Arena:Attrition": "Arène : Attrition",
-    "Arena:One Flag CTF": "Arène : Un seul drapeau",
+    "Arena:One Flag CTF": "Arène : Drapeau neutre",
     "Arena:Escalation Slayer": "Arène : Escalade",
     "Arena:FFA Slayer": "Arène : Assassin FFA",
     "Arena:Shotty Snipes Slayer": "Arène : Shotty Snipers",
@@ -55,7 +58,7 @@ PAIR_FR: dict[str, str] = {
     "BTB:Fiesta CTF": "BTB : Fiesta CDD",
     "BTB:Fiesta Slayer": "BTB : Fiesta Assassin",
     "BTB:Fiesta Total Control": "BTB : Fiesta Contrôle total",
-    "BTB:One Flag CTF": "BTB : Un seul drapeau",
+    "BTB:One Flag CTF": "BTB : Drapeau neutre",
     "BTB:Extraction": "BTB : Extraction",
     "BTB:Escalation Slayer": "BTB : Escalade",
     "BTB:Sentry Defense": "BTB : Défense sentinelle",
@@ -72,10 +75,10 @@ PAIR_FR: dict[str, str] = {
     "Community:Slayer": "Communauté : Assassin",
     "Community:Team Slayer": "Communauté : Assassin en équipe",
     "Event:Escalation Slayer": "Événement : Escalade",
-    "Super Fiesta:Slayer": "Super fiesta : Assassin",
+    "Super Fiesta:Slayer": "Super Fiesta : Assassin",
     "Fiesta:FFA Slayer": "Fiesta : Assassin FFA",
-    "Firefight:Heroic King of the Hill": "Firefight : Roi de la colline héroïque",
-    "Firefight:Legendary King of the Hill": "Firefight : Roi de la colline légendaire",
+    "Firefight:Heroic King of the Hill": "Baptême du feu : Roi de la colline héroïque",
+    "Firefight:Legendary King of the Hill": "Baptême du feu : Roi de la colline légendaire",
     "Gruntpocalypse:Heroic KOTH": "Gruntpocalypse : Roi de la colline héroïque",
     "Husky Raid:CTF": "Husky Raid : CDD",
     "Super Husky Raid:CTF": "Super Husky Raid : CDD",
@@ -153,8 +156,8 @@ PAIR_FR: dict[str, str] = {
     "Arena:Oddball on Recharge": "Arène : Oddball",
     "Arena:Oddball on Starboard": "Arène : Oddball",
     "Arena:Oddball on Streets": "Arène : Oddball",
-    "Arena:One Flag CTF on Cliffhanger": "Arène : Un seul drapeau",
-    "Arena:One Flag CTF on Salvation": "Arène : Un seul drapeau",
+    "Arena:One Flag CTF on Cliffhanger": "Arène : Drapeau neutre",
+    "Arena:One Flag CTF on Salvation": "Arène : Drapeau neutre",
     "Arena:Shotty Snipes Slayer on Detachment": "Arène : Shotty Snipers",
     "Arena:Slayer on Aquarius": "Arène : Assassin",
     "Arena:Slayer on Aquarius - Forge": "Arène : Assassin",
@@ -280,7 +283,7 @@ PAIR_FR: dict[str, str] = {
     "BTB:Fiesta Total Control on Command": "BTB : Fiesta Contrôle total",
     "BTB:Fiesta Total Control on Fortitude": "BTB : Fiesta Contrôle total",
     "BTB:Fiesta Total Control on Refuge": "BTB : Fiesta Contrôle total",
-    "BTB:One Flag CTF on Refuge": "BTB : Un seul drapeau",
+    "BTB:One Flag CTF on Refuge": "BTB : Drapeau neutre",
     "BTB:Sentry Defense on Highpower Sentry Defense": "BTB : Défense sentinelle",
     "BTB:Sentry Defense on Oasis Sentry Defense": "BTB : Défense sentinelle",
     "BTB:Slayer on Breaker": "BTB : Assassin",
@@ -399,10 +402,10 @@ PAIR_FR: dict[str, str] = {
     # -------------------------------------------------------------------------
     # Firefight / Gruntpocalypse
     # -------------------------------------------------------------------------
-    "Firefight:Heroic King of the Hill on Oasis": "Firefight : Roi de la colline héroïque",
-    "Firefight:Legendary King of the Hill on Oasis": "Firefight : Roi de la colline légendaire",
+    "Firefight:Heroic King of the Hill on Oasis": "Baptême du feu : Roi de la colline héroïque",
+    "Firefight:Legendary King of the Hill on Oasis": "Baptême du feu : Roi de la colline légendaire",
     "Gruntpocalypse:Heroic KOTH on Vallaheim Firefight": "Gruntpocalypse : Roi de la colline héroïque",
-    "ght:Heroic King of the Hill on Vallaheim Firefight": "Firefight : Roi de la colline héroïque",
+    "ght:Heroic King of the Hill on Vallaheim Firefight": "Baptême du feu : Roi de la colline héroïque",
 
     # -------------------------------------------------------------------------
     # Husky Raid / Super Husky Raid
@@ -445,25 +448,25 @@ PAIR_FR: dict[str, str] = {
     # -------------------------------------------------------------------------
     # Super Fiesta
     # -------------------------------------------------------------------------
-    "Super Fiesta:Slayer on Argyle": "Super fiesta : Assassin",
-    "Super Fiesta:Slayer on Behemoth - Forge": "Super fiesta : Assassin",
-    "Super Fiesta:Slayer on Catalyst - Forge": "Super fiesta : Assassin",
-    "Super Fiesta:Slayer on Chasm - Forge": "Super fiesta : Assassin",
-    "Super Fiesta:Slayer on Cliffhanger - Forge": "Super fiesta : Assassin",
-    "Super Fiesta:Slayer on Dynasty": "Super fiesta : Assassin",
-    "Super Fiesta:Slayer on Empyrean": "Super fiesta : Assassin",
-    "Super Fiesta:Slayer on Forbidden - Forge": "Super fiesta : Assassin",
-    "Super Fiesta:Slayer on Forest": "Super fiesta : Assassin",
-    "Super Fiesta:Slayer on Forest - Forge": "Super fiesta : Assassin",
-    "Super Fiesta:Slayer on Houseki": "Super fiesta : Assassin",
-    "Super Fiesta:Slayer on Illusion - Forge": "Super fiesta : Assassin",
-    "Super Fiesta:Slayer on Live Fire - Forge": "Super fiesta : Assassin",
-    "Super Fiesta:Slayer on Opulence": "Super fiesta : Assassin",
-    "Super Fiesta:Slayer on Prism - Forge": "Super fiesta : Assassin",
-    "Super Fiesta:Slayer on Recharge - Forge": "Super fiesta : Assassin",
-    "Super Fiesta:Slayer on Shiro": "Super fiesta : Assassin",
-    "Super Fiesta:Slayer on Shogun": "Super fiesta : Assassin",
-    "Super Fiesta:Slayer on Streets - Forge": "Super fiesta : Assassin",
+    "Super Fiesta:Slayer on Argyle": "Super Fiesta : Assassin",
+    "Super Fiesta:Slayer on Behemoth - Forge": "Super Fiesta : Assassin",
+    "Super Fiesta:Slayer on Catalyst - Forge": "Super Fiesta : Assassin",
+    "Super Fiesta:Slayer on Chasm - Forge": "Super Fiesta : Assassin",
+    "Super Fiesta:Slayer on Cliffhanger - Forge": "Super Fiesta : Assassin",
+    "Super Fiesta:Slayer on Dynasty": "Super Fiesta : Assassin",
+    "Super Fiesta:Slayer on Empyrean": "Super Fiesta : Assassin",
+    "Super Fiesta:Slayer on Forbidden - Forge": "Super Fiesta : Assassin",
+    "Super Fiesta:Slayer on Forest": "Super Fiesta : Assassin",
+    "Super Fiesta:Slayer on Forest - Forge": "Super Fiesta : Assassin",
+    "Super Fiesta:Slayer on Houseki": "Super Fiesta : Assassin",
+    "Super Fiesta:Slayer on Illusion - Forge": "Super Fiesta : Assassin",
+    "Super Fiesta:Slayer on Live Fire - Forge": "Super Fiesta : Assassin",
+    "Super Fiesta:Slayer on Opulence": "Super Fiesta : Assassin",
+    "Super Fiesta:Slayer on Prism - Forge": "Super Fiesta : Assassin",
+    "Super Fiesta:Slayer on Recharge - Forge": "Super Fiesta : Assassin",
+    "Super Fiesta:Slayer on Shiro": "Super Fiesta : Assassin",
+    "Super Fiesta:Slayer on Shogun": "Super Fiesta : Assassin",
+    "Super Fiesta:Slayer on Streets - Forge": "Super Fiesta : Assassin",
 
     # -------------------------------------------------------------------------
     # Tactical
@@ -523,11 +526,18 @@ def translate_pair_name(name: str | None) -> str | None:
         prefix = prefix.strip()
         rest = rest.strip()
         if prefix:
-            # BTB Heavies: garder "BTB Heavies" intact
-            if prefix.lower() == "btb heavies":
+            # Préfixes multi-mots à préserver
+            prefix_lower = prefix.lower()
+            if prefix_lower == "btb heavies":
                 prefix = "BTB Heavies"
-            elif prefix.lower() == "btb":
+            elif prefix_lower == "btb":
                 prefix = "BTB"
+            elif prefix_lower == "super fiesta":
+                prefix = "Super Fiesta"
+            elif prefix_lower == "super husky raid":
+                prefix = "Super Husky Raid"
+            elif prefix_lower == "husky raid":
+                prefix = "Husky Raid"
             else:
                 prefix = prefix[:1].upper() + prefix[1:].lower()
         # Si la partie mode est totalement en minuscules, on la TitleCase ("oddball" -> "Oddball").
@@ -538,40 +548,64 @@ def translate_pair_name(name: str | None) -> str | None:
     if candidate in PAIR_FR:
         return PAIR_FR[candidate]
 
-    # 3) Fallback: si on n'a pas la carte (pas de " on "), on cherche un pair connu avec ce préfixe.
-    # Exemple: "Arena:Team Slayer" -> match "Arena:Team Slayer on <map>".
+    # 3) Fallback: extraire le mode sans carte et chercher le fallback générique
     base = candidate
-    if " on " not in base and base:
-        prefix_key = base + " on "
-        for k, v in PAIR_FR.items():
-            if k.startswith(prefix_key):
-                return v
+    mode_without_map = base
+    if " on " in base:
+        mode_without_map = base.split(" on ", 1)[0].strip()
+    
+    # Chercher le mode sans carte dans les fallbacks génériques
+    if mode_without_map in PAIR_FR:
+        return PAIR_FR[mode_without_map]
 
-        # Chercher le préfixe exact dans les fallbacks génériques
-        if base in PAIR_FR:
-            return PAIR_FR[base]
-
-    # 4) Fallback générique pour modes Arena
-    if base.startswith("Arena:"):
-        rest = base.split(":", 1)[1].strip()
-        if " on " in rest:
-            rest = rest.split(" on ")[0].strip()
-        arena_mode_fr = {
-            "Slayer": "Assassin",
-            "Team Slayer": "Assassin en équipe",
-            "FFA Slayer": "Assassin FFA",
-            "Oddball": "Oddball",
-            "CTF": "Capture du drapeau",
-            "Neutral Flag CTF": "Drapeau neutre",
-            "One Flag CTF": "Un seul drapeau",
-            "King of the Hill": "Roi de la colline",
-            "Strongholds": "Bases",
-            "Attrition": "Attrition",
-            "Escalation Slayer": "Escalade",
-            "Team Snipers": "Snipers en équipe",
-            "Shotty Snipes Slayer": "Shotty Snipers",
-            "VIP": "VIP",
-        }
-        return f"Arène : {arena_mode_fr.get(rest, rest)}"
+    # 4) Fallback générique pour tous les préfixes connus
+    generic_mode_translations = {
+        "Slayer": "Assassin",
+        "Team Slayer": "Assassin en équipe",
+        "FFA Slayer": "Assassin FFA",
+        "Fiesta Slayer": "Fiesta Assassin",
+        "Oddball": "Oddball",
+        "CTF": "Capture du drapeau",
+        "Neutral Flag CTF": "Drapeau neutre",
+        "One Flag CTF": "Drapeau neutre",
+        "King of the Hill": "Roi de la colline",
+        "Strongholds": "Bases",
+        "Attrition": "Attrition",
+        "Escalation Slayer": "Escalade",
+        "Team Snipers": "Snipers en équipe",
+        "Shotty Snipes Slayer": "Shotty Snipers",
+        "Total Control": "Contrôle total",
+        "Stockpile": "Stockage",
+        "Extraction": "Extraction",
+        "Land Grab": "Land Grab",
+        "VIP": "VIP",
+    }
+    
+    prefix_translations = {
+        "Arena": "Arène",
+        "BTB": "BTB",
+        "BTB Heavies": "BTB Heavies",
+        "Ranked": "Classé",
+        "Tactical": "Tactique",
+        "Community": "Communauté",
+        "Event": "Événement",
+        "Fiesta": "Fiesta",
+        "Super Fiesta": "Super Fiesta",
+        "Firefight": "Baptême du feu",
+        "Gruntpocalypse": "Gruntpocalypse",
+        "Husky Raid": "Husky Raid",
+        "Super Husky Raid": "Super Husky Raid",
+        "Assault": "Assaut",
+    }
+    
+    if ":" in mode_without_map:
+        prefix, mode_part = mode_without_map.split(":", 1)
+        prefix = prefix.strip()
+        mode_part = mode_part.strip()
+        
+        prefix_fr = prefix_translations.get(prefix, prefix)
+        mode_fr = generic_mode_translations.get(mode_part, mode_part)
+        
+        return f"{prefix_fr} : {mode_fr}"
 
     return s

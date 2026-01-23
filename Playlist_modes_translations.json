@@ -364,12 +364,12 @@
     },
     {
       "en": "Arena:One Flag CTF on Cliffhanger",
-      "fr": "Arène : Un seul drapeau",
+      "fr": "Arène : Drapeau neutre",
       "category": "Arena"
     },
     {
       "en": "Arena:One Flag CTF on Salvation",
-      "fr": "Arène : Un seul drapeau",
+      "fr": "Arène : Drapeau neutre",
       "category": "Arena"
     },
     {
@@ -1639,21 +1639,21 @@
     }
   ],
   "categories": {
-    "Arena": "Arène",
-    "Assault": "Assaut",
+    "Arena": "Assassin",
+    "Assault": "Assassin",
     "BTB": "Grande bataille en équipe",
-    "BTB Heavies": "Grande bataille en équipe Heavies",
-    "Community": "Communauté",
-    "Event": "Événement",
-    "Fiesta": "Mode Fiesta",
+    "BTB Heavies": "Grande bataille en équipe",
+    "Community": "Assassin",
+    "Event": "Autres",
+    "Fiesta": "Fiesta",
     "Firefight": "Baptême du feu",
-    "Gruntpocalypse": "Grogarpocalypse",
-    "Husky Raid": "Husky Raid",
+    "Gruntpocalypse": "Baptême du feu",
+    "Husky Raid": "Fiesta",
     "Other": "Autres",
     "Ranked": "Classé",
-    "Super Fiesta": "Super Fiesta",
-    "Super Husky Raid": "Super Husky Raid",
-    "Tactical": "SWAT",
+    "Super Fiesta": "Fiesta",
+    "Super Husky Raid": "Fiesta",
+    "Tactical": "Assassin",
     "ght": "Baptême du feu"
   }
 }

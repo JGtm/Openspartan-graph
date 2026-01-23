@@ -164,7 +164,7 @@ def render_match_search_page(
         if isinstance(picked, str) and picked in opts:
             st.session_state["match_id_input"] = opts[picked]
 
-    st.button("Utiliser ce match", use_container_width=True, on_click=_on_use_quick_match)
+    st.button("Utiliser ce match", width="stretch", on_click=_on_use_quick_match)
 
     # Recherche par date/heure
     with st.expander("Recherche par date/heure", expanded=False):
@@ -189,7 +189,7 @@ def render_match_search_page(
             else:
                 st.warning(f"Aucun match trouvé dans ±{tol_min} min (le plus proche est à {diff_min:.1f} min).")
 
-        st.button("Rechercher", use_container_width=True, on_click=_on_search_by_datetime)
+        st.button("Rechercher", width="stretch", on_click=_on_search_by_datetime)
 
     mid = str(match_id_input or "").strip()
     if not mid:

@@ -592,7 +592,7 @@ def _render_expected_vs_actual(row: pd.Series, pm: dict, colors: dict) -> None:
     )
     exp_fig.update_yaxes(title_text="F / D / A", rangemode="tozero", secondary_y=False)
     exp_fig.update_yaxes(title_text="Ratio", secondary_y=True)
-    st.plotly_chart(exp_fig, use_container_width=True)
+    st.plotly_chart(exp_fig, width="stretch")
 
     # Folie meurtrière / Tirs à la tête
     spree_v = pd.to_numeric(row.get("max_killing_spree"), errors="coerce")
@@ -618,7 +618,7 @@ def _render_expected_vs_actual(row: pd.Series, pm: dict, colors: dict) -> None:
             showlegend=False,
         )
         fig_sh.update_yaxes(rangemode="tozero")
-        st.plotly_chart(apply_halo_plot_style(fig_sh, height=260), use_container_width=True)
+        st.plotly_chart(apply_halo_plot_style(fig_sh, height=260), width="stretch")
 
 
 def _render_nemesis_section(

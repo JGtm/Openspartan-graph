@@ -1,7 +1,7 @@
-"""OpenSpartan Graphs - Dashboard Streamlit.
+"""LevelUp - Dashboard Streamlit.
 
 Application de visualisation des statistiques Halo Infinite
-depuis la base de données OpenSpartan Workshop.
+depuis la base de données SPNKr.
 """
 
 import os
@@ -140,6 +140,9 @@ from src.ui.components import (
     compute_session_performance_score,
     render_kpi_cards,
     render_top_summary,
+    render_checkbox_filter,
+    render_hierarchical_checkbox_filter,
+    get_firefight_playlists,
 )
 from src.ui.cache import (
     load_df,
@@ -587,7 +590,7 @@ def _build_friends_opts_map(
 
 def main() -> None:
     """Point d'entrée principal de l'application Streamlit."""
-    st.set_page_config(page_title="OpenSpartan Graphs", layout="wide")
+    st.set_page_config(page_title="LevelUp", layout="wide")
 
     perf_reset_run()
 
@@ -674,8 +677,7 @@ def main() -> None:
     waypoint_player = str(st.session_state.get("waypoint_player", "") or "").strip()
 
     with st.sidebar:
-        render_perf_panel(location="sidebar")
-        st.markdown("<div class='os-sidebar-brand'>OpenSpartan Graphs</div>", unsafe_allow_html=True)
+        st.markdown("<div class='os-sidebar-brand' style='font-size: 2.5em;'>LevelUp</div>", unsafe_allow_html=True)
         st.markdown("<div class='os-sidebar-divider'></div>", unsafe_allow_html=True)
 
         # Indicateur de dernière synchronisation
@@ -694,14 +696,14 @@ def main() -> None:
                         "🔄 Sync",
                         key="quick_sync_button",
                         help="Synchronise les nouveaux matchs (mode delta: arrêt dès match connu).",
-                        use_container_width=True,
+                        width="stretch",
                     )
                 with sync_col2:
                     full_sync = st.button(
                         "📥 Full",
                         key="full_sync_button", 
                         help="Synchronisation complète (parcourt tout l'historique).",
-                        use_container_width=True,
+                        width="stretch",
                     )
                 
                 if sync_clicked or full_sync:
@@ -953,30 +955,9 @@ def main() -> None:
     
     with st.sidebar:
         st.header("Filtres")
-        if "include_firefight" not in st.session_state:
-            st.session_state["include_firefight"] = False
-        if "restrict_playlists" not in st.session_state:
-            st.session_state["restrict_playlists"] = False  # Désactivé par défaut pour voir tous les matchs
 
-        # Filtres de type de partie
-        st.toggle(
-            "Inclure Firefight (PvE)",
-            key="include_firefight",
-            help="Inclut les parties Firefight (mode PvE) dans les statistiques.",
-        )
-        st.toggle(
-            "Restreindre aux playlists classiques",
-            key="restrict_playlists",
-            help="Limite aux playlists Partie rapide, Arène/Assassin classé, Grand combat en équipe.",
-        )
-        st.markdown("<div style='height: 8px'></div>", unsafe_allow_html=True)
-
-    include_firefight = bool(st.session_state.get("include_firefight", False))
-
-    # Firefight exclu par défaut
+    # Base pour les filtres : on inclut tout (Firefight sera filtré via checkboxes)
     base_for_filters = df.copy()
-    if (not include_firefight) and ("is_firefight" in base_for_filters.columns):
-        base_for_filters = base_for_filters.loc[~base_for_filters["is_firefight"]].copy()
 
     # Base "globale" : toutes les parties (après inclusion/exclusion Firefight)
     base = base_for_filters
@@ -1081,7 +1062,7 @@ def main() -> None:
                 db_path,
                 xuid.strip(),
                 db_key,
-                include_firefight,
+                True,  # Inclure Firefight (filtrage via checkboxes)
                 gap_minutes,
             )
             session_labels_ui = (
@@ -1180,19 +1161,11 @@ def main() -> None:
             picked_session_labels = None if picked_one == "(toutes)" else [picked_one]
 
         # ------------------------------------------------------------------
-        # Filtres en cascade (ne montrent que les valeurs réellement jouées)
+        # Filtres en cascade avec checkboxes
         # Playlist -> Mode (pair) -> Carte
         # ------------------------------------------------------------------
-        # Le scope des dropdowns suit les filtres au-dessus (période/sessions)
-        # + les réglages avancés (Firefight / restriction playlists).
+        # Le scope des filtres suit les filtres au-dessus (période/sessions).
         dropdown_base = base_for_filters.copy()
-
-        restrict_playlists_ui = bool(st.session_state.get("restrict_playlists", True))
-        if restrict_playlists_ui:
-            pl0 = dropdown_base["playlist_name"].apply(_clean_asset_label).fillna("").astype(str)
-            allowed_mask0 = pl0.apply(is_allowed_playlist_name)
-            if allowed_mask0.any():
-                dropdown_base = dropdown_base.loc[allowed_mask0].copy()
 
         if filter_mode == "Période":
             dropdown_base = dropdown_base.loc[(dropdown_base["date"] >= start_d) & (dropdown_base["date"] <= end_d)].copy()
@@ -1207,24 +1180,47 @@ def main() -> None:
         dropdown_base["mode_ui"] = dropdown_base["pair_name"].apply(_normalize_mode_label)
         dropdown_base["map_ui"] = dropdown_base["map_name"].apply(_normalize_map_label)
 
+        # --- Playlists (avec Firefight décoché par défaut) ---
         playlist_values = sorted({str(x).strip() for x in dropdown_base["playlist_ui"].dropna().tolist() if str(x).strip()})
         preferred_order = ["Partie rapide", "Arène classée", "Assassin classé"]
         playlist_values = [p for p in preferred_order if p in playlist_values] + [p for p in playlist_values if p not in preferred_order]
-        playlist_selected = st.selectbox("Playlist", options=["(toutes)"] + playlist_values, index=0)
+        
+        firefight_playlists = get_firefight_playlists(playlist_values)
+        playlists_selected = render_checkbox_filter(
+            label="Playlists",
+            options=playlist_values,
+            session_key="filter_playlists",
+            default_unchecked=firefight_playlists,  # Firefight décoché par défaut
+            expanded=False,
+        )
 
+        # Scope après filtre playlist
         scope1 = dropdown_base
-        if playlist_selected != "(toutes)":
-            scope1 = scope1.loc[scope1["playlist_ui"].fillna("") == playlist_selected].copy()
+        if playlists_selected and len(playlists_selected) < len(playlist_values):
+            scope1 = scope1.loc[scope1["playlist_ui"].fillna("").isin(playlists_selected)].copy()
 
+        # --- Modes (hiérarchique par catégorie) ---
         mode_values = sorted({str(x).strip() for x in scope1["mode_ui"].dropna().tolist() if str(x).strip()})
-        mode_selected = st.selectbox("Mode", options=["(tous)"] + mode_values, index=0)
+        modes_selected = render_hierarchical_checkbox_filter(
+            label="Modes",
+            options=mode_values,
+            session_key="filter_modes",
+            expanded=False,
+        )
 
+        # Scope après filtre mode
         scope2 = scope1
-        if mode_selected != "(tous)":
-            scope2 = scope2.loc[scope2["mode_ui"].fillna("") == mode_selected].copy()
+        if modes_selected and len(modes_selected) < len(mode_values):
+            scope2 = scope2.loc[scope2["mode_ui"].fillna("").isin(modes_selected)].copy()
 
+        # --- Cartes ---
         map_values = sorted({str(x).strip() for x in scope2["map_ui"].dropna().tolist() if str(x).strip()})
-        map_selected = st.selectbox("Carte", options=["(toutes)"] + map_values, index=0)
+        maps_selected = render_checkbox_filter(
+            label="Cartes",
+            options=map_values,
+            session_key="filter_maps",
+            expanded=False,
+        )
 
         # Paramètres avancés déplacés dans l'onglet Paramètres.
 
@@ -1234,7 +1230,8 @@ def main() -> None:
     
     with perf_section("filters/apply"):
         if filter_mode == "Sessions":
-            base_s = cached_compute_sessions_db(db_path, xuid.strip(), db_key, include_firefight, gap_minutes)
+            # On inclut tout (Firefight sera filtré via checkboxes playlists)
+            base_s = cached_compute_sessions_db(db_path, xuid.strip(), db_key, True, gap_minutes)
             dff = (
                 base_s.loc[base_s["session_label"].isin(picked_session_labels)].copy()
                 if picked_session_labels
@@ -1247,18 +1244,6 @@ def main() -> None:
             dff["playlist_fr"] = dff["playlist_name"].apply(translate_playlist_name)
         if "pair_fr" not in dff.columns:
             dff["pair_fr"] = dff["pair_name"].apply(translate_pair_name)
-
-    restrict_playlists = bool(st.session_state.get("restrict_playlists", True))
-    if restrict_playlists:
-        pl = dff["playlist_name"].apply(_clean_asset_label).fillna("").astype(str)
-        allowed_mask = pl.apply(is_allowed_playlist_name)
-        if allowed_mask.any():
-            dff = dff.loc[allowed_mask].copy()
-        else:
-            st.sidebar.warning(
-                "Aucune playlist n'a matché Partie rapide / Assassin classé / Arène classée. "
-                "Désactive ce filtre si tes libellés sont différents."
-            )
             
     if "playlist_ui" not in dff.columns:
         dff["playlist_ui"] = dff["playlist_name"].apply(_clean_asset_label).apply(translate_playlist_name)
@@ -1267,12 +1252,13 @@ def main() -> None:
     if "map_ui" not in dff.columns:
         dff["map_ui"] = dff["map_name"].apply(_normalize_map_label)
 
-    if playlist_selected != "(toutes)":
-        dff = dff.loc[dff["playlist_ui"].fillna("") == playlist_selected]
-    if mode_selected != "(tous)":
-        dff = dff.loc[dff["mode_ui"].fillna("") == mode_selected]
-    if map_selected != "(toutes)":
-        dff = dff.loc[dff["map_ui"].fillna("") == map_selected]
+    # Application des filtres checkboxes
+    if playlists_selected:
+        dff = dff.loc[dff["playlist_ui"].fillna("").isin(playlists_selected)]
+    if modes_selected:
+        dff = dff.loc[dff["mode_ui"].fillna("").isin(modes_selected)]
+    if maps_selected:
+        dff = dff.loc[dff["map_ui"].fillna("").isin(maps_selected)]
 
     if filter_mode == "Période":
         mask = (dff["date"] >= start_d) & (dff["date"] <= end_d)
@@ -1426,7 +1412,7 @@ def main() -> None:
     # --------------------------------------------------------------------------
     elif page == "Comparaison de sessions":
         all_sessions_df = cached_compute_sessions_db(
-            db_path, xuid.strip(), db_key, include_firefight, gap_minutes
+            db_path, xuid.strip(), db_key, True, gap_minutes  # Inclure tout, filtrage via checkboxes
         )
         render_session_comparison_page(all_sessions_df)
 
@@ -1464,7 +1450,7 @@ def main() -> None:
             aliases_key=aliases_key,
             settings=settings,
             picked_session_labels=picked_session_labels,
-            include_firefight=include_firefight,
+            include_firefight=True,  # Inclure tout, filtrage via checkboxes playlists
             waypoint_player=waypoint_player,
             build_friends_opts_map_fn=_build_friends_opts_map,
             assign_player_colors_fn=_assign_player_colors,
