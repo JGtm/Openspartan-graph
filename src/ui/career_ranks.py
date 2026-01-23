@@ -12,7 +12,7 @@ Usage:
     
     # Si on connaît le numéro de rang du joueur (1-272):
     info = get_rank_info(150)
-    print(f"{info.full_label}: {info.xp_required} XP")
+    print(f"{info.full_label_fr}: {info.xp_required} XP")
     
     # Récupérer le chemin local de l'icône:
     icon_path = get_rank_icon_path(150)
@@ -29,6 +29,69 @@ from pathlib import Path
 from typing import Any
 
 
+_CAREER_RANK_TIER_FR: dict[str, str] = {
+    "Bronze": "Bronze",
+    "Silver": "Argent",
+    "Gold": "Or",
+    "Platinum": "Platine",
+    "Diamond": "Diamant",
+    "Onyx": "Onyx",
+}
+
+
+_CAREER_RANK_TITLE_FR: dict[str, str] = {
+    "Recruit": "Recrue",
+    "Cadet": "Cadet",
+    "Private": "Soldat",
+    "Lance Corporal": "Caporal suppléant",
+    "Corporal": "Caporal",
+    "Sergeant": "Sergent",
+    "Staff Sergeant": "Sergent-chef",
+    "Gunnery Sergeant": "Sergent d'artillerie",
+    "Master Sergeant": "Adjudant",
+    "Lieutenant": "Lieutenant",
+    "Captain": "Capitaine",
+    "Major": "Lieutenant-major",
+    "Lt Colonel": "Lieutenant-colonel",
+    "Colonel": "Colonel",
+    "Brigadier General": "Général de brigade",
+    "General": "Général",
+    "Hero": "Héros",
+}
+
+
+def format_career_rank_label_fr(*, tier: str | None, title: str | None, grade: str | None) -> str:
+    """Formate un libellé de rang Career en français.
+
+    Args:
+        tier: Tier/type de rang (ex: "Silver", "Gold")
+        title: Titre du rang (ex: "Private", "Lt Colonel")
+        grade: Sous-grade ("1"/"2"/"3") ou None
+
+    Returns:
+        Libellé FR (ex: "Argent Soldat 2", "Or Lieutenant-colonel 1", "Héros").
+    """
+    raw_title = (title or "").strip()
+    raw_tier = (tier or "").strip()
+    raw_grade = (grade or "").strip()
+
+    title_fr = _CAREER_RANK_TITLE_FR.get(raw_title, raw_title)
+    tier_fr = _CAREER_RANK_TIER_FR.get(raw_tier, raw_tier)
+
+    # Cas spéciaux: grade initial et grade final
+    if title_fr in ("Recrue", "Héros"):
+        return title_fr
+
+    parts: list[str] = []
+    if tier_fr:
+        parts.append(tier_fr)
+    if title_fr:
+        parts.append(title_fr)
+    if raw_grade:
+        parts.append(raw_grade)
+    return " ".join(parts).strip()
+
+
 @dataclass(frozen=True)
 class CareerRankInfo:
     """Informations sur un rang Career."""
@@ -42,7 +105,7 @@ class CareerRankInfo:
     
     @property
     def full_label(self) -> str:
-        """Retourne le label complet du rang (ex: 'Gold Lance Corporal III')."""
+        """Retourne le label complet du rang (ex: 'Gold Lance Corporal 3')."""
         parts = []
         if self.subtitle:
             parts.append(self.subtitle)
@@ -50,15 +113,31 @@ class CareerRankInfo:
         if self.tier:
             parts.append(self.tier)
         return " ".join(parts)
+
+    @property
+    def full_label_fr(self) -> str:
+        """Retourne le label complet du rang en français (ex: 'Or Caporal suppléant 1')."""
+        return format_career_rank_label_fr(tier=self.subtitle, title=self.title, grade=self.tier)
     
     @property
     def display_label(self) -> str:
-        """Retourne un label compact (ex: 'Lance Corporal Gold III')."""
+        """Retourne un label compact (ex: 'Lance Corporal Gold 3')."""
         if self.subtitle and self.tier:
             return f"{self.title} {self.subtitle} {self.tier}"
         elif self.subtitle:
             return f"{self.title} {self.subtitle}"
         return self.title
+
+    @property
+    def display_label_fr(self) -> str:
+        """Retourne un label compact en français (ex: 'Caporal suppléant Bronze 1')."""
+        title_fr = _CAREER_RANK_TITLE_FR.get(self.title, self.title)
+        tier_fr = _CAREER_RANK_TIER_FR.get(self.subtitle or "", self.subtitle or "")
+        if tier_fr and self.tier:
+            return f"{title_fr} {tier_fr} {self.tier}".strip()
+        if tier_fr:
+            return f"{title_fr} {tier_fr}".strip()
+        return title_fr.strip()
 
 
 def _repo_root() -> Path:

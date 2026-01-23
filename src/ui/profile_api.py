@@ -22,6 +22,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from src.ui.career_ranks import format_career_rank_label_fr
+
 
 @dataclass(frozen=True)
 class ProfileAppearance:
@@ -673,7 +675,7 @@ def fetch_appearance_via_spnkr(
                                 break
                         
                         if current_stage is None:
-                            return f"Career Rank {display_rank}", f"XP {partial_xp}", None
+                            return f"Rang de carrière {display_rank}", f"XP {partial_xp}", None
                         
                         # 4. Construire le label du rang
                         tier_type = getattr(current_stage, "tier_type", None)
@@ -689,12 +691,13 @@ def fetch_appearance_via_spnkr(
                         # Construire le label
                         if current_rank == 272:
                             # Hero rank
-                            r_label = rank_title or "Hero"
+                            r_label = format_career_rank_label_fr(tier=None, title=(rank_title or "Hero"), grade=None)
                             r_subtitle = f"XP {partial_xp}/{xp_required}" if xp_required else f"XP {partial_xp}"
                         else:
                             # Rang normal: "Bronze Private 1" -> "Bronze Private 1"
-                            parts = [p for p in [tier_type, rank_title, rank_tier] if p]
-                            r_label = " ".join(parts) if parts else f"Rank {display_rank}"
+                            r_label = format_career_rank_label_fr(tier=tier_type, title=rank_title, grade=rank_tier)
+                            if not r_label:
+                                r_label = f"Rang {display_rank}"
                             r_subtitle = f"XP {partial_xp}/{xp_required}" if xp_required else f"XP {partial_xp}"
                         
                         # 5. Construire l'URL de l'icône
