@@ -15,7 +15,8 @@ RUN python -m pip install --no-cache-dir --upgrade pip \
 # Code et assets
 COPY src /app/src
 COPY static /app/static
-COPY streamlit_app.py run_dashboard.py openspartan_graph.py db_profiles.json metadata.json /app/
+COPY scripts /app/scripts
+COPY streamlit_app.py openspartan_launcher.py db_profiles.json /app/
 
 # Bonnes pratiques: ne pas tourner en root (meilleure compatibilité si /appdata est monté)
 RUN adduser --disabled-password --gecos "" --uid 10001 appuser \
