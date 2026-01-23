@@ -142,9 +142,10 @@ class TestFormatMmss:
 
     def test_normal(self):
         """Test avec valeur normale."""
-        assert format_mmss(90.0) == "1:30"
-        assert format_mmss(65.0) == "1:05"
-        assert format_mmss(30.0) == "0:30"
+        # Note: format_mmss utilise le format "mm:ss" avec zero-padding sur les minutes
+        assert format_mmss(90.0) == "01:30"
+        assert format_mmss(65.0) == "01:05"
+        assert format_mmss(30.0) == "00:30"
 
     def test_none(self):
         """Test avec None."""

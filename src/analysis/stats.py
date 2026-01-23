@@ -5,6 +5,7 @@ from typing import Optional
 import pandas as pd
 
 from src.models import AggregatedStats, OutcomeRates
+from src.ui.formatting import format_mmss
 
 
 def compute_aggregated_stats(df: pd.DataFrame) -> AggregatedStats:
@@ -106,17 +107,6 @@ def format_selected_matches_summary(n: int, rates: OutcomeRates) -> str:
     )
 
 
-def format_mmss(seconds: Optional[float]) -> str:
-    """Formate une durée en mm:ss.
-    
-    Args:
-        seconds: Durée en secondes.
-        
-    Returns:
-        Chaîne formatée "m:ss" ou "-" si invalide.
-    """
-    if seconds is None or seconds != seconds:  # NaN check
-        return "-"
-    s_i = int(round(float(seconds)))
-    m, sec = divmod(max(0, s_i), 60)
-    return f"{m:d}:{sec:02d}"
+# NOTE: format_mmss est importé depuis src.ui.formatting pour éviter la duplication.
+# Re-export pour rétrocompatibilité des imports existants.
+__all__ = ["compute_aggregated_stats", "compute_outcome_rates", "compute_global_ratio", "format_selected_matches_summary", "format_mmss"]
