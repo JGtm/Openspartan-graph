@@ -1,6 +1,9 @@
 /* =============================================================================
-   LevelUp - Thème sombre personnalisé
+   LevelUp - Thème sombre personnalisé (Style Halo Waypoint)
    ============================================================================= */
+
+/* Google Fonts - Bebas Neue (titres) + Roboto Condensed (corps) */
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Roboto+Condensed:wght@300;400;500;600;700;800;900&display=swap');
 
 :root {
     /* Palette "dark Halo" (inspiration, pas copie) */
@@ -20,6 +23,15 @@
     --good: #23d18b;
     --bad: #ff4d4d;
     --warn: #ffb020;
+
+    /* Polices Halo Waypoint */
+    --font-display: 'Bebas Neue', 'Industry', 'Roboto Condensed', 'Arial Narrow', sans-serif;
+    --font-body: 'Roboto Condensed', 'Segoe UI', 'Arial', sans-serif;
+
+    /* Waypoint card corners (taille des coins coupés) */
+    --corner-size: 12px;
+    --corner-size-sm: 8px;
+    --corner-size-lg: 16px;
 }
 
 /* =============================================================================
@@ -45,12 +57,42 @@
     }
 }
 
+/* Police globale pour tout le document */
+html, body, [class*="st-"] {
+    font-family: var(--font-body) !important;
+}
+
+/* Titres style Waypoint */
+h1, h2, h3, h4, h5, h6,
+.stMarkdown h1, .stMarkdown h2, .stMarkdown h3 {
+    font-family: var(--font-display) !important;
+    letter-spacing: 0.05em !important;
+    text-transform: uppercase;
+    font-weight: 400 !important;
+}
+
+h1, .stMarkdown h1 {
+    font-size: 2.2rem !important;
+    color: rgba(255, 255, 255, 0.96) !important;
+}
+
+h2, .stMarkdown h2 {
+    font-size: 1.6rem !important;
+    color: rgba(255, 255, 255, 0.92) !important;
+}
+
+h3, .stMarkdown h3 {
+    font-size: 1.25rem !important;
+    color: rgba(255, 255, 255, 0.88) !important;
+}
+
 section.main {
     /* Fond global : couleur unie RGB 29, 35, 40 */
     background: rgb(29, 35, 40);
     color: var(--text);
     position: relative;
     z-index: 1;
+    font-family: var(--font-body);
 }
 
 /* Grain très léger (sans pattern agressif) */
@@ -165,32 +207,63 @@ section.main:after {
 }
 
 /* =============================================================================
-   Hero banner (fallback sans joueur)
+   Hero banner (Style Waypoint)
    ============================================================================= */
 
 .hero {
-    border: 1px solid var(--border);
-    background:
-        radial-gradient(820px 520px at 10% 0%, rgba(51, 214, 255, 0.16) 0%, transparent 58%),
-        radial-gradient(900px 620px at 90% 120%, rgba(0, 167, 255, 0.10) 0%, transparent 58%),
-        linear-gradient(135deg, rgba(18, 26, 36, 0.86), rgba(8, 10, 14, 0.92));
-    box-shadow: 0 16px 34px rgba(0,0,0,0.32);
-    border-radius: 18px;
-    padding: 18px 18px;
-    margin-bottom: 14px;
+    position: relative;
+    background: linear-gradient(145deg, rgba(28, 38, 50, 0.95), rgba(16, 22, 30, 0.92));
+    padding: 20px 22px;
+    margin-bottom: 16px;
+    /* Coins coupés asymétriques */
+    clip-path: polygon(
+        0 var(--corner-size-lg),
+        var(--corner-size-lg) 0,
+        100% 0,
+        100% calc(100% - var(--corner-size)),
+        calc(100% - var(--corner-size)) 100%,
+        0 100%
+    );
+}
+
+.hero::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(145deg, rgba(51, 214, 255, 0.30), rgba(51, 214, 255, 0.08));
+    clip-path: polygon(
+        0 var(--corner-size-lg),
+        var(--corner-size-lg) 0,
+        100% 0,
+        100% calc(100% - var(--corner-size)),
+        calc(100% - var(--corner-size)) 100%,
+        0 100%
+    );
+    z-index: -1;
+    padding: 1px;
+    -webkit-mask: 
+        linear-gradient(#fff 0 0) content-box, 
+        linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
 }
 
 .hero .title {
-    font-size: 28px;
-    font-weight: 750;
-    letter-spacing: -0.02em;
+    font-family: var(--font-display);
+    font-size: 32px;
+    font-weight: 400;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
     margin: 0;
+    color: rgba(255, 255, 255, 0.96);
 }
 
 .hero .subtitle {
-    margin-top: 4px;
+    font-family: var(--font-body);
+    margin-top: 6px;
     color: var(--muted);
     font-size: 14px;
+    font-weight: 500;
 }
 
 /* =============================================================================
@@ -369,7 +442,7 @@ section.main:after {
 }
 
 /* =============================================================================
-   Chips
+   Chips (Style Waypoint)
    ============================================================================= */
 
 .chips {
@@ -380,102 +453,211 @@ section.main:after {
 }
 
 .chip {
-    border: 1px solid rgba(255,255,255,0.14);
-    background: rgba(10, 14, 20, 0.35);
-    color: rgba(245, 248, 255, 0.86);
-    padding: 6px 10px;
-    border-radius: 999px;
+    position: relative;
+    font-family: var(--font-body);
     font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    background: linear-gradient(145deg, rgba(28, 38, 50, 0.90), rgba(16, 22, 30, 0.88));
+    color: rgba(245, 248, 255, 0.86);
+    padding: 6px 12px;
+    /* Coins coupés petits */
+    clip-path: polygon(
+        0 4px,
+        4px 0,
+        100% 0,
+        100% calc(100% - 4px),
+        calc(100% - 4px) 100%,
+        0 100%
+    );
 }
 
 /* =============================================================================
-   Buttons
+   Buttons (Style Waypoint)
    ============================================================================= */
 
 .stButton>button {
-    border-radius: 12px;
-    border: 1px solid rgba(255,255,255,0.14);
-    background: rgba(18, 26, 36, 0.55);
-    color: rgba(245, 248, 255, 0.90);
-    transition: transform 120ms ease, border-color 120ms ease, background 120ms ease;
+    position: relative;
+    font-family: var(--font-display);
+    font-size: 14px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    background: linear-gradient(145deg, rgba(28, 38, 50, 0.95), rgba(16, 22, 30, 0.92));
+    color: rgba(245, 248, 255, 0.92);
+    border: none;
+    /* Coins coupés */
+    clip-path: polygon(
+        0 var(--corner-size-sm),
+        var(--corner-size-sm) 0,
+        100% 0,
+        100% calc(100% - var(--corner-size-sm)),
+        calc(100% - var(--corner-size-sm)) 100%,
+        0 100%
+    );
+    transition: all 150ms ease;
 }
 
 .stButton>button:hover {
-    border-color: rgba(51, 214, 255, 0.38);
-    background: rgba(18, 26, 36, 0.72);
+    background: linear-gradient(145deg, rgba(51, 214, 255, 0.20), rgba(28, 38, 50, 0.95));
+    color: var(--accent);
     transform: translateY(-1px);
 }
 
 .stButton>button[kind="primary"] {
-    background: linear-gradient(90deg, rgba(51, 214, 255, 0.98), rgba(0, 167, 255, 0.98));
-    border: 0;
+    background: linear-gradient(145deg, rgba(51, 214, 255, 0.85), rgba(0, 167, 255, 0.90));
+    color: rgba(0, 20, 30, 0.95);
+}
+
+.stButton>button[kind="primary"]:hover {
+    background: linear-gradient(145deg, rgba(51, 214, 255, 1), rgba(0, 167, 255, 1));
 }
 
 /* =============================================================================
-   Tabs
+   Tabs (Style Waypoint)
    ============================================================================= */
 
 .stTabs [data-baseweb="tab-list"] {
-    gap: 6px;
+    gap: 4px;
+    border-bottom: 1px solid rgba(51, 214, 255, 0.20);
+    padding-bottom: 0;
 }
 
 .stTabs [data-baseweb="tab"] {
-    background: rgba(18, 26, 36, 0.44);
-    border: 1px solid rgba(255,255,255,0.10);
-    border-radius: 12px;
-    padding: 10px 12px;
-    color: rgba(245, 248, 255, 0.86);
+    font-family: var(--font-display);
+    font-size: 14px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    border-radius: 0;
+    padding: 12px 16px;
+    color: rgba(245, 248, 255, 0.65);
+    transition: all 150ms ease;
+}
+
+.stTabs [data-baseweb="tab"]:hover {
+    color: rgba(245, 248, 255, 0.90);
+    background: rgba(51, 214, 255, 0.06);
 }
 
 .stTabs [aria-selected="true"] {
-    background: rgba(51, 214, 255, 0.14);
-    border-color: rgba(51, 214, 255, 0.34);
+    color: var(--accent) !important;
+    border-bottom-color: var(--accent);
+    background: rgba(51, 214, 255, 0.08);
 }
 
 /* =============================================================================
-   Metrics
+   Metrics (Style Waypoint)
    ============================================================================= */
 
 div[data-testid="stMetric"] {
-    background: rgba(18, 26, 36, 0.58);
-    border: 1px solid rgba(255,255,255,0.10);
-    border-radius: 14px;
-    padding: 14px 14px;
-    box-shadow: 0 14px 28px rgba(0,0,0,0.22);
-    min-height: 118px;
+    position: relative;
+    background: linear-gradient(145deg, rgba(28, 38, 50, 0.90), rgba(16, 22, 30, 0.88));
+    padding: 16px 16px;
+    min-height: 100px;
     display: flex;
     flex-direction: column;
     justify-content: space-between;
+    /* Coins coupés style Waypoint */
+    clip-path: polygon(
+        0 var(--corner-size-sm),
+        var(--corner-size-sm) 0,
+        100% 0,
+        100% calc(100% - var(--corner-size-sm)),
+        calc(100% - var(--corner-size-sm)) 100%,
+        0 100%
+    );
+}
+
+/* Bordure Waypoint pour Metrics */
+div[data-testid="stMetric"]::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(145deg, rgba(51, 214, 255, 0.22), rgba(51, 214, 255, 0.06));
+    clip-path: polygon(
+        0 var(--corner-size-sm),
+        var(--corner-size-sm) 0,
+        100% 0,
+        100% calc(100% - var(--corner-size-sm)),
+        calc(100% - var(--corner-size-sm)) 100%,
+        0 100%
+    );
+    z-index: -1;
+    padding: 1px;
+    -webkit-mask: 
+        linear-gradient(#fff 0 0) content-box, 
+        linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
 }
 
 div[data-testid="stMetric"] label {
-    color: rgba(255,255,255,0.74) !important;
+    font-family: var(--font-body) !important;
+    font-size: 12px !important;
+    font-weight: 600 !important;
+    letter-spacing: 0.04em !important;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.65) !important;
 }
 
-div[data-testid="stMetric"] div {
-    color: rgba(255,255,255,0.92) !important;
+div[data-testid="stMetric"] [data-testid="stMetricValue"] {
+    font-family: var(--font-display) !important;
+    font-size: 32px !important;
+    letter-spacing: 0.02em !important;
+    color: rgba(255,255,255,0.96) !important;
 }
 
 /* =============================================================================
-   Bandeau résumé (haut de page)
+   Bandeau résumé (Style Waypoint)
    ============================================================================= */
 
 .os-top-summary {
-    margin: 10px 0 10px 0;
-    padding: 14px 16px;
-    border-radius: 16px;
-    border: 1px solid rgba(255, 255, 255, 0.14);
-    background:
-        radial-gradient(900px 420px at 8% 0%, rgba(51, 214, 255, 0.18) 0%, transparent 58%),
-        linear-gradient(135deg, rgba(18, 26, 36, 0.86), rgba(8, 10, 14, 0.92));
-    box-shadow: 0 16px 34px rgba(0, 0, 0, 0.30);
+    position: relative;
+    margin: 10px 0 14px 0;
+    padding: 16px 18px;
+    background: linear-gradient(145deg, rgba(28, 38, 50, 0.95), rgba(16, 22, 30, 0.92));
+    /* Coins coupés asymmétriques style Waypoint */
+    clip-path: polygon(
+        0 var(--corner-size-lg),
+        var(--corner-size-lg) 0,
+        100% 0,
+        100% calc(100% - var(--corner-size)),
+        calc(100% - var(--corner-size)) 100%,
+        0 100%
+    );
+}
+
+.os-top-summary::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(145deg, rgba(51, 214, 255, 0.30), rgba(51, 214, 255, 0.08));
+    clip-path: polygon(
+        0 var(--corner-size-lg),
+        var(--corner-size-lg) 0,
+        100% 0,
+        100% calc(100% - var(--corner-size)),
+        calc(100% - var(--corner-size)) 100%,
+        0 100%
+    );
+    z-index: -1;
+    padding: 1px;
+    -webkit-mask: 
+        linear-gradient(#fff 0 0) content-box, 
+        linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
 }
 
 .os-top-summary__title {
-    font-size: 16px;
-    font-weight: 800;
-    letter-spacing: -0.01em;
-    color: rgba(245, 248, 255, 0.94);
+    font-family: var(--font-display);
+    font-size: 20px;
+    font-weight: 400;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: rgba(245, 248, 255, 0.96);
 }
 
 .os-top-summary__row {
@@ -741,68 +923,145 @@ div[data-testid="stNumberInput"] input:focus {
     .os-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
+/* =============================================================================
+   Waypoint Cards - Style Halo avec coins coupés
+   ============================================================================= */
+
 .os-card {
-    border: 1px solid rgba(255,255,255,0.12);
-    background:
-        radial-gradient(900px 420px at 0% 0%, rgba(51, 214, 255, 0.10) 0%, transparent 55%),
-        linear-gradient(180deg, rgba(255,255,255,0.06), rgba(10, 14, 20, 0.36));
-    border-radius: 14px;
-    padding: 12px 12px;
-    box-shadow: 0 10px 22px rgba(0,0,0,0.18);
-    backdrop-filter: blur(6px);
+    position: relative;
+    padding: 14px 14px;
+    background: linear-gradient(145deg, rgba(28, 38, 50, 0.95), rgba(16, 22, 30, 0.92));
+    /* Coins coupés style Waypoint */
+    clip-path: polygon(
+        0 var(--corner-size),
+        var(--corner-size) 0,
+        100% 0,
+        100% calc(100% - var(--corner-size)),
+        calc(100% - var(--corner-size)) 100%,
+        0 100%
+    );
+    transition: all 180ms ease;
+}
+
+/* Bordure simulée via pseudo-élément (car clip-path coupe les borders) */
+.os-card::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(145deg, rgba(51, 214, 255, 0.25), rgba(51, 214, 255, 0.08));
+    clip-path: polygon(
+        0 var(--corner-size),
+        var(--corner-size) 0,
+        100% 0,
+        100% calc(100% - var(--corner-size)),
+        calc(100% - var(--corner-size)) 100%,
+        0 100%
+    );
+    z-index: -1;
+    padding: 1px;
+    -webkit-mask: 
+        linear-gradient(#fff 0 0) content-box, 
+        linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
 }
 
 .os-card:hover {
-    border-color: rgba(112,205,223,0.38);
-    transform: translateY(-1px);
-    transition: transform 120ms ease, border-color 120ms ease;
+    transform: translateY(-2px);
+    box-shadow: 
+        0 8px 24px rgba(0, 0, 0, 0.35),
+        0 0 20px rgba(51, 214, 255, 0.12);
+}
+
+.os-card:hover::before {
+    background: linear-gradient(145deg, rgba(51, 214, 255, 0.45), rgba(51, 214, 255, 0.20));
 }
 
 .os-card-title {
-    font-weight: 700;
-    font-size: 13px;
+    font-family: var(--font-display);
+    font-weight: 400;
+    font-size: 15px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
     line-height: 1.2;
-    color: rgba(255,255,255,0.92);
+    color: rgba(255,255,255,0.88);
     margin-bottom: 8px;
 }
 
 .os-card-kpi {
-    font-weight: 800;
-    font-size: 22px;
-    letter-spacing: -0.02em;
-    color: rgba(255,255,255,0.96);
+    font-family: var(--font-display);
+    font-weight: 400;
+    font-size: 28px;
+    letter-spacing: 0.02em;
+    color: rgba(255,255,255,0.98);
 }
 
 .os-card-sub {
-    margin-top: 2px;
+    font-family: var(--font-body);
+    margin-top: 4px;
     font-size: 12px;
-    color: rgba(180,180,180,0.90);
+    font-weight: 500;
+    color: rgba(182, 196, 214, 0.85);
+    letter-spacing: 0.01em;
 }
 
 /* =============================================================================
-   Tables HTML (pour liens internes "Ouvrir")
+   Tables HTML (Style Waypoint)
    ============================================================================= */
 
 .os-table-wrap {
+    position: relative;
     width: 100%;
     overflow-x: auto;
     overflow-y: auto;
     max-height: 560px;
-    border: 1px solid rgba(255,255,255,0.12);
-    border-radius: 14px;
-    background: rgba(18, 26, 36, 0.35);
+    background: linear-gradient(145deg, rgba(28, 38, 50, 0.90), rgba(16, 22, 30, 0.88));
+    /* Coins coupés style Waypoint */
+    clip-path: polygon(
+        0 var(--corner-size),
+        var(--corner-size) 0,
+        100% 0,
+        100% calc(100% - var(--corner-size)),
+        calc(100% - var(--corner-size)) 100%,
+        0 100%
+    );
+}
+
+/* Bordure Waypoint pour tables */
+.os-table-wrap::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(145deg, rgba(51, 214, 255, 0.22), rgba(51, 214, 255, 0.06));
+    clip-path: polygon(
+        0 var(--corner-size),
+        var(--corner-size) 0,
+        100% 0,
+        100% calc(100% - var(--corner-size)),
+        calc(100% - var(--corner-size)) 100%,
+        0 100%
+    );
+    z-index: -1;
+    padding: 1px;
+    -webkit-mask: 
+        linear-gradient(#fff 0 0) content-box, 
+        linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
 }
 
 .os-table {
     width: 100%;
     border-collapse: collapse;
+    font-family: var(--font-body);
     font-size: 0.88rem;
 }
 
 .os-table th,
 .os-table td {
-    padding: 8px 10px;
-    border-bottom: 1px solid rgba(255,255,255,0.08);
+    padding: 10px 12px;
+    border-bottom: 1px solid rgba(51, 214, 255, 0.10);
     white-space: nowrap;
     vertical-align: middle;
 }
@@ -811,20 +1070,26 @@ div[data-testid="stNumberInput"] input:focus {
     position: sticky;
     top: 0;
     z-index: 2;
+    font-family: var(--font-display);
+    font-size: 13px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
     text-align: left;
-    font-weight: 800;
-    color: rgba(245, 248, 255, 0.92);
-    background: rgba(10, 14, 20, 0.78);
-    border-bottom: 1px solid rgba(255,255,255,0.12);
+    font-weight: 400;
+    color: var(--accent);
+    background: rgba(10, 14, 20, 0.92);
+    border-bottom: 1px solid rgba(51, 214, 255, 0.20);
 }
 
 .os-table tr:hover td {
-    background: rgba(255, 255, 255, 0.03);
+    background: rgba(51, 214, 255, 0.05);
 }
 
 .os-table a {
+    font-family: var(--font-display);
     color: var(--accent);
-    font-weight: 800;
+    font-weight: 400;
+    letter-spacing: 0.04em;
     text-decoration: none;
 }
 
