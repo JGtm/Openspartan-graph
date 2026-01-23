@@ -85,8 +85,8 @@ La sidebar affiche maintenant :
 
 - **Windows 10/11** (ou Linux/macOS via Docker)
 - **Python 3.10+** (recommandé: 3.11 ou 3.12)
-- **[OpenSpartan Workshop](https://github.com/OpenSpartan/openspartan-workshop)** installé et synchronisé (optionnel)
-- **Compte Azure AD** pour l'API Halo (si vous utilisez SPNKr)
+- **Compte Azure AD**
+- **SPNKr** API Halo Infinite
 
 ---
 
