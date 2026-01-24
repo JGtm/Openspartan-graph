@@ -211,6 +211,12 @@ section.main:after {
     border-color: rgba(255, 255, 255, 0.12);
 }
 
+/* Sidebar : masquer le texte ".arrow" parasite dans les expanders */
+[data-testid="stSidebar"] [data-testid="stExpander"] .arrow,
+[data-testid="stExpander"] summary span.arrow {
+    display: none !important;
+}
+
 /* =============================================================================
    Hero banner (Style Waypoint épuré)
    ============================================================================= */
