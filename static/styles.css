@@ -6,12 +6,16 @@
 @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Roboto+Condensed:wght@300;400;500;600;700;800;900&display=swap');
 
 :root {
-    /* Palette "dark Halo" (inspiration, pas copie) */
-    --bg0: #070b10;
-    --bg1: #0b111a;
-    --surface: rgba(18, 26, 36, 0.88);
+    /* Palette "dark Halo" - Style Waypoint */
+    /* IMPORTANT: Ces valeurs doivent correspondre à src/config.py THEME_COLORS */
+    --bg-main: rgb(25, 36, 41);           /* Fond principal */
+    --bg-plot: rgb(29, 35, 40);           /* Fond graphiques (Waypoint news) */
+    --bg-surface: rgb(28, 38, 50);        /* Surfaces (cards) */
+    --bg-dark: rgb(16, 22, 30);           /* Fond sombre (gradients) */
+    
+    --surface: rgba(28, 38, 50, 0.95);
     --surface-2: rgba(22, 32, 44, 0.78);
-    --surface-3: rgba(10, 14, 20, 0.45);
+    --surface-3: rgba(16, 22, 30, 0.45);
     --border: rgba(255, 255, 255, 0.12);
     --border-strong: rgba(255, 255, 255, 0.18);
     --text: rgba(245, 248, 255, 0.92);
@@ -19,6 +23,7 @@
 
     --accent: #33d6ff;
     --accent-2: #00a7ff;
+    --accent-rgb: 51, 214, 255;
 
     --good: #23d18b;
     --bad: #ff4d4d;
@@ -87,8 +92,8 @@ h3, .stMarkdown h3 {
 }
 
 section.main {
-    /* Fond global : couleur unie RGB 29, 35, 40 */
-    background: rgb(29, 35, 40);
+    /* Fond global : utilise la variable centralisée */
+    background: var(--bg-main);
     color: var(--text);
     position: relative;
     z-index: 1;

@@ -141,6 +141,53 @@ class HaloColors:
 HALO_COLORS = HaloColors()
 
 
+@dataclass(frozen=True)
+class ThemeColors:
+    """Couleurs du thème UI (style Halo Waypoint).
+    
+    Centralisé ici pour être réutilisé dans:
+    - CSS (via variables)
+    - Graphiques Plotly
+    - Composants Python
+    """
+    # Backgrounds
+    bg_main: tuple[int, int, int] = (25, 36, 41)      # Fond principal de l'app
+    bg_plot: tuple[int, int, int] = (29, 35, 40)      # Fond des graphiques (Waypoint news section)
+    bg_surface: tuple[int, int, int] = (28, 38, 50)   # Surfaces (cards, panels)
+    bg_dark: tuple[int, int, int] = (16, 22, 30)      # Fond sombre (gradients)
+    
+    # Accent
+    accent: str = "#33d6ff"
+    accent_rgb: tuple[int, int, int] = (51, 214, 255)
+    
+    # Text
+    text_primary: str = "rgba(245, 248, 255, 0.92)"
+    text_muted: str = "rgba(182, 196, 214, 0.82)"
+    
+    # Borders
+    border: str = "rgba(255, 255, 255, 0.12)"
+    border_accent: str = "rgba(51, 214, 255, 0.25)"
+    
+    def bg_main_css(self) -> str:
+        """Retourne bg_main en format CSS rgb()."""
+        return f"rgb({self.bg_main[0]}, {self.bg_main[1]}, {self.bg_main[2]})"
+    
+    def bg_plot_css(self) -> str:
+        """Retourne bg_plot en format CSS rgb()."""
+        return f"rgb({self.bg_plot[0]}, {self.bg_plot[1]}, {self.bg_plot[2]})"
+    
+    def bg_plot_rgba(self, alpha: float = 1.0) -> str:
+        """Retourne bg_plot en format rgba() pour Plotly."""
+        return f"rgba({self.bg_plot[0]},{self.bg_plot[1]},{self.bg_plot[2]},{alpha})"
+    
+    def bg_surface_css(self) -> str:
+        """Retourne bg_surface en format CSS rgb()."""
+        return f"rgb({self.bg_surface[0]}, {self.bg_surface[1]}, {self.bg_surface[2]})"
+
+
+THEME_COLORS = ThemeColors()
+
+
 # =============================================================================
 # Configuration des sessions
 # =============================================================================
