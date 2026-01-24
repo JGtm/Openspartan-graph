@@ -212,12 +212,12 @@ section.main:after {
 }
 
 /* =============================================================================
-   Hero banner (Style Waypoint)
+   Hero banner (Style Waypoint épuré)
    ============================================================================= */
 
 .hero {
     position: relative;
-    background: linear-gradient(145deg, rgba(28, 38, 50, 0.95), rgba(16, 22, 30, 0.92));
+    background: transparent;
     padding: 20px 22px;
     margin-bottom: 16px;
     /* Coins coupés asymétriques */
@@ -235,7 +235,7 @@ section.main:after {
     content: "";
     position: absolute;
     inset: 0;
-    background: linear-gradient(145deg, rgba(51, 214, 255, 0.30), rgba(51, 214, 255, 0.08));
+    background: rgba(255, 255, 255, 0.25);
     clip-path: polygon(
         0 var(--corner-size-lg),
         var(--corner-size-lg) 0,
@@ -292,7 +292,7 @@ section.main:after {
     margin-top: 3.5rem; /* Espace pour la navbar Streamlit */
     margin-bottom: 1rem;
     padding: 16px 20px;
-    background: linear-gradient(145deg, rgba(28, 38, 50, 0.95), rgba(16, 22, 30, 0.92));
+    background: transparent;
     /* Coins coupés asymétriques */
     clip-path: polygon(
         0 var(--corner-size-lg),
@@ -308,7 +308,7 @@ section.main:after {
     content: "";
     position: absolute;
     inset: 0;
-    background: linear-gradient(145deg, rgba(51, 214, 255, 0.30), rgba(51, 214, 255, 0.08));
+    background: rgba(255, 255, 255, 0.25);
     clip-path: polygon(
         0 var(--corner-size-lg),
         var(--corner-size-lg) 0,
@@ -610,12 +610,12 @@ section.main:after {
 }
 
 /* =============================================================================
-   Metrics (Style Waypoint)
+   Metrics (Style Waypoint épuré)
    ============================================================================= */
 
 div[data-testid="stMetric"] {
     position: relative;
-    background: linear-gradient(145deg, rgba(28, 38, 50, 0.90), rgba(16, 22, 30, 0.88));
+    background: transparent;
     padding: 16px 16px;
     min-height: 100px;
     display: flex;
@@ -632,12 +632,12 @@ div[data-testid="stMetric"] {
     );
 }
 
-/* Bordure Waypoint pour Metrics */
+/* Bordure fine blanche (style Waypoint) */
 div[data-testid="stMetric"]::before {
     content: "";
     position: absolute;
     inset: 0;
-    background: linear-gradient(145deg, rgba(51, 214, 255, 0.22), rgba(51, 214, 255, 0.06));
+    background: rgba(255, 255, 255, 0.25);
     clip-path: polygon(
         0 var(--corner-size-sm),
         var(--corner-size-sm) 0,
@@ -672,15 +672,15 @@ div[data-testid="stMetric"] [data-testid="stMetricValue"] {
 }
 
 /* =============================================================================
-   Bandeau résumé (Style Waypoint)
+   Bandeau résumé (Style Waypoint épuré)
    ============================================================================= */
 
 .os-top-summary {
     position: relative;
     margin: 10px 0 14px 0;
     padding: 16px 18px;
-    background: linear-gradient(145deg, rgba(28, 38, 50, 0.95), rgba(16, 22, 30, 0.92));
-    /* Coins coupés asymmétriques style Waypoint */
+    background: transparent;
+    /* Coins coupés asymétriques style Waypoint */
     clip-path: polygon(
         0 var(--corner-size-lg),
         var(--corner-size-lg) 0,
@@ -695,7 +695,7 @@ div[data-testid="stMetric"] [data-testid="stMetricValue"] {
     content: "";
     position: absolute;
     inset: 0;
-    background: linear-gradient(145deg, rgba(51, 214, 255, 0.30), rgba(51, 214, 255, 0.08));
+    background: rgba(255, 255, 255, 0.25);
     clip-path: polygon(
         0 var(--corner-size-lg),
         var(--corner-size-lg) 0,
@@ -986,14 +986,16 @@ div[data-testid="stNumberInput"] input:focus {
 }
 
 /* =============================================================================
-   Waypoint Cards - Style Halo avec coins coupés
+   Waypoint Cards - Style épuré avec coins coupés
+   Inspiré des cards "REWARDS" et "NEWS" sur halowaypoint.com
    ============================================================================= */
 
 .os-card {
     position: relative;
-    padding: 14px 14px;
-    background: linear-gradient(145deg, rgba(28, 38, 50, 0.95), rgba(16, 22, 30, 0.92));
-    /* Coins coupés style Waypoint */
+    padding: 16px 16px;
+    /* Fond transparent (même couleur que le background) */
+    background: transparent;
+    /* Coins coupés style Waypoint (haut-gauche et bas-droite) */
     clip-path: polygon(
         0 var(--corner-size),
         var(--corner-size) 0,
@@ -1002,15 +1004,16 @@ div[data-testid="stNumberInput"] input:focus {
         calc(100% - var(--corner-size)) 100%,
         0 100%
     );
-    transition: all 180ms ease;
+    transition: border-color 150ms ease;
 }
 
-/* Bordure simulée via pseudo-élément (car clip-path coupe les borders) */
+/* Bordure fine blanche/grise (style Waypoint) */
 .os-card::before {
     content: "";
     position: absolute;
     inset: 0;
-    background: linear-gradient(145deg, rgba(51, 214, 255, 0.25), rgba(51, 214, 255, 0.08));
+    /* Bordure grise subtile */
+    background: rgba(255, 255, 255, 0.25);
     clip-path: polygon(
         0 var(--corner-size),
         var(--corner-size) 0,
@@ -1026,17 +1029,27 @@ div[data-testid="stNumberInput"] input:focus {
         linear-gradient(#fff 0 0);
     -webkit-mask-composite: xor;
     mask-composite: exclude;
+    transition: background 150ms ease;
 }
 
-.os-card:hover {
-    transform: translateY(-2px);
-    box-shadow: 
-        0 8px 24px rgba(0, 0, 0, 0.35),
-        0 0 20px rgba(51, 214, 255, 0.12);
-}
-
+/* Hover : bordure plus lumineuse (blanc) */
 .os-card:hover::before {
-    background: linear-gradient(145deg, rgba(51, 214, 255, 0.45), rgba(51, 214, 255, 0.20));
+    background: rgba(255, 255, 255, 0.65);
+}
+
+/* Flèche indicateur hover (style Waypoint) */
+.os-card::after {
+    content: "↘";
+    position: absolute;
+    bottom: 8px;
+    right: 10px;
+    font-size: 14px;
+    color: rgba(255, 255, 255, 0);
+    transition: color 150ms ease;
+}
+
+.os-card:hover::after {
+    color: rgba(255, 255, 255, 0.75);
 }
 
 .os-card-title {
