@@ -293,37 +293,20 @@ section.main:after {
     margin-bottom: 1rem;
     padding: 16px 20px;
     background: transparent;
-    /* Coins coupés asymétriques */
-    clip-path: polygon(
-        0 var(--corner-size-lg),
-        var(--corner-size-lg) 0,
-        100% 0,
-        100% calc(100% - var(--corner-size)),
-        calc(100% - var(--corner-size)) 100%,
-        0 100%
-    );
+    /* Angles droits (rectangle simple) */
 }
 
 .spartan-id-wrapper::before {
     content: "";
     position: absolute;
     inset: 0;
-    background: rgba(255, 255, 255, 0.25);
-    clip-path: polygon(
-        0 var(--corner-size-lg),
-        var(--corner-size-lg) 0,
-        100% 0,
-        100% calc(100% - var(--corner-size)),
-        calc(100% - var(--corner-size)) 100%,
-        0 100%
-    );
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.25);
     z-index: -1;
-    padding: 1px;
-    -webkit-mask: 
-        linear-gradient(#fff 0 0) content-box, 
-        linear-gradient(#fff 0 0);
-    -webkit-mask-composite: xor;
-    mask-composite: exclude;
+}
+
+.spartan-id-wrapper:hover::before {
+    border-color: rgba(255, 255, 255, 0.65);
 }
 
 /* =============================================================================
