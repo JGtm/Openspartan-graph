@@ -217,6 +217,33 @@ section.main:after {
     display: none !important;
 }
 
+/* Masquer les icônes Material cassées (_arrow_light, etc.) dans les expanders */
+[data-testid="stExpander"] summary {
+    font-family: var(--font-body) !important;
+}
+
+[data-testid="stExpander"] summary [data-testid="stMarkdownContainer"] p {
+    font-family: var(--font-body) !important;
+}
+
+/* Cacher le texte d'icône Material non rendu */
+[data-testid="stExpander"] summary span[class*="icon"],
+[data-testid="stExpander"] summary .material-symbols-rounded {
+    font-size: 0 !important;
+    visibility: hidden !important;
+}
+
+/* Style des expanders sidebar */
+[data-testid="stSidebar"] [data-testid="stExpander"] {
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 0;
+    background: transparent;
+}
+
+[data-testid="stSidebar"] [data-testid="stExpander"] summary {
+    padding: 8px 12px;
+}
+
 /* =============================================================================
    Hero banner (Style Waypoint épuré)
    ============================================================================= */
@@ -599,7 +626,7 @@ section.main:after {
 }
 
 /* =============================================================================
-   Metrics (Style Waypoint épuré)
+   Metrics (Style Waypoint - angles droits)
    ============================================================================= */
 
 div[data-testid="stMetric"] {
@@ -610,38 +637,21 @@ div[data-testid="stMetric"] {
     display: flex;
     flex-direction: column;
     justify-content: space-between;
-    /* Coins coupés style Waypoint */
-    clip-path: polygon(
-        0 var(--corner-size-sm),
-        var(--corner-size-sm) 0,
-        100% 0,
-        100% calc(100% - var(--corner-size-sm)),
-        calc(100% - var(--corner-size-sm)) 100%,
-        0 100%
-    );
+    /* Angles droits */
 }
 
-/* Bordure fine blanche (style Waypoint) */
+/* Bordure fine blanche */
 div[data-testid="stMetric"]::before {
     content: "";
     position: absolute;
     inset: 0;
-    background: rgba(255, 255, 255, 0.25);
-    clip-path: polygon(
-        0 var(--corner-size-sm),
-        var(--corner-size-sm) 0,
-        100% 0,
-        100% calc(100% - var(--corner-size-sm)),
-        calc(100% - var(--corner-size-sm)) 100%,
-        0 100%
-    );
+    border: 1px solid rgba(255, 255, 255, 0.25);
     z-index: -1;
-    padding: 1px;
-    -webkit-mask: 
-        linear-gradient(#fff 0 0) content-box, 
-        linear-gradient(#fff 0 0);
-    -webkit-mask-composite: xor;
-    mask-composite: exclude;
+    pointer-events: none;
+}
+
+div[data-testid="stMetric"]:hover::before {
+    border-color: rgba(255, 255, 255, 0.65);
 }
 
 div[data-testid="stMetric"] label {
