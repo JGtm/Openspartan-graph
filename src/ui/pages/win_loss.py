@@ -233,7 +233,6 @@ def render_win_loss_page(
             key, label = metric
 
             view = breakdown.head(20).iloc[::-1]
-            title = f"{label} par carte — {scope} (min {min_matches} matchs)"
             if key == "ratio_global":
                 fig = plot_map_ratio_with_winloss(view, title=title)
             else:
