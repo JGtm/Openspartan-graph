@@ -7,10 +7,21 @@ plus pratiques quand il y a beaucoup de valeurs à filtrer.
 from __future__ import annotations
 
 import json
+from functools import partial
 from pathlib import Path
 from typing import Optional
 
 import streamlit as st
+
+
+def _set_filter_all(session_key: str, options: list[str]) -> None:
+    """Callback pour sélectionner toutes les options."""
+    st.session_state[session_key] = set(options)
+
+
+def _set_filter_none(session_key: str) -> None:
+    """Callback pour désélectionner toutes les options."""
+    st.session_state[session_key] = set()
 
 
 # Cache pour les catégories de modes
@@ -183,12 +194,18 @@ def render_checkbox_filter(
         # Boutons Tout / Aucun
         if show_select_buttons and len(options) > 1:
             cols = st.columns(2)
-            if cols[0].button("✓ Tout", key=f"{session_key}_all", width="stretch"):
-                st.session_state[session_key] = set(options)
-                st.rerun()
-            if cols[1].button("✗ Aucun", key=f"{session_key}_none", width="stretch"):
-                st.session_state[session_key] = set()
-                st.rerun()
+            cols[0].button(
+                "✓ Tout",
+                key=f"{session_key}_all",
+                on_click=partial(_set_filter_all, session_key, list(options)),
+                use_container_width=True,
+            )
+            cols[1].button(
+                "✗ Aucun",
+                key=f"{session_key}_none",
+                on_click=partial(_set_filter_none, session_key),
+                use_container_width=True,
+            )
 
         # Checkboxes
         for opt in options:
@@ -293,12 +310,18 @@ def render_hierarchical_checkbox_filter(
     with st.expander(title, expanded=expanded):
         # Boutons globaux Tout / Aucun
         cols = st.columns(2)
-        if cols[0].button("✓ Tout", key=f"{session_key}_all", width="stretch"):
-            st.session_state[session_key] = set(options)
-            st.rerun()
-        if cols[1].button("✗ Aucun", key=f"{session_key}_none", width="stretch"):
-            st.session_state[session_key] = set()
-            st.rerun()
+        cols[0].button(
+            "✓ Tout",
+            key=f"{session_key}_all",
+            on_click=partial(_set_filter_all, session_key, list(options)),
+            use_container_width=True,
+        )
+        cols[1].button(
+            "✗ Aucun",
+            key=f"{session_key}_none",
+            on_click=partial(_set_filter_none, session_key),
+            use_container_width=True,
+        )
 
         st.markdown("---")
 

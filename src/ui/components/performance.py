@@ -15,6 +15,7 @@ from src.analysis.performance_score import (
     compute_session_performance_score_v1,
     compute_session_performance_score_v2,
 )
+from src.analysis.performance_config import SCORE_THRESHOLDS, SCORE_LABELS
 
 
 def compute_session_performance_score(df_session: pd.DataFrame) -> dict:
@@ -54,13 +55,13 @@ def get_score_color(score: float | None) -> str:
     """Retourne la couleur CSS selon le score de performance."""
     if score is None:
         return "var(--color-neutral)"
-    if score >= 75:
+    if score >= SCORE_THRESHOLDS["excellent"]:
         return "var(--color-excellent)"
-    if score >= 60:
+    if score >= SCORE_THRESHOLDS["good"]:
         return "var(--color-good)"
-    if score >= 45:
+    if score >= SCORE_THRESHOLDS["average"]:
         return "var(--color-average)"
-    if score >= 30:
+    if score >= SCORE_THRESHOLDS["below_average"]:
         return "var(--color-poor)"
     return "var(--color-bad)"
 
@@ -69,13 +70,13 @@ def get_score_class(score: float | None) -> str:
     """Retourne la classe CSS selon le score de performance."""
     if score is None:
         return "text-neutral"
-    if score >= 75:
+    if score >= SCORE_THRESHOLDS["excellent"]:
         return "text-excellent"
-    if score >= 60:
+    if score >= SCORE_THRESHOLDS["good"]:
         return "text-good"
-    if score >= 45:
+    if score >= SCORE_THRESHOLDS["average"]:
         return "text-average"
-    if score >= 30:
+    if score >= SCORE_THRESHOLDS["below_average"]:
         return "text-poor"
     return "text-bad"
 
@@ -84,15 +85,15 @@ def get_score_label(score: float | None) -> str:
     """Retourne le label textuel selon le score."""
     if score is None:
         return "N/A"
-    if score >= 75:
-        return "Excellent"
-    if score >= 60:
-        return "Bon"
-    if score >= 45:
-        return "Moyen"
-    if score >= 30:
-        return "Faible"
-    return "Difficile"
+    if score >= SCORE_THRESHOLDS["excellent"]:
+        return SCORE_LABELS["excellent"]
+    if score >= SCORE_THRESHOLDS["good"]:
+        return SCORE_LABELS["good"]
+    if score >= SCORE_THRESHOLDS["average"]:
+        return SCORE_LABELS["average"]
+    if score >= SCORE_THRESHOLDS["below_average"]:
+        return SCORE_LABELS["below_average"]
+    return SCORE_LABELS["bad"]
 
 
 def render_performance_score_card(

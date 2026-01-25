@@ -6,6 +6,7 @@ from plotly.subplots import make_subplots
 
 from src.config import HALO_COLORS, PLOT_CONFIG
 from src.visualization.theme import apply_halo_plot_style, get_legend_horizontal_bottom
+from src.analysis.performance_config import SCORE_THRESHOLDS
 
 
 def _rolling_mean(series: pd.Series, window: int = 10) -> pd.Series:
@@ -509,3 +510,101 @@ def plot_spree_headshots_accuracy(df: pd.DataFrame) -> go.Figure:
     fig.update_yaxes(title_text="Précision (%)", ticksuffix="%", rangemode="tozero", secondary_y=True)
     
     return apply_halo_plot_style(fig, height=420)
+
+
+def plot_performance_timeseries(
+    df: pd.DataFrame,
+    df_history: pd.DataFrame | None = None,
+    title: str = "Score de performance",
+    show_smooth: bool = True,
+) -> go.Figure:
+    """Graphique du score de performance dans le temps.
+    
+    Args:
+        df: DataFrame avec colonnes performance ou kills/deaths/assists/accuracy/outcome.
+        df_history: DataFrame complet pour le calcul du score relatif.
+        title: Titre du graphique.
+        show_smooth: Afficher la courbe de moyenne lissée.
+        
+    Returns:
+        Figure Plotly.
+    """
+    from src.analysis.performance_score import compute_performance_series
+
+    colors = HALO_COLORS.as_dict()
+    d = df.sort_values("start_time").reset_index(drop=True)
+    x_idx = list(range(len(d)))
+    labels = d["start_time"].dt.strftime("%m-%d %H:%M").tolist()
+    step = max(1, len(labels) // 10) if len(labels) > 1 else 1
+
+    # Calculer le score de performance RELATIF
+    history = df_history if df_history is not None else df
+    if "performance" not in d.columns or d["performance"].isna().all():
+        d["performance"] = compute_performance_series(d, history)
+
+    performance = pd.to_numeric(d["performance"], errors="coerce")
+
+    # Déterminer la couleur en fonction du score
+    def _get_perf_color(val: float) -> str:
+        if val >= SCORE_THRESHOLDS["excellent"]:
+            return colors.get("green", "#50C878")
+        elif val >= SCORE_THRESHOLDS["good"]:
+            return colors.get("cyan", "#00B7EB")
+        elif val >= SCORE_THRESHOLDS["average"]:
+            return colors.get("amber", "#FFBF00")
+        elif val >= SCORE_THRESHOLDS["below_average"]:
+            return colors.get("orange", "#FF8C00")
+        else:
+            return colors.get("red", "#FF4444")
+
+    bar_colors = [_get_perf_color(v) if not pd.isna(v) else colors.get("gray", "#888888") for v in performance]
+
+    hover = (
+        "performance=%{y:.1f}<br>"
+        "date=%{customdata[0]}<extra></extra>"
+    )
+    customdata = list(zip(d["start_time"].dt.strftime("%d/%m/%Y %H:%M")))
+
+    fig = go.Figure()
+    fig.add_trace(
+        go.Bar(
+            x=x_idx,
+            y=performance,
+            name="Performance",
+            marker_color=bar_colors,
+            opacity=PLOT_CONFIG.bar_opacity,
+            customdata=customdata,
+            hovertemplate=hover,
+        )
+    )
+
+    if show_smooth:
+        smooth = _rolling_mean(performance, window=10)
+        fig.add_trace(
+            go.Scatter(
+                x=x_idx,
+                y=smooth,
+                mode="lines",
+                name="Moyenne (lissée)",
+                line=dict(width=PLOT_CONFIG.line_width, color=colors.get("violet", "#8B5CF6")),
+                hovertemplate="moyenne=%{y:.1f}<extra></extra>",
+            )
+        )
+
+    fig.update_layout(
+        title=title,
+        margin=dict(l=40, r=20, t=60, b=90),
+        hovermode="x unified",
+        legend=get_legend_horizontal_bottom(),
+    )
+    fig.update_yaxes(title_text="Score de performance", rangemode="tozero", range=[0, 100])
+    fig.update_xaxes(
+        title_text="Match (chronologique)",
+        tickmode="array",
+        tickvals=x_idx[::step],
+        ticktext=labels[::step],
+        type="category",
+    )
+
+    return apply_halo_plot_style(fig, title=title, height=PLOT_CONFIG.default_height)
+

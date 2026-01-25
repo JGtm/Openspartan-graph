@@ -25,6 +25,12 @@ from src.analysis.killer_victim import (
     killer_victim_counts_long,
     killer_victim_matrix,
 )
+from src.analysis.performance_score import (
+    compute_match_performance_from_row,
+    compute_relative_performance_score,
+    compute_performance_series,
+)
+from src.analysis.performance_config import MIN_MATCHES_FOR_RELATIVE
 
 __all__ = [
     "compute_aggregated_stats",
@@ -44,4 +50,8 @@ __all__ = [
     "compute_killer_victim_pairs",
     "killer_victim_counts_long",
     "killer_victim_matrix",
+    "compute_match_performance_from_row",
+    "compute_relative_performance_score",
+    "compute_performance_series",
+    "MIN_MATCHES_FOR_RELATIVE",
 ]

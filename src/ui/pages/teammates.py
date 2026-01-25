@@ -31,6 +31,7 @@ from src.visualization import (
     plot_per_minute_timeseries,
     plot_timeseries,
     plot_trio_metric,
+    plot_performance_timeseries,
 )
 
 
@@ -431,6 +432,22 @@ def _render_comparison_charts(
                 plot_average_life(friend_sub, title=f"{friend_name} — Durée de vie (avec {me_name})"),
                 width="stretch",
                 key=f"friend_life_fr_{friend_xuid}",
+            )
+
+    # Graphes de performance
+    c7, c8 = st.columns(2)
+    with c7:
+        st.plotly_chart(
+            plot_performance_timeseries(sub, title=f"{me_name} — Performance (avec {friend_name})", show_smooth=show_smooth),
+            width="stretch",
+            key=f"friend_perf_me_{friend_xuid}",
+        )
+    with c8:
+        if not friend_sub.empty:
+            st.plotly_chart(
+                plot_performance_timeseries(friend_sub, title=f"{friend_name} — Performance (avec {me_name})", show_smooth=show_smooth),
+                width="stretch",
+                key=f"friend_perf_fr_{friend_xuid}",
             )
 
 
@@ -864,9 +881,11 @@ def _render_trio_view(
         st.warning("Impossible d'aligner les stats des 3 joueurs sur ces matchs.")
         return False
 
+    from src.analysis.performance_score import compute_performance_series
+
     merged = merged.sort_values("start_time")
-    d_self = merged[["start_time", "kills", "deaths", "assists", "ratio", "accuracy", "average_life_seconds"]].copy()
-    d_f1 = merged[["start_time", "f1_kills", "f1_deaths", "f1_assists", "f1_ratio", "f1_accuracy", "f1_average_life_seconds"]].rename(
+    d_self = merged[["start_time", "kills", "deaths", "assists", "ratio", "accuracy", "average_life_seconds", "time_played_seconds"]].copy()
+    d_f1 = merged[["start_time", "f1_kills", "f1_deaths", "f1_assists", "f1_ratio", "f1_accuracy", "f1_average_life_seconds", "time_played_seconds"]].rename(
         columns={
             "f1_kills": "kills",
             "f1_deaths": "deaths",
@@ -876,7 +895,7 @@ def _render_trio_view(
             "f1_average_life_seconds": "average_life_seconds",
         }
     )
-    d_f2 = merged[["start_time", "f2_kills", "f2_deaths", "f2_assists", "f2_ratio", "f2_accuracy", "f2_average_life_seconds"]].rename(
+    d_f2 = merged[["start_time", "f2_kills", "f2_deaths", "f2_assists", "f2_ratio", "f2_accuracy", "f2_average_life_seconds", "time_played_seconds"]].rename(
         columns={
             "f2_kills": "kills",
             "f2_deaths": "deaths",
@@ -886,6 +905,12 @@ def _render_trio_view(
             "f2_average_life_seconds": "average_life_seconds",
         }
     )
+
+    # Calculer les scores de performance RELATIF pour les 3 joueurs
+    # Chaque joueur est comparé à son propre historique dans ces matchs communs
+    d_self["performance"] = compute_performance_series(d_self, d_self)
+    d_f1["performance"] = compute_performance_series(d_f1, d_f1)
+    d_f2["performance"] = compute_performance_series(d_f2, d_f2)
 
     names = (me_name, f1_name, f2_name)
     st.plotly_chart(
@@ -917,6 +942,11 @@ def _render_trio_view(
         plot_trio_metric(d_self, d_f1, d_f2, metric="average_life_seconds", names=names, title="Durée de vie moyenne", y_title="Secondes", y_format=".1f"),
         width="stretch",
         key=f"trio_life_{f1_xuid}_{f2_xuid}",
+    )
+    st.plotly_chart(
+        plot_trio_metric(d_self, d_f1, d_f2, metric="performance", names=names, title="Performance", y_title="Score", y_format=".1f"),
+        width="stretch",
+        key=f"trio_performance_{f1_xuid}_{f2_xuid}",
     )
 
     # Graphes de barres

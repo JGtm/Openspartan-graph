@@ -12,8 +12,10 @@ import pandas as pd
 import streamlit as st
 
 from src.analysis.stats import format_mmss
+from src.analysis.performance_score import compute_performance_series
 from src.ui.cache import cached_load_player_match_result
 from src.ui.translations import translate_playlist_name
+from src.ui.components.performance import get_score_class
 
 
 def _normalize_mode_label(pair_name: str | None) -> str | None:
@@ -92,6 +94,7 @@ def render_match_history_page(
     db_path: str,
     xuid: str,
     db_key: tuple[int, int] | None,
+    df_full: pd.DataFrame | None = None,
 ) -> None:
     """Affiche la page Historique des parties.
 
@@ -101,6 +104,7 @@ def render_match_history_page(
         db_path: Chemin vers la base de données.
         xuid: XUID du joueur.
         db_key: Clé de cache de la DB.
+        df_full: DataFrame complet (non filtré) pour le calcul du score relatif.
     """
     st.subheader("Historique des parties")
 
@@ -143,6 +147,13 @@ def render_match_history_page(
 
     dff_table["start_time_fr"] = dff_table["start_time"].apply(_format_datetime_fr_hm)
     dff_table["average_life_mmss"] = dff_table["average_life_seconds"].apply(lambda x: format_mmss(x))
+    
+    # Calcul de la note de performance RELATIVE (basée sur l'historique complet)
+    history_df = df_full if df_full is not None else dff_table
+    dff_table["performance"] = compute_performance_series(dff_table, history_df)
+    dff_table["performance_display"] = dff_table["performance"].apply(
+        lambda x: f"{x:.0f}" if pd.notna(x) else "-"
+    )
 
     # Table HTML
     _render_history_table(dff_table)
@@ -176,6 +187,7 @@ def _render_history_table(dff_table: pd.DataFrame) -> None:
         ("Mode", "mode_ui"),
         ("Résultat", "outcome_label"),
         ("Score", "score"),
+        ("Performance", "performance_display"),
         ("MMR équipe", "team_mmr"),
         ("MMR adverse", "enemy_mmr"),
         ("Écart MMR", "delta_mmr"),
@@ -210,6 +222,11 @@ def _render_history_table(dff_table: pd.DataFrame) -> None:
             elif key == "outcome_label":
                 val = _fmt(r.get(key))
                 css_class = _outcome_class(val)
+                tds.append(f"<td class='{css_class}'>{html_lib.escape(val)}</td>")
+            elif key == "performance_display":
+                val = _fmt(r.get(key))
+                perf_val = r.get("performance")
+                css_class = get_score_class(perf_val)
                 tds.append(f"<td class='{css_class}'>{html_lib.escape(val)}</td>")
             elif key in ("team_mmr", "enemy_mmr", "delta_mmr"):
                 val = _fmt_mmr_int(r.get(key))

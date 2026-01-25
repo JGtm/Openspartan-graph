@@ -5,14 +5,16 @@ from typing import List
 import pandas as pd
 
 from src.analysis.stats import compute_outcome_rates, compute_global_ratio
+from src.analysis.performance_score import compute_performance_series
 from src.models import MapBreakdown
 
 
-def compute_map_breakdown(df: pd.DataFrame) -> pd.DataFrame:
+def compute_map_breakdown(df: pd.DataFrame, df_history: pd.DataFrame | None = None) -> pd.DataFrame:
     """Calcule les statistiques agrégées par carte.
     
     Args:
         df: DataFrame de matchs.
+        df_history: DataFrame complet pour le calcul du score relatif.
         
     Returns:
         DataFrame avec colonnes:
@@ -22,6 +24,7 @@ def compute_map_breakdown(df: pd.DataFrame) -> pd.DataFrame:
         - win_rate
         - loss_rate
         - ratio_global
+        - performance_avg
     """
     if df.empty:
         return pd.DataFrame(
@@ -32,6 +35,7 @@ def compute_map_breakdown(df: pd.DataFrame) -> pd.DataFrame:
                 "win_rate",
                 "loss_rate",
                 "ratio_global",
+                "performance_avg",
             ]
         )
 
@@ -48,14 +52,20 @@ def compute_map_breakdown(df: pd.DataFrame) -> pd.DataFrame:
                 "win_rate",
                 "loss_rate",
                 "ratio_global",
+                "performance_avg",
             ]
         )
 
     rows: List[dict] = []
+    history = df_history if df_history is not None else d
     for map_name, g in d.groupby("map_name", dropna=True):
         rates = compute_outcome_rates(g)
         total_out = max(1, rates.total)
         acc = g["accuracy"].dropna().mean()
+        
+        # Calcul de la performance moyenne RELATIVE pour cette carte
+        perf_scores = compute_performance_series(g, history).dropna()
+        perf_avg = float(perf_scores.mean()) if not perf_scores.empty else None
         
         rows.append(
             {
@@ -65,6 +75,7 @@ def compute_map_breakdown(df: pd.DataFrame) -> pd.DataFrame:
                 "win_rate": rates.wins / total_out if rates.total else None,
                 "loss_rate": rates.losses / total_out if rates.total else None,
                 "ratio_global": compute_global_ratio(g),
+                "performance_avg": perf_avg,
             }
         )
 

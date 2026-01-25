@@ -33,6 +33,9 @@ from src.ui import (
 )
 from src.ui.formatting import format_date_fr
 from src.ui.medals import medal_label, render_medals_grid
+from src.ui.components.performance import get_score_class, get_score_color
+from src.analysis.performance_score import compute_relative_performance_score
+from src.analysis.performance_config import SCORE_THRESHOLDS
 from src.visualization.theme import apply_halo_plot_style, get_legend_horizontal_bottom
 
 
@@ -294,6 +297,7 @@ def render_match_view(
     waypoint_player: str,
     db_key: tuple[int, int] | None,
     settings: AppSettings,
+    df_full: pd.DataFrame | None = None,
     # Fonctions injectées
     normalize_mode_label_fn: Callable[[str | None], str],
     format_score_label_fn: Callable[[Any, Any], str],
@@ -324,6 +328,8 @@ def render_match_view(
         Clé de cache pour la base de données.
     settings : AppSettings
         Paramètres de l'application.
+    df_full : pd.DataFrame | None
+        DataFrame complet pour le calcul du score relatif.
     normalize_mode_label_fn, format_score_label_fn, score_css_color_fn, format_datetime_fn
         Fonctions de formatage injectées.
     load_player_match_result_fn, load_match_medals_fn, load_highlight_events_fn,
@@ -376,8 +382,26 @@ def render_match_view(
     if wp and match_id and match_id.strip() and match_id.strip() != "-":
         match_url = f"https://www.halowaypoint.com/halo-infinite/players/{wp}/matches/{match_id.strip()}"
 
-    # Cartes KPI - Date et Résultat
-    top_cols = st.columns(2)
+    # Calcul du score de performance RELATIF
+    perf_score = None
+    if df_full is not None and len(df_full) >= 10:
+        perf_score = compute_relative_performance_score(row, df_full)
+    perf_display = f"{perf_score:.0f}" if perf_score is not None else "-"
+    perf_color = None
+    if perf_score is not None:
+        if perf_score >= SCORE_THRESHOLDS["excellent"]:
+            perf_color = colors["green"]
+        elif perf_score >= SCORE_THRESHOLDS["good"]:
+            perf_color = colors["cyan"]
+        elif perf_score >= SCORE_THRESHOLDS["average"]:
+            perf_color = colors["amber"]
+        elif perf_score >= SCORE_THRESHOLDS["below_average"]:
+            perf_color = colors.get("orange", "#FF8C00")
+        else:
+            perf_color = colors["red"]
+
+    # Cartes KPI - Date, Résultat, Performance
+    top_cols = st.columns(3)
     with top_cols[0]:
         _os_card("Date", format_date_fr(last_time))
     with top_cols[1]:
@@ -391,6 +415,14 @@ def render_match_view(
             f"<span class='{outcome_class} fw-bold'>{html.escape(str(score_label))}</span>",
             accent=str(outcome_color),
             kpi_color=str(outcome_color),
+        )
+    with top_cols[2]:
+        _os_card(
+            "Performance",
+            perf_display,
+            "Relatif à ton historique" if perf_score is not None else "Historique insuffisant",
+            accent=perf_color,
+            kpi_color=perf_color,
         )
 
     last_mode_ui = row.get("mode_ui") or normalize_mode_label_fn(str(last_pair) if last_pair else None)

@@ -258,6 +258,8 @@ def _render_map_table(breakdown: pd.DataFrame, base_scope: pd.DataFrame) -> None
     tbl["loss_rate"] = (tbl["loss_rate"] * 100).round(1)
     tbl["accuracy_avg"] = tbl["accuracy_avg"].round(2)
     tbl["ratio_global"] = tbl["ratio_global"].round(2)
+    if "performance_avg" in tbl.columns:
+        tbl["performance_avg"] = tbl["performance_avg"].round(1)
 
     def _single_or_multi_label(series: pd.Series) -> str:
         try:
@@ -299,6 +301,7 @@ def _render_map_table(breakdown: pd.DataFrame, base_scope: pd.DataFrame) -> None
             "map_name": "Carte",
             "matches": "Parties",
             "accuracy_avg": "Précision moy. (%)",
+            "performance_avg": "Performance moy.",
             "win_rate": "Taux victoire (%)",
             "loss_rate": "Taux défaite (%)",
             "ratio_global": "Ratio global",
@@ -312,6 +315,7 @@ def _render_map_table(breakdown: pd.DataFrame, base_scope: pd.DataFrame) -> None
         "Mode",
         "Parties",
         "Précision moy. (%)",
+        "Performance moy.",
         "Taux victoire (%)",
         "Taux défaite (%)",
         "Ratio global",
@@ -326,6 +330,7 @@ def _render_map_table(breakdown: pd.DataFrame, base_scope: pd.DataFrame) -> None
         column_config={
             "Parties": st.column_config.NumberColumn("Parties", format="%d"),
             "Précision moy. (%)": st.column_config.NumberColumn("Précision moy. (%)", format="%.2f"),
+            "Performance moy.": st.column_config.NumberColumn("Performance moy.", format="%.1f"),
             "Taux victoire (%)": st.column_config.NumberColumn("Taux victoire (%)", format="%.1f"),
             "Taux défaite (%)": st.column_config.NumberColumn("Taux défaite (%)", format="%.1f"),
             "Ratio global": st.column_config.NumberColumn("Ratio global", format="%.2f"),

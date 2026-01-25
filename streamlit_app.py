@@ -170,6 +170,11 @@ from src.ui.sync import (
     render_sync_indicator,
     refresh_spnkr_db_via_api,
 )
+from src.ui.multiplayer import (
+    is_multi_player_db,
+    render_player_selector,
+    get_player_display_name,
+)
 
 
 _LABEL_SUFFIX_RE = re.compile(r"^(.*?)(?:\s*[\-–—]\s*[0-9A-Za-z]{8,})$", re.IGNORECASE)
@@ -683,6 +688,14 @@ def main() -> None:
         # Indicateur de dernière synchronisation
         if db_path and os.path.exists(db_path):
             render_sync_indicator(db_path)
+
+        # Sélecteur multi-joueurs (si DB fusionnée)
+        if db_path and os.path.exists(db_path):
+            new_xuid = render_player_selector(db_path, xuid, key="sidebar_player_selector")
+            if new_xuid:
+                st.session_state["xuid_input"] = new_xuid
+                xuid = new_xuid
+                st.rerun()
 
         # Bouton Sync rapide pour les DB SPNKr
         if db_path and is_spnkr_db_path(db_path) and os.path.exists(db_path):
@@ -1370,6 +1383,7 @@ def main() -> None:
         waypoint_player=waypoint_player,
         db_key=db_key,
         settings=settings,
+        df_full=df,  # Historique complet pour le score relatif
         render_match_view_fn=render_match_view,
         normalize_mode_label_fn=_normalize_mode_label,
         format_score_label_fn=format_score_label,
@@ -1414,13 +1428,13 @@ def main() -> None:
         all_sessions_df = cached_compute_sessions_db(
             db_path, xuid.strip(), db_key, True, gap_minutes  # Inclure tout, filtrage via checkboxes
         )
-        render_session_comparison_page(all_sessions_df)
+        render_session_comparison_page(all_sessions_df, df_full=df)
 
     # --------------------------------------------------------------------------
     # Page: Séries temporelles
     # --------------------------------------------------------------------------
     elif page == "Séries temporelles":
-        render_timeseries_page(dff)
+        render_timeseries_page(dff, df_full=df)
 
     # --------------------------------------------------------------------------
     # Page: Victoires/Défaites
@@ -1468,6 +1482,7 @@ def main() -> None:
             db_path=db_path,
             xuid=xuid,
             db_key=db_key,
+            df_full=df,  # Historique complet pour le score relatif
         )
 
     # --------------------------------------------------------------------------

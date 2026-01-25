@@ -25,6 +25,7 @@ def render_last_match_page(
     waypoint_player: str,
     db_key: tuple[int, int] | None,
     settings: "AppSettings",
+    df_full: pd.DataFrame | None,
     render_match_view_fn: Callable,
     normalize_mode_label_fn: Callable[[str | None], str | None],
     format_score_label_fn: Callable,
@@ -48,6 +49,7 @@ def render_last_match_page(
         waypoint_player: Nom du joueur Waypoint.
         db_key: Clé de cache de la DB.
         settings: Paramètres de l'application.
+        df_full: DataFrame complet pour le calcul du score relatif.
         render_match_view_fn: Fonction de rendu du match.
         normalize_mode_label_fn: Fonction de normalisation du label de mode.
         format_score_label_fn: Fonction de formatage du score.
@@ -77,6 +79,7 @@ def render_last_match_page(
         waypoint_player=waypoint_player,
         db_key=db_key,
         settings=settings,
+        df_full=df_full,
         normalize_mode_label_fn=normalize_mode_label_fn,
         format_score_label_fn=format_score_label_fn,
         score_css_color_fn=score_css_color_fn,
@@ -98,6 +101,7 @@ def render_match_search_page(
     waypoint_player: str,
     db_key: tuple[int, int] | None,
     settings: "AppSettings",
+    df_full: pd.DataFrame | None,
     render_match_view_fn: Callable,
     normalize_mode_label_fn: Callable[[str | None], str | None],
     format_score_label_fn: Callable,
@@ -122,6 +126,7 @@ def render_match_search_page(
         waypoint_player: Nom du joueur Waypoint.
         db_key: Clé de cache de la DB.
         settings: Paramètres de l'application.
+        df_full: DataFrame complet pour le calcul du score relatif.
         render_match_view_fn: Fonction de rendu du match.
         normalize_mode_label_fn: Fonction de normalisation du label de mode.
         format_score_label_fn: Fonction de formatage du score.
@@ -208,6 +213,7 @@ def render_match_search_page(
                 waypoint_player=waypoint_player,
                 db_key=db_key,
                 settings=settings,
+                df_full=df_full,
                 normalize_mode_label_fn=normalize_mode_label_fn,
                 format_score_label_fn=format_score_label_fn,
                 score_css_color_fn=score_css_color_fn,

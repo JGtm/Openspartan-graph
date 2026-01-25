@@ -19,7 +19,10 @@ from src.ui.components.performance import (
     compute_session_performance_score_v2_ui,
     render_performance_score_card,
     render_metric_comparison_row,
+    get_score_class,
 )
+from src.analysis.performance_score import compute_performance_series
+from src.analysis.performance_config import PERFORMANCE_SCORE_SHORT_DESC
 
 if TYPE_CHECKING:
     pass
@@ -66,12 +69,17 @@ def _outcome_class(label: str) -> str:
     return ""
 
 
-def render_session_history_table(df_sess: pd.DataFrame, session_name: str) -> None:
+def render_session_history_table(
+    df_sess: pd.DataFrame,
+    session_name: str,
+    df_full: pd.DataFrame | None = None,
+) -> None:
     """Affiche le tableau historique d'une session.
     
     Args:
         df_sess: DataFrame de la session.
         session_name: Nom de la session pour les messages.
+        df_full: DataFrame complet pour le calcul du score relatif.
     """
     if df_sess.empty:
         st.info(f"Aucune partie dans {session_name}.")
@@ -118,6 +126,15 @@ def render_session_history_table(df_sess: pd.DataFrame, session_name: str) -> No
         df_sess["Résultat"] = df_sess["outcome"].map(outcome_map).fillna("-")
         display_cols.append("Résultat")
     
+    # Colonne Performance RELATIVE (après Résultat)
+    history_df = df_full if df_full is not None else df_sess
+    df_sess["Performance"] = compute_performance_series(df_sess, history_df)
+    df_sess["Perf_display"] = df_sess["Performance"].apply(
+        lambda x: f"{x:.0f}" if pd.notna(x) else "-"
+    )
+    display_cols.append("Perf_display")
+    col_map["Perf_display"] = "Performance"
+    
     if "team_mmr" in df_sess.columns:
         df_sess["MMR Équipe"] = df_sess["team_mmr"].apply(
             lambda x: f"{x:.0f}" if pd.notna(x) else "-"
@@ -134,20 +151,31 @@ def render_session_history_table(df_sess: pd.DataFrame, session_name: str) -> No
     df_display = df_sess[display_cols].copy()
     df_display = df_display.rename(columns=col_map)
     
+    # Garder les scores de performance pour la coloration
+    perf_scores = df_sess["Performance"].values if "Performance" in df_sess.columns else None
+    
     # Trier par heure (conserver l'ordre chronologique via start_time)
     if "start_time" in df_sess.columns:
-        df_display = df_display.iloc[df_sess["start_time"].argsort().values]
+        sort_indices = df_sess["start_time"].argsort().values
+        df_display = df_display.iloc[sort_indices]
+        if perf_scores is not None:
+            perf_scores = perf_scores[sort_indices]
     
     # Affichage HTML pour styliser les résultats
     import html as html_lib
     html_rows = []
-    for _, row in df_display.iterrows():
+    for idx, (_, row) in enumerate(df_display.iterrows()):
         cells = []
         for col in df_display.columns:
             val = row[col]
             if col == "Résultat":
                 css_class = _outcome_class(str(val))
                 cells.append(f"<td class='{css_class}'>{html_lib.escape(str(val))}</td>")
+            elif col == "Performance":
+                # Coloration selon le score
+                perf_val = perf_scores[idx] if perf_scores is not None else None
+                css_class = get_score_class(perf_val)
+                cells.append(f"<td class='{css_class}'>{html_lib.escape(str(val) if val is not None else '-')}</td>")
             else:
                 cells.append(f"<td>{html_lib.escape(str(val) if val is not None else '-')}</td>")
         html_rows.append("<tr>" + "".join(cells) + "</tr>")
@@ -265,26 +293,19 @@ def render_comparison_bar_chart(perf_a: dict, perf_b: dict) -> None:
 
 def render_session_comparison_page(
     all_sessions_df: pd.DataFrame,
+    df_full: pd.DataFrame | None = None,
 ) -> None:
     """Rend la page de comparaison de sessions.
     
     Args:
         all_sessions_df: DataFrame avec toutes les sessions (colonnes session_id, session_label).
+        df_full: DataFrame complet pour le calcul du score relatif.
     """
     st.caption("Compare les performances entre deux sessions de jeu.")
     
     # Note explicative sur le score de performance
     with st.expander("ℹ️ À propos du score de performance", expanded=False):
-        st.markdown("""
-        Le **score de performance** (0-100) est calculé avec une formule **modulaire** :
-        - composantes (K/D, victoires, précision, kills/min, survie)
-        - + une composante **objectif** si des stats existent (CTF/Strongholds/Oddball/KOTH…)
-        - si une composante manque, les poids sont **renormalisés**
-        - ajustement léger possible selon l’**écart MMR** (si dispo)
-        
-        Un score ≥75 est **excellent**, ≥60 est **bon**, ≥45 est **moyen**.
-        Détails : voir docs/PERFORMANCE_SCORE.md
-        """)
+        st.markdown(PERFORMANCE_SCORE_SHORT_DESC)
     
     if all_sessions_df.empty:
         st.info("Aucune session disponible.")
@@ -439,7 +460,7 @@ def render_session_comparison_page(
     tab_hist_a, tab_hist_b = st.tabs(["Session A", "Session B"])
     
     with tab_hist_a:
-        render_session_history_table(df_session_a, "Session A")
+        render_session_history_table(df_session_a, "Session A", df_full=df_full)
     
     with tab_hist_b:
-        render_session_history_table(df_session_b, "Session B")
+        render_session_history_table(df_session_b, "Session B", df_full=df_full)

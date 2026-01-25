@@ -1,28 +1,22 @@
-"""Lanceur unique (Python) pour OpenSpartan Graph.
+"""Lanceur LevelUp pour OpenSpartan Graph.
 
-Objectif
-- Remplacer les .bat par un script Python unique.
-- Proposer des modes de lancement/refresh clairs via CLI (avec --help),
-  et un mode interactif simple (max 2 questions) si lancé sans arguments.
+Architecture simplifiée centrée sur la DB fusionnée multi-joueurs.
 
-Exemples
-- Mode interactif:
+Usage
+-----
+Mode interactif (recommandé):
   python openspartan_launcher.py
 
-- Lancer le dashboard:
-  python openspartan_launcher.py run
+Commandes CLI:
+  python openspartan_launcher.py run              # Dashboard seul
+  python openspartan_launcher.py sync             # Sync tous les joueurs + rebuild DB fusionnée
+  python openspartan_launcher.py sync --run       # Sync + lance le dashboard
+  python openspartan_launcher.py merge            # Fusionne les DBs sources
 
-- Lancer le dashboard en forçant une DB:
-  python openspartan_launcher.py run --db data/spnkr_gt_JGtm.db
-
-- Refresh SPNKr (safe tmp + replace) pour un joueur:
-  python openspartan_launcher.py refresh --player JGtm --out-db data/spnkr_gt_JGtm.db
-
-- Refresh toutes les DB data/spnkr*.db (highlight events + aliases activés par défaut):
-  python openspartan_launcher.py refresh-all --max-matches 200 --match-type matchmaking --rps 5
-
-- Refresh rapide (sans highlight events ni aliases):
-  python openspartan_launcher.py refresh --player JGtm --no-highlight-events --no-aliases
+Configuration:
+  - La DB fusionnée par défaut: data/halo_unified.db
+  - Les DBs sources: data/spnkr_gt_*.db
+  - Variable d'environnement: OPENSPARTAN_DB_PATH
 """
 
 from __future__ import annotations
@@ -43,7 +37,23 @@ from dataclasses import dataclass
 from pathlib import Path
 
 
-# --- Gestion propre du Ctrl+C (SIGINT) ---
+# =============================================================================
+# Configuration
+# =============================================================================
+
+REPO_ROOT = Path(__file__).resolve().parent
+DEFAULT_DATA_DIR = REPO_ROOT / "data"
+DEFAULT_UNIFIED_DB = DEFAULT_DATA_DIR / "halo_unified.db"
+DEFAULT_STREAMLIT_APP = REPO_ROOT / "streamlit_app.py"
+DEFAULT_IMPORTER = REPO_ROOT / "scripts" / "spnkr_import_db.py"
+DEFAULT_MERGER = REPO_ROOT / "scripts" / "merge_databases.py"
+DEFAULT_FILM_ROSTER_REFETCH = REPO_ROOT / "scripts" / "refetch_film_roster.py"
+
+
+# =============================================================================
+# Gestion propre du Ctrl+C
+# =============================================================================
+
 _shutdown_event = threading.Event()
 _active_process: subprocess.Popen | None = None
 _shutdown_lock = threading.Lock()
@@ -51,18 +61,14 @@ _ctrl_c_count = 0
 
 
 def _subprocess_creation_flags() -> int:
-    """Retourne les flags pour créer un sous-processus isolé du groupe.
-    
-    Sur Windows, CREATE_NEW_PROCESS_GROUP empêche le sous-processus de recevoir
-    le Ctrl+C directement, permettant au launcher de gérer l'interruption proprement.
-    """
+    """Retourne les flags pour isoler le sous-processus."""
     if sys.platform == "win32":
         return subprocess.CREATE_NEW_PROCESS_GROUP
     return 0
 
 
 def _kill_active_process() -> None:
-    """Termine le processus enfant actif de manière forcée."""
+    """Termine le processus enfant actif."""
     proc = _active_process
     if proc is None:
         return
@@ -77,7 +83,7 @@ def _kill_active_process() -> None:
 
 
 def _signal_handler(signum: int, frame) -> None:
-    """Handler pour Ctrl+C : affiche un message propre et force l'arrêt."""
+    """Handler pour Ctrl+C."""
     global _ctrl_c_count
     
     with _shutdown_lock:
@@ -88,38 +94,31 @@ def _signal_handler(signum: int, frame) -> None:
             _shutdown_event.set()
             print("\n⏹ Arrêt en cours...", flush=True)
     
-    # Terminer le processus enfant
     _kill_active_process()
     
-    # Si l'utilisateur appuie plusieurs fois, forcer l'arrêt brutal
     if count >= 2:
         print("⚠ Arrêt forcé.", flush=True)
         os._exit(1)
 
 
 def _install_signal_handler() -> None:
-    """Installe le handler de signal pour un arrêt propre."""
+    """Installe le handler de signal."""
     signal.signal(signal.SIGINT, _signal_handler)
-    # Sur Windows, SIGBREAK est aussi utile (Ctrl+Break)
     if hasattr(signal, "SIGBREAK"):
         signal.signal(signal.SIGBREAK, _signal_handler)
 
 
 def _check_shutdown() -> bool:
-    """Vérifie si un arrêt a été demandé. Retourne True si on doit s'arrêter."""
+    """Vérifie si un arrêt a été demandé."""
     return _shutdown_event.is_set()
 
 
-REPO_ROOT = Path(__file__).resolve().parent
-DEFAULT_DATA_DIR = REPO_ROOT / "data"
-DEFAULT_STREAMLIT_APP = REPO_ROOT / "streamlit_app.py"
-DEFAULT_IMPORTER = REPO_ROOT / "scripts" / "spnkr_import_db.py"
-DEFAULT_FILM_ROSTER_REFETCH = REPO_ROOT / "scripts" / "refetch_film_roster.py"
-
+# =============================================================================
+# Helpers Python / venv
+# =============================================================================
 
 def _preferred_python_executable() -> Path | None:
-    # Préfère un venv local si présent (évite d'utiliser un python système
-    # qui n'a pas les dépendances: streamlit, aiohttp, etc.).
+    """Trouve le python du venv local."""
     candidates = [
         REPO_ROOT / ".venv" / "Scripts" / "python.exe",  # Windows
         REPO_ROOT / ".venv" / "bin" / "python",  # Linux/macOS
@@ -131,6 +130,7 @@ def _preferred_python_executable() -> Path | None:
 
 
 def _maybe_reexec_into_venv(argv: list[str]) -> None:
+    """Re-exécute dans le venv si nécessaire."""
     if os.environ.get("OPENSPARTAN_LAUNCHER_NO_REEXEC"):
         return
 
@@ -152,24 +152,30 @@ def _maybe_reexec_into_venv(argv: list[str]) -> None:
 
 
 def _require_module(name: str, *, install_hint: str) -> None:
+    """Vérifie qu'un module est disponible."""
     try:
         __import__(name)
     except Exception as e:
         print(f"Dépendance manquante: {name}")
         print("Détail:", e)
-        print("Installe-la dans ton environnement Python actif puis relance.")
-        print("Si tu utilises le venv du repo, tu peux faire:")
+        print("Installe-la puis relance:")
         print(f"  {install_hint}")
         raise SystemExit(2)
 
 
 def _pick_free_port() -> int:
+    """Trouve un port libre."""
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.bind(("127.0.0.1", 0))
         return int(s.getsockname()[1])
 
 
+# =============================================================================
+# Helpers DB
+# =============================================================================
+
 def _safe_filename_component(s: str) -> str:
+    """Nettoie une chaîne pour un nom de fichier."""
     s = (s or "").strip()
     if not s:
         return ""
@@ -178,41 +184,144 @@ def _safe_filename_component(s: str) -> str:
     return s[:80]
 
 
+def _is_merged_db(db_path: Path | str) -> bool:
+    """Vérifie si la DB est fusionnée (a une table Players)."""
+    try:
+        con = sqlite3.connect(str(db_path))
+        cur = con.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='Players'"
+        )
+        result = cur.fetchone() is not None
+        con.close()
+        return result
+    except Exception:
+        return False
+
+
+@dataclass
+class PlayerInfo:
+    """Informations sur un joueur dans la DB fusionnée."""
+    xuid: str
+    gamertag: str | None
+    label: str | None
+    source_db: str | None
+    total_matches: int
+
+
+def _list_players_from_merged_db(db_path: Path | str) -> list[PlayerInfo]:
+    """Liste les joueurs d'une DB fusionnée."""
+    players = []
+    try:
+        con = sqlite3.connect(str(db_path))
+        cur = con.execute("""
+            SELECT xuid, gamertag, label, source_db, total_matches
+            FROM Players
+            ORDER BY total_matches DESC
+        """)
+        for row in cur.fetchall():
+            players.append(PlayerInfo(
+                xuid=row[0],
+                gamertag=row[1],
+                label=row[2],
+                source_db=row[3],
+                total_matches=row[4] or 0,
+            ))
+        con.close()
+    except Exception:
+        pass
+    return players
+
+
+def _iter_source_dbs(data_dir: Path) -> list[Path]:
+    """Liste les DBs sources (spnkr_gt_*.db)."""
+    if not data_dir.exists():
+        return []
+    return sorted(data_dir.glob("spnkr_gt_*.db"))
+
+
+def _infer_player_from_db_filename(db_path: Path) -> str | None:
+    """Déduit le gamertag depuis le nom de fichier."""
+    base = db_path.stem
+    if base.startswith("spnkr_gt_"):
+        return base[len("spnkr_gt_"):]
+    if base.startswith("spnkr_xuid_"):
+        return base[len("spnkr_xuid_"):]
+    return None
+
+
 def _default_spnkr_db_path_for_player(player: str) -> Path:
+    """Construit le chemin DB pour un joueur."""
     tag = f"xuid_{player}" if str(player).strip().isdigit() else f"gt_{player}"
     safe = _safe_filename_component(tag)
     name = f"spnkr_{safe}.db" if safe else "spnkr.db"
     return DEFAULT_DATA_DIR / name
 
 
-def _ensure_importer_exists() -> None:
-    if not DEFAULT_IMPORTER.exists():
-        raise SystemExit(f"Importer introuvable: {DEFAULT_IMPORTER}")
+def _count_matches_in_db(db_path: Path) -> int:
+    """Compte les matchs dans une DB."""
+    if not db_path.exists():
+        return 0
+    try:
+        con = sqlite3.connect(str(db_path))
+        cur = con.cursor()
+        cur.execute("SELECT COUNT(*) FROM MatchStats")
+        row = cur.fetchone()
+        con.close()
+        return int(row[0]) if row else 0
+    except Exception:
+        return 0
 
+
+def _get_db_path_from_env_or_default() -> Path:
+    """Retourne la DB à utiliser (env ou défaut)."""
+    env = os.environ.get("OPENSPARTAN_DB_PATH") or os.environ.get("OPENSPARTAN_DB")
+    if env:
+        p = Path(env).expanduser()
+        if p.exists():
+            return p.resolve()
+    if DEFAULT_UNIFIED_DB.exists():
+        return DEFAULT_UNIFIED_DB
+    return DEFAULT_UNIFIED_DB
+
+
+def _display_path(p: Path) -> str:
+    """Affiche un chemin relatif au repo."""
+    try:
+        return str(p.resolve().relative_to(REPO_ROOT))
+    except Exception:
+        return str(p)
+
+
+# =============================================================================
+# Import SPNKr
+# =============================================================================
 
 @dataclass(frozen=True)
 class RefreshOptions:
+    """Options pour un refresh SPNKr."""
     player: str
     out_db: Path
-    match_type: str
-    max_matches: int
-    rps: int
-    no_assets: bool
-    no_skill: bool
-    with_highlight_events: bool  # True = activer (défaut), False = désactiver
-    with_aliases: bool = True    # True = activer (défaut), False = désactiver
-    delta: bool = False          # True = arrêt dès match connu (sync rapide)
+    match_type: str = "matchmaking"
+    max_matches: int = 100
+    rps: int = 2
+    no_assets: bool = False
+    no_skill: bool = False
+    with_highlight_events: bool = True
+    with_aliases: bool = True
+    delta: bool = True
 
 
 def _run_spnkr_import(opts: RefreshOptions) -> int:
-    """Exécute l'import SPNKr en mode safe: tmp DB puis replace si OK."""
-
-    _ensure_importer_exists()
+    """Exécute l'import SPNKr (safe tmp + replace)."""
+    
+    if not DEFAULT_IMPORTER.exists():
+        raise SystemExit(f"Importer introuvable: {DEFAULT_IMPORTER}")
+    
     opts.out_db.parent.mkdir(parents=True, exist_ok=True)
 
     tmp_db = opts.out_db.with_suffix(f"{opts.out_db.suffix}.tmp.{int(time.time())}.{os.getpid()}")
 
-    # Copie la DB existante vers TMP pour éviter toute corruption si import interrompu.
+    # Copie la DB existante vers TMP
     try:
         if opts.out_db.exists():
             shutil.copy2(opts.out_db, tmp_db)
@@ -222,41 +331,25 @@ def _run_spnkr_import(opts: RefreshOptions) -> int:
     cmd = [
         sys.executable,
         str(DEFAULT_IMPORTER),
-        "--out-db",
-        str(tmp_db),
-        "--player",
-        str(opts.player),
-        "--match-type",
-        str(opts.match_type),
-        "--max-matches",
-        str(int(opts.max_matches)),
-        "--requests-per-second",
-        str(int(opts.rps)),
+        "--out-db", str(tmp_db),
+        "--player", str(opts.player),
+        "--match-type", str(opts.match_type),
+        "--max-matches", str(int(opts.max_matches)),
+        "--requests-per-second", str(int(opts.rps)),
         "--resume",
     ]
     if opts.no_assets:
         cmd.append("--no-assets")
     if opts.no_skill:
         cmd.append("--no-skill")
-    # Highlight events: activés par défaut, désactivables via --no-highlight-events
     if not opts.with_highlight_events:
         cmd.append("--no-highlight-events")
-    # Aliases: activés par défaut, désactivables via --no-aliases
     if not opts.with_aliases:
         cmd.append("--no-aliases")
-    # Mode delta: s'arrête dès qu'un match connu est rencontré
     if opts.delta:
         cmd.append("--delta")
 
-    print("[SPNKr] Import…")
-    print("- player:", opts.player)
-    print("- out_db:", opts.out_db)
-    print("- match_type:", opts.match_type)
-    print("- max_matches:", opts.max_matches)
-    print("- rps:", opts.rps)
-    print("- highlight_events:", "ON" if opts.with_highlight_events else "OFF")
-    print("- aliases:", "ON" if opts.with_aliases else "OFF")
-    print("- delta:", "ON" if opts.delta else "OFF")
+    print(f"  → Import {opts.player}...")
 
     global _active_process
     proc = subprocess.Popen(cmd, cwd=str(REPO_ROOT), creationflags=_subprocess_creation_flags())
@@ -265,7 +358,6 @@ def _run_spnkr_import(opts: RefreshOptions) -> int:
     try:
         proc.wait()
     except KeyboardInterrupt:
-        # Arrêt propre demandé
         try:
             proc.terminate()
             proc.wait(timeout=5)
@@ -274,7 +366,6 @@ def _run_spnkr_import(opts: RefreshOptions) -> int:
                 proc.kill()
             except Exception:
                 pass
-        # Nettoyage du fichier tmp
         try:
             if tmp_db.exists():
                 tmp_db.unlink()
@@ -285,7 +376,6 @@ def _run_spnkr_import(opts: RefreshOptions) -> int:
         _active_process = None
     
     if proc.returncode != 0:
-        # Ne pas afficher d'erreur si c'est un arrêt volontaire (Ctrl+C)
         if _shutdown_event.is_set():
             try:
                 if tmp_db.exists():
@@ -293,7 +383,7 @@ def _run_spnkr_import(opts: RefreshOptions) -> int:
             except Exception:
                 pass
             return 0
-        print(f"[SPNKr] Échec import (code={proc.returncode}). DB originale conservée.")
+        print(f"  ⚠ Échec import (code={proc.returncode})")
         try:
             if tmp_db.exists():
                 tmp_db.unlink()
@@ -301,14 +391,13 @@ def _run_spnkr_import(opts: RefreshOptions) -> int:
             pass
         return int(proc.returncode)
 
-    # Validation minimale: fichier tmp non vide.
+    # Validation et remplacement
     try:
         if not tmp_db.exists() or tmp_db.stat().st_size <= 0:
-            print("[SPNKr] Import OK mais DB tmp vide. DB originale conservée.")
             return 0
         os.replace(tmp_db, opts.out_db)
     except Exception as e:
-        print("[SPNKr] Import OK mais remplacement DB a échoué:", e)
+        print(f"  ⚠ Remplacement échoué: {e}")
         try:
             if tmp_db.exists():
                 tmp_db.unlink()
@@ -316,80 +405,94 @@ def _run_spnkr_import(opts: RefreshOptions) -> int:
             pass
         return 2
 
-    print("[SPNKr] OK")
     return 0
 
 
-def _fetch_profile_assets(*, player: str, xuid: str | None = None) -> int:
-    """Récupère les assets profil (emblem, backdrop, nameplate) via SPNKr.
-    
-    Cette fonction est appelée après un refresh pour mettre à jour le cache
-    des assets visuels du joueur.
-    """
-    print("[Profile] Fetch assets profil...")
-    print("- player:", player)
+def _repair_aliases_for_recent_matches(db_path: Path, player: str, count: int = 20) -> None:
+    """Répare les aliases sur les matchs récents."""
+    if not DEFAULT_FILM_ROSTER_REFETCH.exists():
+        return
     
     try:
-        # Import dynamique pour éviter les erreurs si spnkr n'est pas installé
+        con = sqlite3.connect(str(db_path))
+        cur = con.execute("""
+            SELECT json_extract(ResponseBody,'$.MatchId') as MatchId
+            FROM MatchStats
+            WHERE json_extract(ResponseBody,'$.MatchId') IS NOT NULL
+            ORDER BY json_extract(ResponseBody,'$.MatchInfo.StartTime') DESC
+            LIMIT ?
+        """, (count,))
+        match_ids = [row[0] for row in cur.fetchall() if row[0]]
+        con.close()
+    except Exception:
+        return
+    
+    if not match_ids:
+        return
+    
+    print(f"  → Réparation aliases ({len(match_ids)} matchs)...")
+    
+    for mid in match_ids:
+        if _check_shutdown():
+            return
+        cmd = [
+            sys.executable, str(DEFAULT_FILM_ROSTER_REFETCH),
+            "--db", str(db_path),
+            "--write-aliases",
+            "--patch-highlight-events",
+            "--match-id", str(mid),
+        ]
+        try:
+            subprocess.run(cmd, cwd=str(REPO_ROOT), creationflags=_subprocess_creation_flags(),
+                          capture_output=True)
+        except Exception:
+            pass
+
+
+def _fetch_profile_assets(player: str) -> None:
+    """Récupère les assets profil du joueur."""
+    try:
         from src.ui.profile_api import (
             fetch_appearance_via_spnkr,
             fetch_xuid_via_spnkr,
             save_cached_appearance,
             save_cached_xuid,
         )
-    except ImportError as e:
-        print(f"[Profile] Module profile_api non disponible: {e}")
-        return 0  # Non bloquant
+    except ImportError:
+        return
     
-    # Résoudre le XUID si on a un gamertag
-    resolved_xuid = xuid
-    if not resolved_xuid or not str(resolved_xuid).strip().isdigit():
-        player_str = str(player).strip()
-        if player_str.isdigit():
-            resolved_xuid = player_str
-        else:
-            print(f"[Profile] Résolution XUID pour {player}...")
-            try:
-                resolved_xuid, canonical_gt = fetch_xuid_via_spnkr(gamertag=player_str)
-                if resolved_xuid:
-                    save_cached_xuid(player_str, resolved_xuid)
-                    print(f"[Profile] XUID résolu: {resolved_xuid} ({canonical_gt})")
-            except Exception as e:
-                print(f"[Profile] Échec résolution XUID: {e}")
-                return 0  # Non bloquant
+    print(f"  → Fetch assets profil...")
     
-    if not resolved_xuid:
-        print("[Profile] Impossible de résoudre le XUID, skip fetch assets.")
-        return 0
+    player_str = str(player).strip()
+    xuid = None
     
-    # Fetch les assets
+    if player_str.isdigit():
+        xuid = player_str
+    else:
+        try:
+            xuid, _ = fetch_xuid_via_spnkr(gamertag=player_str)
+            if xuid:
+                save_cached_xuid(player_str, xuid)
+        except Exception:
+            pass
+    
+    if not xuid:
+        return
+    
     try:
-        print(f"[Profile] Fetch appearance pour XUID {resolved_xuid}...")
-        appearance = fetch_appearance_via_spnkr(xuid=resolved_xuid)
-        
+        appearance = fetch_appearance_via_spnkr(xuid=xuid)
         if appearance:
-            save_cached_appearance(resolved_xuid, appearance)
-            print("[Profile] Assets mis en cache:")
-            if appearance.service_tag:
-                print(f"  - Service tag: {appearance.service_tag}")
-            if appearance.emblem_image_url:
-                print(f"  - Emblem: OK")
-            if appearance.backdrop_image_url:
-                print(f"  - Backdrop: OK")
-            if appearance.nameplate_image_url:
-                print(f"  - Nameplate: OK")
-            if appearance.rank_label:
-                print(f"  - Rank: {appearance.rank_label}")
-        else:
-            print("[Profile] Aucune donnée retournée")
-            
-        return 0
-    except Exception as e:
-        print(f"[Profile] Échec fetch assets: {e}")
-        return 0  # Non bloquant
+            save_cached_appearance(xuid, appearance)
+    except Exception:
+        pass
 
+
+# =============================================================================
+# Commandes principales
+# =============================================================================
 
 def _launch_streamlit(*, db_path: Path | None, port: int | None, no_browser: bool) -> int:
+    """Lance le dashboard Streamlit."""
     if not DEFAULT_STREAMLIT_APP.exists():
         raise SystemExit(f"Introuvable: {DEFAULT_STREAMLIT_APP}")
 
@@ -403,20 +506,16 @@ def _launch_streamlit(*, db_path: Path | None, port: int | None, no_browser: boo
 
     cmd = [
         sys.executable,
-        "-m",
-        "streamlit",
-        "run",
-        str(DEFAULT_STREAMLIT_APP),
-        "--server.address",
-        "localhost",
-        "--server.port",
-        str(chosen_port),
-        "--server.headless",
-        "true",
+        "-m", "streamlit", "run", str(DEFAULT_STREAMLIT_APP),
+        "--server.address", "localhost",
+        "--server.port", str(chosen_port),
+        "--server.headless", "true",
     ]
 
-    print("Lancement du dashboard…")
-    print("URL:", url)
+    print("\n🚀 Lancement du dashboard…")
+    print(f"   URL: {url}")
+    if db_path:
+        print(f"   DB: {_display_path(db_path)}")
     
     global _active_process
     proc = subprocess.Popen(cmd, cwd=str(REPO_ROOT), creationflags=_subprocess_creation_flags())
@@ -435,7 +534,6 @@ def _launch_streamlit(*, db_path: Path | None, port: int | None, no_browser: boo
         return 0
     finally:
         _active_process = None
-        # Nettoyage si le processus est encore actif
         if proc.poll() is None:
             try:
                 proc.terminate()
@@ -447,931 +545,325 @@ def _launch_streamlit(*, db_path: Path | None, port: int | None, no_browser: boo
                     pass
 
 
-def _iter_spnkr_dbs(data_dir: Path) -> list[Path]:
-    if not data_dir.exists():
-        return []
-    return sorted(data_dir.glob("spnkr*.db"))
-
-
-def _infer_player_from_db_filename(db_path: Path) -> str | None:
-    base = db_path.stem
-    if base.startswith("spnkr_gt_"):
-        return base[len("spnkr_gt_") :]
-    if base.startswith("spnkr_xuid_"):
-        return base[len("spnkr_xuid_") :]
-    if base.startswith("spnkr_"):
-        return base[len("spnkr_") :]
-    return None
-
-
-def _guess_default_spnkr_db() -> Path | None:
-    env = os.environ.get("OPENSPARTAN_DB_PATH") or os.environ.get("OPENSPARTAN_DB")
-    if env:
-        p = Path(env).expanduser()
-        if p.exists():
-            return p.resolve()
-
-    dbs = _iter_spnkr_dbs(DEFAULT_DATA_DIR)
-    if not dbs:
-        return None
-    # Choisit la plus récemment modifiée.
-    return max(dbs, key=lambda p: p.stat().st_mtime)
-
-
-def _display_path(p: Path) -> str:
-    try:
-        return str(p.resolve().relative_to(REPO_ROOT))
-    except Exception:
-        return str(p)
-
-
-def _prompt_db_choice(*, purpose: str, default_db: Path | None, allow_none: bool = False) -> Path | None:
-    candidates: list[Path] = []
-
-    if default_db is not None and default_db.exists():
-        candidates.append(default_db.resolve())
-
-    for p in _iter_spnkr_dbs(DEFAULT_DATA_DIR):
-        rp = p.resolve()
-        if rp not in candidates:
-            candidates.append(rp)
-
-    if candidates:
-        print(f"\nDBs disponibles ({purpose}):")
-        if allow_none:
-            print("  0) (auto / aucune DB forcée)")
-        for i, p in enumerate(candidates, start=1):
-            marker = " (défaut)" if default_db is not None and p == default_db.resolve() else ""
-            print(f"  {i}) {_display_path(p)}{marker}")
-        print("(Tu peux aussi coller un chemin complet vers une DB .db)")
-    else:
-        print(f"\nAucune DB détectée pour {purpose}.")
-        print("Colle un chemin complet vers une DB .db")
-
-    default_hint = _display_path(default_db) if default_db is not None else ""
-    raw = input(f"DB ({purpose}) [défaut: {default_hint}]: ").strip()
-    if not raw:
-        if allow_none:
-            return default_db.resolve() if default_db is not None and default_db.exists() else None
-        if default_db is not None and default_db.exists():
-            return default_db.resolve()
-        return candidates[0] if candidates else None
-
-    if allow_none and raw == "0":
-        return None
-
-    if raw.isdigit() and candidates:
-        idx = int(raw)
-        if 1 <= idx <= len(candidates):
-            return candidates[idx - 1]
-        print("Numéro invalide.")
-        return None
-
-    # Sinon, l'entrée est interprétée comme un chemin.
-    p = Path(raw).expanduser()
-    try:
-        p = p.resolve()
-    except Exception:
-        pass
-    if not p.exists():
-        print("DB introuvable:", p)
-        return None
-    return p
-
-
-def _prompt_player_choice(*, default_player: str | None) -> str | None:
-    candidates: list[tuple[str, Path | None]] = []
-
-    dp = (default_player or "").strip()
-    if dp:
-        candidates.append((dp, None))
-
-    for db in _iter_spnkr_dbs(DEFAULT_DATA_DIR):
-        p = _infer_player_from_db_filename(db)
-        if not p:
-            continue
-        if any(p == existing for existing, _ in candidates):
-            continue
-        candidates.append((p, db))
-
-    if candidates:
-        print("\nJoueurs détectés (depuis les DB existantes):")
-        for i, (p, db) in enumerate(candidates, start=1):
-            origin = f" ({db.name})" if db is not None else ""
-            marker = " (défaut)" if dp and p == dp else ""
-            print(f"  {i}) {p}{origin}{marker}")
-
-    raw = input("Joueur SPNKr (gamertag ou XUID) [SPNKR_PLAYER]: ").strip()
-    if not raw:
-        return dp or (candidates[0][0] if candidates else None)
-
-    if raw.isdigit() and candidates:
-        idx = int(raw)
-        if 1 <= idx <= len(candidates):
-            return candidates[idx - 1][0]
-        print("Numéro invalide.")
-        return None
-
-    return raw
-
-
-def _count_matches_in_db(db_path: Path) -> int:
-    """Compte le nombre total de matchs dans la DB."""
-    if not db_path.exists():
-        return 0
-    try:
-        con = sqlite3.connect(str(db_path))
-        cur = con.cursor()
-        cur.execute("SELECT COUNT(*) FROM MatchStats")
-        row = cur.fetchone()
-        con.close()
-        return int(row[0]) if row else 0
-    except Exception:
-        return 0
-
-
-def _latest_match_id_from_db(db_path: Path) -> str | None:
-    """Retourne le MatchId le plus récent selon MatchStats.MatchInfo.StartTime."""
-    try:
-        con = sqlite3.connect(str(db_path))
-    except Exception:
-        return None
-    try:
-        cur = con.cursor()
-        cur.execute(
-            """
-            SELECT
-              json_extract(ResponseBody,'$.MatchId') as MatchId,
-              json_extract(ResponseBody,'$.MatchInfo.StartTime') as Start
-            FROM MatchStats
-            WHERE json_extract(ResponseBody,'$.MatchId') IS NOT NULL
-              AND json_extract(ResponseBody,'$.MatchInfo.StartTime') IS NOT NULL
-            ORDER BY Start DESC
-            LIMIT 1
-            """
-        )
-        row = cur.fetchone()
-        if not row:
-            return None
-        mid = row[0]
-        return str(mid).strip() if isinstance(mid, str) and mid.strip() else None
-    except Exception:
-        return None
-    finally:
-        try:
-            con.close()
-        except Exception:
-            pass
-
-
-def _latest_match_ids_from_db(db_path: Path, *, limit: int) -> list[str]:
-    """Retourne les N MatchId les plus récents selon MatchStats.MatchInfo.StartTime."""
-    n = max(1, int(limit))
-    try:
-        con = sqlite3.connect(str(db_path))
-    except Exception:
-        return []
-    try:
-        cur = con.cursor()
-        cur.execute(
-            """
-            SELECT
-              json_extract(ResponseBody,'$.MatchId') as MatchId,
-              json_extract(ResponseBody,'$.MatchInfo.StartTime') as Start
-            FROM MatchStats
-            WHERE json_extract(ResponseBody,'$.MatchId') IS NOT NULL
-              AND json_extract(ResponseBody,'$.MatchInfo.StartTime') IS NOT NULL
-            ORDER BY Start DESC
-            LIMIT ?
-            """,
-            (n,),
-        )
-        rows = cur.fetchall() or []
-        out: list[str] = []
-        for r in rows:
-            mid = r[0] if r else None
-            if isinstance(mid, str) and mid.strip():
-                out.append(mid.strip())
-        return out
-    except Exception:
-        return []
-    finally:
-        try:
-            con.close()
-        except Exception:
-            pass
-
-
-def _resolve_out_db(*, player: str, out_db_arg: str | None) -> Path:
-    return Path(out_db_arg).expanduser().resolve() if out_db_arg else _default_spnkr_db_path_for_player(player)
-
-
 def _cmd_run(args: argparse.Namespace) -> int:
-    db = Path(args.db).expanduser().resolve() if args.db else None
+    """Commande: lance le dashboard."""
+    db = Path(args.db).expanduser().resolve() if args.db else _get_db_path_from_env_or_default()
+    
+    if not db.exists():
+        print(f"❌ DB introuvable: {db}")
+        print("\n   Tu dois d'abord synchroniser les données:")
+        print("   python openspartan_launcher.py sync")
+        return 2
+    
+    # Afficher les infos si DB fusionnée
+    if _is_merged_db(db):
+        players = _list_players_from_merged_db(db)
+        print(f"\n📊 DB fusionnée: {len(players)} joueur(s)")
+        for p in players:
+            name = p.label or p.gamertag or p.xuid[:15]
+            print(f"   - {name}: {p.total_matches} matchs")
+    
     return _launch_streamlit(db_path=db, port=args.port, no_browser=args.no_browser)
 
 
-def _cmd_refresh(args: argparse.Namespace) -> int:
-    player = args.player or os.environ.get("SPNKR_PLAYER")
-    if not player:
-        raise SystemExit("Fournis --player (ou SPNKR_PLAYER)")
-
-    out_db = _resolve_out_db(player=str(player), out_db_arg=getattr(args, "out_db", None))
-    # Rend le chemin visible aux commandes suivantes (run+refresh, run+refresh+aliases, etc.)
-    try:
-        args.out_db = str(out_db)
-    except Exception:
-        pass
-    opts = RefreshOptions(
-        player=str(player),
-        out_db=out_db,
-        match_type=str(args.match_type),
-        max_matches=int(args.max_matches),
-        rps=int(args.rps),
-        no_assets=bool(args.no_assets),
-        no_skill=bool(args.no_skill),
-        with_highlight_events=not bool(getattr(args, "no_highlight_events", False)),
-        with_aliases=not bool(getattr(args, "no_aliases", False)),
-        delta=bool(getattr(args, "delta", False)),
-    )
-    return _run_spnkr_import(opts)
-
-
-def _cmd_refresh_all(args: argparse.Namespace) -> int:
-    data_dir = Path(args.data_dir).expanduser().resolve() if args.data_dir else DEFAULT_DATA_DIR
-    dbs = _iter_spnkr_dbs(data_dir)
-    if not dbs:
-        print(f"[INFO] Aucune DB trouvée: {data_dir / 'spnkr*.db'}")
-        return 0
-
+def _cmd_sync(args: argparse.Namespace) -> int:
+    """Commande: sync tous les joueurs + rebuild DB fusionnée."""
+    
+    # Trouver les DBs sources
+    source_dbs = _iter_source_dbs(DEFAULT_DATA_DIR)
+    
+    if not source_dbs:
+        print("❌ Aucune DB source trouvée dans data/spnkr_gt_*.db")
+        print("\n   Tu dois d'abord créer une DB avec le script d'import:")
+        print("   python scripts/spnkr_import_db.py --player <gamertag> --out-db data/spnkr_gt_<gamertag>.db")
+        return 2
+    
+    print("=" * 60)
+    print("🔄 SYNCHRONISATION")
+    print("=" * 60)
+    print(f"\n   {len(source_dbs)} DB(s) source(s) détectée(s):")
+    for db in source_dbs:
+        player = _infer_player_from_db_filename(db)
+        count = _count_matches_in_db(db)
+        print(f"   - {db.name} ({player}): {count} matchs")
+    
+    print("\n📥 Étape 1/3: Refresh des DBs sources...")
+    
     failures = 0
-    for db in dbs:
+    for db in source_dbs:
         if _check_shutdown():
             return 0
+        
         player = _infer_player_from_db_filename(db)
         if not player:
-            print(f"[SKIP] {db.name} (impossible de déduire --player depuis le nom)")
             continue
-
+        
+        print(f"\n[{player}]")
+        
         opts = RefreshOptions(
-            player=str(player),
+            player=player,
             out_db=db,
-            match_type=str(args.match_type),
-            max_matches=int(args.max_matches),
-            rps=int(args.rps),
-            no_assets=bool(args.no_assets),
-            no_skill=bool(args.no_skill),
-            with_highlight_events=not bool(getattr(args, "no_highlight_events", False)),
-            with_aliases=not bool(getattr(args, "no_aliases", False)),
-            delta=bool(getattr(args, "delta", False)),
+            match_type="matchmaking",
+            max_matches=int(getattr(args, "max_matches", 100)),
+            rps=int(getattr(args, "rps", 2)),
+            delta=not getattr(args, "full", False),
         )
+        
+        matches_before = _count_matches_in_db(db)
         rc = _run_spnkr_import(opts)
+        
         if _check_shutdown():
             return 0
+        
         if rc != 0:
             failures += 1
-
-    if failures:
-        print(f"Terminé avec {failures} échec(s).")
-        return 2
-    print("Terminé.")
-    return 0
-
-
-def _cmd_refresh_all_with_aliases(args: argparse.Namespace) -> int:
-    """Refresh toutes les DB SPNKr avec highlight events, aliases film et profil."""
-    data_dir = Path(args.data_dir).expanduser().resolve() if args.data_dir else DEFAULT_DATA_DIR
-    dbs = _iter_spnkr_dbs(data_dir)
-    if not dbs:
-        print(f"[INFO] Aucune DB trouvée: {data_dir / 'spnkr*.db'}")
-        return 0
-
-    failures = 0
-    for db in dbs:
-        if _check_shutdown():
-            return 0
-        player = _infer_player_from_db_filename(db)
-        if not player:
-            print(f"[SKIP] {db.name} (impossible de déduire --player depuis le nom)")
             continue
-
-        print(f"\n{'='*60}")
-        print(f"[DB] {db.name} (player={player})")
-        print(f"{'='*60}")
-
-        # Créer un namespace avec les bons paramètres pour ce joueur
-        sub_args = argparse.Namespace(
-            player=str(player),
-            out_db=str(db),
-            match_type=str(args.match_type),
-            max_matches=int(args.max_matches),
-            rps=int(args.rps),
-            no_assets=bool(getattr(args, "no_assets", False)),
-            no_skill=bool(getattr(args, "no_skill", False)),
-            no_highlight_events=bool(getattr(args, "no_highlight_events", False)),
-            no_aliases=bool(getattr(args, "no_aliases", False)),
-            delta=bool(getattr(args, "delta", False)),
-            with_highlight_events=not bool(getattr(args, "no_highlight_events", False)),
-            aliases_last=int(getattr(args, "aliases_last", 50)),
-            patch_highlight_events=bool(getattr(args, "patch_highlight_events", False)),
-            include_type2=bool(getattr(args, "include_type2", False)),
-            max_type2_chunks=int(getattr(args, "max_type2_chunks", 0)),
-            max_total_chunks=getattr(args, "max_total_chunks", None),
-            print_limit=int(getattr(args, "print_limit", 10)),
-            no_fetch_profile=bool(getattr(args, "no_fetch_profile", False)),
-        )
-
-        rc = _cmd_refresh_with_aliases(sub_args)
-        if _check_shutdown():
-            return 0
-        if rc != 0:
-            failures += 1
-
-    if failures:
-        print(f"\nTerminé avec {failures} échec(s).")
-        return 2
-    print("\nTerminé.")
-    return 0
-
-
-def _cmd_run_with_refresh(args: argparse.Namespace) -> int:
-    # Par défaut, run+refresh est utilisé quand on veut un dashboard complet.
-    # Highlight events et aliases sont activés par défaut.
-    try:
-        args.no_highlight_events = False
-        args.no_aliases = False
-    except Exception:
-        pass
-    rc = _cmd_refresh(args)
+        
+        matches_after = _count_matches_in_db(db)
+        new_matches = matches_after - matches_before
+        
+        if new_matches > 0:
+            print(f"  ✓ {new_matches} nouveau(x) match(s)")
+        else:
+            print(f"  ✓ À jour")
+        
+        # Réparer les aliases sur les matchs récents
+        _repair_aliases_for_recent_matches(db, player, count=min(new_matches + 5, 30))
+        
+        # Fetch assets profil
+        _fetch_profile_assets(player)
+    
     if _check_shutdown():
         return 0
-    if rc not in (0, 2):
-        # 2 = erreur de paramétrage, on ne lance pas.
-        print("[WARN] Refresh en échec, lancement du dashboard quand même…")
-    db = Path(args.out_db).expanduser().resolve() if getattr(args, "out_db", None) else None
-    return _launch_streamlit(db_path=db, port=args.port, no_browser=args.no_browser)
-
-
-def _cmd_refresh_with_aliases(args: argparse.Namespace) -> int:
-    """Refresh SPNKr + highlight events, puis répare les aliases sur les N derniers matchs."""
-
-    # Force highlight events: indispensable pour certaines données.
-    args.with_highlight_events = True
-
-    player = args.player or os.environ.get("SPNKR_PLAYER")
-    if not player:
-        raise SystemExit("Fournis --player (ou SPNKR_PLAYER)")
-
-    out_db = _resolve_out_db(player=str(player), out_db_arg=getattr(args, "out_db", None))
-    try:
-        args.out_db = str(out_db)
-    except Exception:
-        pass
-
-    # Compter les matchs AVANT le refresh pour détecter les nouveaux
-    matches_before = _count_matches_in_db(out_db)
-    is_delta = bool(getattr(args, "delta", False))
-
-    rc = _cmd_refresh(args)
-    if rc == 2 or _check_shutdown():
-        return 0 if _check_shutdown() else 2
-
-    # Compter les matchs APRÈS le refresh
-    matches_after = _count_matches_in_db(out_db)
-    new_matches = max(0, matches_after - matches_before)
-
-    # Réparation aliases: optimisé en mode delta
-    aliases_last_arg = int(getattr(args, "aliases_last", 0) or 0)
     
-    if is_delta and new_matches == 0:
-        # Mode delta sans nouveaux matchs: traiter seulement les 5 derniers
-        # (au cas où des aliases manqueraient sur les matchs récents)
-        aliases_last = 5
-        print(f"[Aliases] Mode delta: 0 nouveau match → vérification des {aliases_last} derniers uniquement")
-    elif is_delta and new_matches > 0:
-        # Mode delta avec nouveaux matchs: traiter les nouveaux + quelques anciens
-        aliases_last = min(new_matches + 5, 50)
-        print(f"[Aliases] Mode delta: {new_matches} nouveau(x) match(s) → traitement de {aliases_last} matchs")
-    elif aliases_last_arg > 0:
-        # Valeur explicite fournie
-        aliases_last = aliases_last_arg
-    else:
-        # Mode refresh complet sans valeur explicite
-        aliases_last = int(getattr(args, "max_matches", 10) or 10)
+    print("\n📦 Étape 2/3: Fusion des DBs...")
     
-    aliases_last = max(1, min(aliases_last, 200))
-
-    match_ids = _latest_match_ids_from_db(out_db, limit=aliases_last)
-    if not match_ids:
-        print("[Aliases] Aucun match trouvé pour réparer les aliases.")
-        return 0
-
-    print("[Aliases] Film roster -> xuid_aliases.json")
-    print("- db:", out_db)
-    print("- matches:", len(match_ids))
-
-    for i, mid in enumerate(match_ids, start=1):
-        # Vérifier si arrêt demandé
-        if _check_shutdown():
-            return 0
-            
-        cmd = [sys.executable, str(DEFAULT_FILM_ROSTER_REFETCH), "--db", str(out_db), "--write-aliases", "--match-id", str(mid)]
-        if getattr(args, "patch_highlight_events", False):
-            cmd.append("--patch-highlight-events")
-        if getattr(args, "include_type2", False):
-            cmd.append("--include-type2")
-        if getattr(args, "max_type2_chunks", None) is not None:
-            cmd += ["--max-type2-chunks", str(int(args.max_type2_chunks))]
-        if getattr(args, "max_total_chunks", None) is not None:
-            cmd += ["--max-total-chunks", str(int(args.max_total_chunks))]
-        if getattr(args, "print_limit", None) is not None:
-            cmd += ["--print-limit", str(int(args.print_limit))]
-
-        print(f"[Aliases] {i}/{len(match_ids)} match_id={mid}")
-        try:
-            proc = subprocess.run(cmd, cwd=str(REPO_ROOT), creationflags=_subprocess_creation_flags())
-            if proc.returncode != 0 and not _shutdown_event.is_set():
-                print(f"[WARN] Repair aliases échoué sur {mid} (code={proc.returncode})")
-        except KeyboardInterrupt:
-            return 0
-
-    # Fetch des assets profil (emblem, backdrop, nameplate)
-    if not getattr(args, "no_fetch_profile", False):
-        _fetch_profile_assets(player=str(player))
-
+    # Appeler le script de merge
+    rc = _run_merge(source_dbs)
+    if rc != 0:
+        print("⚠ La fusion a échoué")
+        return rc
+    
+    print("\n📊 Étape 3/3: Calcul des scores de performance...")
+    
+    # Calculer les scores historiques
+    _run_compute_performance()
+    
+    print("\n" + "=" * 60)
+    print("✅ SYNCHRONISATION TERMINÉE")
+    print("=" * 60)
+    
+    unified_db = DEFAULT_UNIFIED_DB
+    if unified_db.exists():
+        players = _list_players_from_merged_db(unified_db)
+        total_matches = sum(p.total_matches for p in players)
+        print(f"\n   DB: {_display_path(unified_db)}")
+        print(f"   Joueurs: {len(players)}")
+        print(f"   Matchs: {total_matches}")
+    
+    # Lancer le dashboard si demandé
+    if getattr(args, "run", False):
+        return _launch_streamlit(db_path=unified_db, port=None, no_browser=False)
+    
     return 0
 
 
-def _cmd_run_with_refresh_and_aliases(args: argparse.Namespace) -> int:
-    rc = _cmd_refresh_with_aliases(args)
-    if rc == 2 or _check_shutdown():
-        return 0 if _check_shutdown() else 2
-    db = Path(args.out_db).expanduser().resolve() if getattr(args, "out_db", None) else None
-    return _launch_streamlit(db_path=db, port=args.port, no_browser=args.no_browser)
-
-
-def _cmd_repair_aliases(args: argparse.Namespace) -> int:
-    if not DEFAULT_FILM_ROSTER_REFETCH.exists():
-        raise SystemExit(f"Introuvable: {DEFAULT_FILM_ROSTER_REFETCH}")
-
-    _require_module("aiohttp", install_hint="./.venv/Scripts/python -m pip install -r requirements.txt")
-
-    db_path = Path(args.db).expanduser().resolve() if args.db else None
-    if db_path is None:
-        guessed = _guess_default_spnkr_db()
-        if guessed is None:
-            raise SystemExit("Fournis --db (aucune DB par défaut détectée).")
-        db_path = guessed
-
-    # Par défaut (sans options), on fait comme l'interactif: --latest.
-    if not getattr(args, "all_matches", False) and not getattr(args, "latest", False) and not getattr(args, "match_id", None):
-        args.latest = True
-
-    match_id = str(getattr(args, "match_id", "") or "").strip() or None
-    if getattr(args, "latest", False) and not match_id:
-        match_id = _latest_match_id_from_db(db_path)
-        if not match_id:
-            raise SystemExit("Impossible de déterminer le match le plus récent (MatchStats).")
-
-    cmd = [sys.executable, str(DEFAULT_FILM_ROSTER_REFETCH), "--db", str(db_path), "--write-aliases"]
-
-    if getattr(args, "aliases", None):
-        cmd += ["--aliases", str(args.aliases)]
-
-    if getattr(args, "patch_highlight_events", False):
-        cmd.append("--patch-highlight-events")
-
-    # Ciblage: match unique (par défaut) ou tous.
-    if getattr(args, "all_matches", False):
-        cmd.append("--all-matches")
-        if getattr(args, "db_source_table", None):
-            cmd += ["--db-source-table", str(args.db_source_table)]
-    else:
-        if not match_id:
-            raise SystemExit("Choisis --latest, --match-id, ou --all-matches")
-        cmd += ["--match-id", match_id]
-
-    # Contrôle download
-    if getattr(args, "include_type2", False):
-        cmd.append("--include-type2")
-    if getattr(args, "max_type2_chunks", None) is not None:
-        cmd += ["--max-type2-chunks", str(int(args.max_type2_chunks))]
-    if getattr(args, "max_total_chunks", None) is not None:
-        cmd += ["--max-total-chunks", str(int(args.max_total_chunks))]
-    if getattr(args, "print_limit", None) is not None:
-        cmd += ["--print-limit", str(int(args.print_limit))]
-
-    print("[Repair] Film roster -> xuid_aliases.json")
-    print("- db:", db_path)
-    if getattr(args, "all_matches", False):
-        print("- mode: all-matches")
-    else:
-        print("- match_id:", match_id)
-
+def _run_merge(source_dbs: list[Path]) -> int:
+    """Exécute la fusion des DBs."""
+    if not DEFAULT_MERGER.exists():
+        print(f"❌ Script de fusion introuvable: {DEFAULT_MERGER}")
+        return 2
+    
+    cmd = [
+        sys.executable,
+        str(DEFAULT_MERGER),
+        str(DEFAULT_UNIFIED_DB),
+    ] + [str(db) for db in source_dbs]
+    
     try:
         proc = subprocess.run(cmd, cwd=str(REPO_ROOT), creationflags=_subprocess_creation_flags())
-        if _shutdown_event.is_set():
-            return 0
-        return int(proc.returncode)
+        return proc.returncode
     except KeyboardInterrupt:
         return 0
+    except Exception as e:
+        print(f"⚠ Erreur fusion: {e}")
+        return 2
 
 
-def _interactive(argv0: str) -> int:
-    print("=" * 66)
-    print("           LevelUp - Lanceur interactif")
-    print("=" * 66)
-    print("\n(Astuce: utilise --help pour les options CLI avancees)")
-    print("\nChoisis un mode:\n")
-    print("  1) Dashboard seul (sans refresh)")
+def _run_compute_performance() -> None:
+    """Calcule les scores de performance historiques."""
+    script = REPO_ROOT / "scripts" / "compute_historical_performance.py"
+    if not script.exists():
+        return
+    
+    cmd = [sys.executable, str(script), str(DEFAULT_UNIFIED_DB)]
+    
+    try:
+        subprocess.run(cmd, cwd=str(REPO_ROOT), creationflags=_subprocess_creation_flags(),
+                      capture_output=True)
+    except Exception:
+        pass
+
+
+def _cmd_merge(args: argparse.Namespace) -> int:
+    """Commande: fusionne les DBs sources."""
+    source_dbs = _iter_source_dbs(DEFAULT_DATA_DIR)
+    
+    if not source_dbs:
+        print("❌ Aucune DB source trouvée dans data/spnkr_gt_*.db")
+        return 2
+    
+    print("📦 Fusion des DBs...")
+    for db in source_dbs:
+        print(f"   - {db.name}")
+    print(f"   → {_display_path(DEFAULT_UNIFIED_DB)}")
+    
+    rc = _run_merge(source_dbs)
+    
+    if rc == 0:
+        print("\n✅ Fusion terminée")
+        _run_compute_performance()
+    
+    return rc
+
+
+# =============================================================================
+# Mode interactif
+# =============================================================================
+
+def _interactive() -> int:
+    """Menu interactif simplifié."""
+    print("=" * 60)
+    print("        LevelUp - Dashboard Halo Infinite")
+    print("=" * 60)
+    
+    unified_db = DEFAULT_UNIFIED_DB
+    source_dbs = _iter_source_dbs(DEFAULT_DATA_DIR)
+    
+    # Afficher l'état actuel
+    print("\n📊 État actuel:")
+    
+    if unified_db.exists() and _is_merged_db(unified_db):
+        players = _list_players_from_merged_db(unified_db)
+        total_matches = sum(p.total_matches for p in players)
+        print(f"   DB: {_display_path(unified_db)}")
+        print(f"   Joueurs: {len(players)}")
+        for p in players:
+            name = p.label or p.gamertag or p.xuid[:15]
+            print(f"      - {name}: {p.total_matches} matchs")
+        print(f"   Total: {total_matches} matchs")
+    elif source_dbs:
+        print(f"   {len(source_dbs)} DB(s) source(s) détectée(s)")
+        for db in source_dbs:
+            player = _infer_player_from_db_filename(db)
+            count = _count_matches_in_db(db)
+            print(f"      - {player}: {count} matchs")
+        print("   ⚠ Pas de DB fusionnée (lance 'sync' pour créer)")
+    else:
+        print("   ❌ Aucune DB trouvée")
+        print("   → Tu dois d'abord importer des données")
+    
+    print("\n" + "-" * 60)
+    print("Choisis une action:\n")
+    print("  1) 🚀 Dashboard                       [recommandé]")
+    print("     Lance le dashboard directement")
     print()
-    print("  -- Sync delta (rapide, nouveaux matchs uniquement) -------------")
-    print("  2) Sync complete + dashboard                          [recommande]")
-    print("     -> Delta + highlights + aliases film + profil, puis dashboard")
+    print("  2) 🔄 Sync + Dashboard")
+    print("     Synchronise les nouveaux matchs puis lance le dashboard")
     print()
-    print("  3) Sync complete (sans dashboard)")
-    print("     -> Delta + highlights + aliases film + profil")
+    print("  3) 🔄 Sync seul")
+    print("     Synchronise les données sans lancer le dashboard")
     print()
-    print("  4) Sync complete (toutes les DB data/spnkr*.db)")
-    print("     -> Delta + highlights + aliases film + profil pour chaque DB")
-    print()
-    print("  -- Refresh total (depuis zero) ---------------------------------")
-    print("  5) Refresh total (recharge tous les matchs, sans delta)")
-    print("     -> 1000 matchs + highlights + aliases film + profil")
+    print("  4) 📦 Fusion seule")
+    print("     Refait la fusion des DBs sans synchroniser")
     print()
     print("  Q) Quitter")
     print()
-
-    choice = input("Ton choix (1/2/3/4/5/Q): ").strip().lower()
+    
+    choice = input("Ton choix (1/2/3/4/Q): ").strip().lower()
+    
     if choice in {"q", "quit", "exit"}:
         return 0
-
-    # Mode 1: Dashboard seul
+    
     if choice == "1":
-        db_p = _prompt_db_choice(purpose="à utiliser", default_db=_guess_default_spnkr_db(), allow_none=True)
-        return _launch_streamlit(db_path=db_p, port=None, no_browser=False)
-
-    # Modes 2-5: nécessitent un joueur (sauf mode 4 qui déduit depuis les DB)
-    player: str | None = None
-    if choice in {"2", "3", "5"}:
-        player = _prompt_player_choice(default_player=os.environ.get("SPNKR_PLAYER"))
-        if not player:
-            print("Aucun joueur fourni.")
+        if not unified_db.exists():
+            print("\n⚠ La DB fusionnée n'existe pas encore.")
+            print("  Lance d'abord une synchronisation (choix 2 ou 3)")
             return 2
-
-    # Mode 2: Sync delta + aliases + profil + dashboard
+        return _launch_streamlit(db_path=unified_db, port=None, no_browser=False)
+    
     if choice == "2":
-        args = argparse.Namespace(
-            player=player,
-            out_db=None,
-            match_type="matchmaking",
-            max_matches=100,  # Delta s'arrêtera avant si matchs connus
-            rps=2,
-            no_assets=False,
-            no_skill=False,
-            no_highlight_events=False,
-            no_aliases=False,
-            delta=True,  # Mode delta activé
-            with_highlight_events=True,
-            aliases_last=50,
-            patch_highlight_events=True,
-            include_type2=False,
-            max_type2_chunks=0,
-            max_total_chunks=None,
-            print_limit=20,
-            no_fetch_profile=False,
-            port=None,
-            no_browser=False,
-            db=None,
-        )
-        return _cmd_run_with_refresh_and_aliases(args)
-
-    # Mode 3: Sync delta + aliases + profil (sans dashboard)
+        args = argparse.Namespace(max_matches=100, rps=2, full=False, run=True)
+        return _cmd_sync(args)
+    
     if choice == "3":
-        args = argparse.Namespace(
-            player=player,
-            out_db=None,
-            match_type="matchmaking",
-            max_matches=100,
-            rps=2,
-            no_assets=False,
-            no_skill=False,
-            no_highlight_events=False,
-            no_aliases=False,
-            delta=True,  # Mode delta activé
-            with_highlight_events=True,
-            aliases_last=50,
-            patch_highlight_events=True,
-            include_type2=False,
-            max_type2_chunks=0,
-            max_total_chunks=None,
-            print_limit=20,
-            no_fetch_profile=False,
-        )
-        return _cmd_refresh_with_aliases(args)
-
-    # Mode 4: Sync delta toutes les DB
+        args = argparse.Namespace(max_matches=100, rps=2, full=False, run=False)
+        return _cmd_sync(args)
+    
     if choice == "4":
-        return _cmd_refresh_all_with_aliases(argparse.Namespace(
-            data_dir=str(DEFAULT_DATA_DIR),
-            match_type="matchmaking",
-            max_matches=100,
-            rps=3,
-            no_assets=False,
-            no_skill=False,
-            no_highlight_events=False,
-            no_aliases=False,
-            delta=True,  # Mode delta activé
-            with_highlight_events=True,
-            aliases_last=50,
-            patch_highlight_events=True,
-            include_type2=False,
-            max_type2_chunks=0,
-            max_total_chunks=None,
-            print_limit=10,
-            no_fetch_profile=False,
-        ))
-
-    # Mode 5: Refresh total (sans delta, depuis zéro)
-    if choice == "5":
-        args = argparse.Namespace(
-            player=player,
-            out_db=None,
-            match_type="matchmaking",
-            max_matches=1000,  # Beaucoup plus de matchs
-            rps=2,
-            no_assets=False,
-            no_skill=False,
-            no_highlight_events=False,
-            no_aliases=False,
-            delta=False,  # PAS de delta = refresh complet
-            with_highlight_events=True,
-            aliases_last=100,
-            patch_highlight_events=True,
-            include_type2=False,
-            max_type2_chunks=0,
-            max_total_chunks=None,
-            print_limit=20,
-            no_fetch_profile=False,
-        )
-        return _cmd_refresh_with_aliases(args)
-
+        return _cmd_merge(argparse.Namespace())
+    
     print("Choix invalide.")
-    print(f"Usage CLI: {argv0} --help")
     return 2
 
 
+# =============================================================================
+# Parser CLI
+# =============================================================================
+
 def _build_parser() -> argparse.ArgumentParser:
+    """Construit le parser CLI."""
     ap = argparse.ArgumentParser(
         prog="openspartan",
-        description=(
-            "Lanceur LevelUp (dashboard Streamlit + refresh SPNKr).\n"
-            "- Mode interactif si lancé sans sous-commande (max 2 questions).\n"
-            "- Mode CLI avec sous-commandes et --help."
-        ),
+        description="Lanceur LevelUp - Dashboard Halo Infinite",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Exemples:
+  python openspartan_launcher.py           # Mode interactif
+  python openspartan_launcher.py run       # Dashboard seul
+  python openspartan_launcher.py sync      # Sync tous les joueurs
+  python openspartan_launcher.py sync --run  # Sync + dashboard
+""",
     )
 
     sub = ap.add_subparsers(dest="cmd")
 
-    p_run = sub.add_parser("run", help="Lance le dashboard Streamlit")
-    p_run.add_argument("--db", default=None, help="Chemin DB à utiliser (OPENSPARTAN_DB_PATH)")
+    # run
+    p_run = sub.add_parser("run", help="Lance le dashboard")
+    p_run.add_argument("--db", default=None, help="Chemin DB (défaut: data/halo_unified.db)")
     p_run.add_argument("--port", type=int, default=None, help="Port (sinon auto)")
-    p_run.add_argument("--no-browser", action="store_true", help="N'ouvre pas le navigateur")
+    p_run.add_argument("--no-browser", action="store_true", help="Ne pas ouvrir le navigateur")
     p_run.set_defaults(func=_cmd_run)
 
-    p_ref = sub.add_parser("refresh", help="Refresh SPNKr (safe tmp + replace) pour un joueur")
-    p_ref.add_argument("--player", default=None, help="Gamertag ou XUID (sinon: SPNKR_PLAYER)")
-    p_ref.add_argument("--out-db", default=None, help="DB cible (sinon: data/spnkr_<player>.db)")
-    p_ref.add_argument(
-        "--match-type",
-        default="matchmaking",
-        choices=["all", "matchmaking", "custom", "local"],
-        help="Type de matchs (défaut: matchmaking)",
-    )
-    p_ref.add_argument("--max-matches", type=int, default=500, help="Max matchs (défaut: 500)")
-    p_ref.add_argument("--rps", type=int, default=2, help="Requests/sec (défaut: 2)")
-    p_ref.add_argument("--no-assets", action="store_true", help="Désactive l'import des assets")
-    p_ref.add_argument("--no-skill", action="store_true", help="Désactive l'import du skill")
-    p_ref.add_argument(
-        "--no-highlight-events",
-        action="store_true",
-        help="Désactive l'import des highlight events (accélère l'import)",
-    )
-    p_ref.add_argument(
-        "--no-aliases",
-        action="store_true",
-        help="Désactive le refresh des aliases (XUID → Gamertag)",
-    )
-    p_ref.add_argument(
-        "--delta",
-        action="store_true",
-        help="Mode delta: s'arrête dès qu'un match déjà connu est rencontré (sync rapide)",
-    )
-    p_ref.set_defaults(func=_cmd_refresh)
+    # sync
+    p_sync = sub.add_parser("sync", help="Synchronise les données de tous les joueurs")
+    p_sync.add_argument("--run", action="store_true", help="Lance le dashboard après la sync")
+    p_sync.add_argument("--full", action="store_true", help="Sync complète (pas de delta)")
+    p_sync.add_argument("--max-matches", type=int, default=100, help="Max matchs par joueur (défaut: 100)")
+    p_sync.add_argument("--rps", type=int, default=2, help="Requêtes/sec (défaut: 2)")
+    p_sync.set_defaults(func=_cmd_sync)
 
-    p_ra = sub.add_parser("refresh-all", help="Refresh toutes les DB data/spnkr*.db")
-    p_ra.add_argument("--data-dir", default=str(DEFAULT_DATA_DIR), help="Dossier contenant les DB (défaut: data/)")
-    p_ra.add_argument(
-        "--match-type",
-        default="matchmaking",
-        choices=["all", "matchmaking", "custom", "local"],
-        help="Type de matchs (défaut: matchmaking)",
-    )
-    p_ra.add_argument("--max-matches", type=int, default=200, help="Max matchs par DB (défaut: 200)")
-    p_ra.add_argument("--rps", type=int, default=5, help="Requests/sec (défaut: 5)")
-    p_ra.add_argument("--no-assets", action="store_true", help="Désactive l'import des assets")
-    p_ra.add_argument("--no-skill", action="store_true", help="Désactive l'import du skill")
-    p_ra.add_argument(
-        "--no-highlight-events",
-        action="store_true",
-        help="Désactive l'import des highlight events (accélère l'import)",
-    )
-    p_ra.add_argument(
-        "--no-aliases",
-        action="store_true",
-        help="Désactive le refresh des aliases (XUID → Gamertag)",
-    )
-    p_ra.add_argument(
-        "--delta",
-        action="store_true",
-        help="Mode delta: s'arrête dès qu'un match déjà connu est rencontré (sync rapide)",
-    )
-    p_ra.set_defaults(func=_cmd_refresh_all)
-
-    p_runref = sub.add_parser("run+refresh", help="Refresh SPNKr puis lance le dashboard")
-    p_runref.add_argument("--player", default=None, help="Gamertag ou XUID (sinon: SPNKR_PLAYER)")
-    p_runref.add_argument("--out-db", default=None, help="DB cible (sinon: data/spnkr_<player>.db)")
-    p_runref.add_argument(
-        "--match-type",
-        default="matchmaking",
-        choices=["all", "matchmaking", "custom", "local"],
-        help="Type de matchs (défaut: matchmaking)",
-    )
-    p_runref.add_argument("--max-matches", type=int, default=500, help="Max matchs (défaut: 500)")
-    p_runref.add_argument("--rps", type=int, default=2, help="Requests/sec (défaut: 2)")
-    p_runref.add_argument("--no-assets", action="store_true", help="Désactive l'import des assets")
-    p_runref.add_argument("--no-skill", action="store_true", help="Désactive l'import du skill")
-    p_runref.add_argument(
-        "--no-highlight-events",
-        action="store_true",
-        help="Désactive l'import des highlight events (accélère l'import)",
-    )
-    p_runref.add_argument(
-        "--no-aliases",
-        action="store_true",
-        help="Désactive le refresh des aliases (XUID → Gamertag)",
-    )
-    p_runref.add_argument("--port", type=int, default=None, help="Port (sinon auto)")
-    p_runref.add_argument("--no-browser", action="store_true", help="N'ouvre pas le navigateur")
-    p_runref.set_defaults(func=_cmd_run_with_refresh)
-
-    p_refa = sub.add_parser(
-        "refresh+aliases",
-        help="Refresh SPNKr (avec highlight events) puis répare les aliases sur les N derniers matchs",
-    )
-    p_refa.add_argument("--player", default=None, help="Gamertag ou XUID (sinon: SPNKR_PLAYER)")
-    p_refa.add_argument("--out-db", default=None, help="DB cible (sinon: data/spnkr_<player>.db)")
-    p_refa.add_argument(
-        "--match-type",
-        default="matchmaking",
-        choices=["all", "matchmaking", "custom", "local"],
-        help="Type de matchs (défaut: matchmaking)",
-    )
-    p_refa.add_argument("--max-matches", type=int, default=50, help="Max matchs importés (défaut: 50)")
-    p_refa.add_argument("--rps", type=int, default=2, help="Requests/sec (défaut: 2)")
-    p_refa.add_argument("--no-assets", action="store_true", help="Désactive l'import des assets")
-    p_refa.add_argument("--no-skill", action="store_true", help="Désactive l'import du skill")
-    p_refa.add_argument(
-        "--delta",
-        action="store_true",
-        help="Mode delta: s'arrête dès qu'un match déjà connu est rencontré (sync rapide)",
-    )
-    p_refa.add_argument(
-        "--aliases-last",
-        type=int,
-        default=0,
-        help="Répare les aliases sur les N derniers matchs (défaut: = --max-matches).",
-    )
-    p_refa.add_argument(
-        "--patch-highlight-events",
-        action="store_true",
-        help="Optionnel: patch HighlightEvents.ResponseBody.gamertag en plus des aliases",
-    )
-    p_refa.add_argument("--include-type2", action="store_true", help="Inclut aussi des chunks type2")
-    p_refa.add_argument("--max-type2-chunks", type=int, default=0, help="Limite chunks type2 (défaut: 0)")
-    p_refa.add_argument("--max-total-chunks", type=int, default=None, help="Limite totale chunks")
-    p_refa.add_argument("--print-limit", type=int, default=20, help="Limite logs (défaut: 20)")
-    p_refa.add_argument(
-        "--no-fetch-profile",
-        action="store_true",
-        help="Désactive le fetch des assets profil (emblem, backdrop, nameplate)",
-    )
-    p_refa.set_defaults(func=_cmd_refresh_with_aliases)
-
-    p_runrefa = sub.add_parser(
-        "run+refresh+aliases",
-        help="Refresh SPNKr (avec highlight events) + répare aliases, puis lance le dashboard",
-    )
-    p_runrefa.add_argument("--player", default=None, help="Gamertag ou XUID (sinon: SPNKR_PLAYER)")
-    p_runrefa.add_argument("--out-db", default=None, help="DB cible (sinon: data/spnkr_<player>.db)")
-    p_runrefa.add_argument(
-        "--match-type",
-        default="matchmaking",
-        choices=["all", "matchmaking", "custom", "local"],
-        help="Type de matchs (défaut: matchmaking)",
-    )
-    p_runrefa.add_argument("--max-matches", type=int, default=50, help="Max matchs importés (défaut: 50)")
-    p_runrefa.add_argument("--rps", type=int, default=2, help="Requests/sec (défaut: 2)")
-    p_runrefa.add_argument("--no-assets", action="store_true", help="Désactive l'import des assets")
-    p_runrefa.add_argument("--no-skill", action="store_true", help="Désactive l'import du skill")
-    p_runrefa.add_argument(
-        "--delta",
-        action="store_true",
-        help="Mode delta: s'arrête dès qu'un match déjà connu est rencontré (sync rapide)",
-    )
-    p_runrefa.add_argument(
-        "--aliases-last",
-        type=int,
-        default=0,
-        help="Répare les aliases sur les N derniers matchs (défaut: = --max-matches).",
-    )
-    p_runrefa.add_argument(
-        "--patch-highlight-events",
-        action="store_true",
-        help="Optionnel: patch HighlightEvents.ResponseBody.gamertag en plus des aliases",
-    )
-    p_runrefa.add_argument("--include-type2", action="store_true", help="Inclut aussi des chunks type2")
-    p_runrefa.add_argument("--max-type2-chunks", type=int, default=0, help="Limite chunks type2 (défaut: 0)")
-    p_runrefa.add_argument("--max-total-chunks", type=int, default=None, help="Limite totale chunks")
-    p_runrefa.add_argument("--print-limit", type=int, default=20, help="Limite logs (défaut: 20)")
-    p_runrefa.add_argument(
-        "--no-fetch-profile",
-        action="store_true",
-        help="Désactive le fetch des assets profil (emblem, backdrop, nameplate)",
-    )
-    p_runrefa.add_argument("--port", type=int, default=None, help="Port (sinon auto)")
-    p_runrefa.add_argument("--no-browser", action="store_true", help="N'ouvre pas le navigateur")
-    p_runrefa.set_defaults(func=_cmd_run_with_refresh_and_aliases)
-
-    p_rep = sub.add_parser(
-        "repair-aliases",
-        help="Répare/complète xuid_aliases.json depuis les film chunks (SPNKr auth requise)",
-    )
-    p_rep.add_argument("--db", default=None, help="DB cible (défaut: OPENSPARTAN_DB_PATH ou data/spnkr*.db récent)")
-    p_rep.add_argument("--match-id", default=None, help="Match GUID à réparer")
-    p_rep.add_argument("--latest", action="store_true", help="Répare le match le plus récent (MatchStats)")
-    p_rep.add_argument("--all-matches", action="store_true", help="Répare tous les matchs de la DB (long)")
-    p_rep.add_argument(
-        "--db-source-table",
-        choices=["HighlightEvents", "MatchStats"],
-        default="HighlightEvents",
-        help="Table utilisée pour lister les MatchId quand --all-matches est activé",
-    )
-    p_rep.add_argument("--aliases", default=None, help="Chemin vers xuid_aliases.json (optionnel)")
-    p_rep.add_argument(
-        "--patch-highlight-events",
-        action="store_true",
-        help="Optionnel: patch HighlightEvents.ResponseBody.gamertag en plus des aliases",
-    )
-    p_rep.add_argument(
-        "--include-type2",
-        action="store_true",
-        help="Inclut aussi des chunks type2 (par défaut: type1 seulement)",
-    )
-    p_rep.add_argument(
-        "--max-type2-chunks",
-        type=int,
-        default=0,
-        help="Limite le nombre de chunks type2 téléchargés (défaut: 0)",
-    )
-    p_rep.add_argument(
-        "--max-total-chunks",
-        type=int,
-        default=None,
-        help="Limite le nombre total de chunks téléchargés (type1+type2)",
-    )
-    p_rep.add_argument(
-        "--print-limit",
-        type=int,
-        default=20,
-        help="Limite le nombre de lignes affichées",
-    )
-    p_rep.set_defaults(func=_cmd_repair_aliases)
+    # merge
+    p_merge = sub.add_parser("merge", help="Fusionne les DBs sources")
+    p_merge.set_defaults(func=_cmd_merge)
 
     return ap
 
 
+# =============================================================================
+# Point d'entrée
+# =============================================================================
+
 def main(argv: list[str] | None = None) -> int:
-    # Installer le handler de signal pour un arrêt propre
+    """Point d'entrée principal."""
     _install_signal_handler()
     
     argv = list(sys.argv[1:] if argv is None else argv)
-
     _maybe_reexec_into_venv(argv)
 
     try:
         if not argv:
-            return _interactive(argv0=f"{Path(sys.argv[0]).name}")
+            return _interactive()
 
         ap = _build_parser()
         args = ap.parse_args(argv)
@@ -1383,14 +875,12 @@ def main(argv: list[str] | None = None) -> int:
         return int(args.func(args))
     
     except KeyboardInterrupt:
-        # Message déjà affiché par le handler de signal
         if not _shutdown_event.is_set():
             print("\n⏹ Arrêt en cours...", flush=True)
         return 0
 
 
 if __name__ == "__main__":
-    # Supprimer les warnings/erreurs lors de l'arrêt brutal
     try:
         raise SystemExit(main())
     except KeyboardInterrupt:

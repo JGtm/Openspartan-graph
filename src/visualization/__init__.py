@@ -8,6 +8,7 @@ from src.visualization.timeseries import (
     plot_accuracy_last_n,
     plot_average_life,
     plot_spree_headshots_accuracy,
+    plot_performance_timeseries,
 )
 from src.visualization.distributions import (
     plot_kda_distribution,
@@ -31,6 +32,7 @@ __all__ = [
     "plot_accuracy_last_n",
     "plot_average_life",
     "plot_spree_headshots_accuracy",
+    "plot_performance_timeseries",
     "plot_kda_distribution",
     "plot_outcomes_over_time",
     "plot_map_comparison",
