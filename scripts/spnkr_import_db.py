@@ -774,6 +774,463 @@ async def _refresh_aliases_via_api(
     return updated
 
 
+# ==============================================================================
+# REFACTORED IMPORT FUNCTIONS
+# ==============================================================================
+
+
+# Nombre de matchs traités en parallèle (conservateur pour éviter 429)
+DEFAULT_PARALLEL_MATCHES = 3
+
+
+@dataclass
+class ImportContext:
+    """Contexte partagé pour l'import de matchs."""
+    client: Any
+    con: sqlite3.Connection
+    existing_match_ids: set[str]
+    asset_seen: set[tuple[str, str, str]]
+    asset_missing: set[tuple[str, str, str]]
+    film_mod: Any | None
+    fetch_skill: bool
+    fetch_assets: bool
+    fetch_highlight_events: bool
+    fetch_aliases: bool
+    delta_mode: bool
+    player: str  # Pour fallback XUID
+    # Lock pour les écritures DB (SQLite n'aime pas les écritures concurrentes)
+    db_lock: asyncio.Lock | None = None
+    # Semaphore pour limiter la concurrence
+    semaphore: asyncio.Semaphore | None = None
+
+
+@dataclass
+class MatchResult:
+    """Résultat du traitement d'un match."""
+    match_id: str
+    inserted: bool  # True si nouveau match inséré
+    aliases_updated: int
+    xuids_seen: set[int]
+    skipped_delta: bool = False  # True si arrêt delta
+
+
+async def _fetch_match_history_batch(
+    ctx: ImportContext,
+    *,
+    start: int,
+    count: int,
+    match_type: str,
+) -> list[str]:
+    """Récupère un batch d'IDs de matchs depuis l'historique.
+    
+    Args:
+        ctx: Contexte d'import.
+        start: Offset dans l'historique (0 = plus récent).
+        count: Nombre de matchs à récupérer (max 25).
+        match_type: Type de matchs (all, matchmaking, custom, local).
+        
+    Returns:
+        Liste des match IDs.
+    """
+    async def _get_hist():
+        resp = await ctx.client.stats.get_match_history(
+            ctx.player, start=start, count=count, match_type=match_type
+        )
+        return await resp.parse()
+
+    history = await _request_with_retries(_get_hist)
+    if not getattr(history, "results", None):
+        return []
+    return [str(r.match_id) for r in history.results]
+
+
+async def _fetch_match_stats(ctx: ImportContext, match_id: str) -> dict[str, Any] | None:
+    """Récupère les stats d'un match.
+    
+    Returns:
+        JSON du match ou None si échec.
+    """
+    async def _get_match():
+        resp = await ctx.client.stats.get_match_stats(match_id)
+        return await resp.json()
+
+    try:
+        match_json = await _request_with_retries(_get_match)
+        return match_json if isinstance(match_json, dict) else None
+    except Exception:
+        return None
+
+
+async def _fetch_skill_stats(
+    ctx: ImportContext, match_id: str, xuids: list[int]
+) -> dict[str, Any] | None:
+    """Récupère les stats de skill pour un match.
+    
+    Returns:
+        JSON du skill ou None si échec/non disponible.
+    """
+    if not ctx.fetch_skill or not xuids:
+        return None
+        
+    async def _get_skill():
+        resp = await ctx.client.skill.get_match_skill(match_id, xuids)
+        return await resp.json()
+
+    try:
+        skill_json = await _request_with_retries(_get_skill)
+        return skill_json if isinstance(skill_json, dict) else None
+    except Exception:
+        # Non bloquant: certains matchs n'ont pas de skill data
+        return None
+
+
+async def _fetch_highlight_events(ctx: ImportContext, match_id: str) -> list[Any]:
+    """Récupère les highlight events d'un match.
+    
+    Returns:
+        Liste des events ou liste vide si échec/désactivé.
+    """
+    if not ctx.fetch_highlight_events or ctx.film_mod is None:
+        return []
+        
+    async def _get_events():
+        return await ctx.film_mod.read_highlight_events(ctx.client, match_id=match_id)
+
+    try:
+        events = await _request_with_retries(_get_events)
+        return events if events else []
+    except Exception:
+        # Non bloquant: certains matchs/chunks peuvent être manquants
+        return []
+
+
+def _event_to_dict(e: Any) -> dict[str, Any]:
+    """Convertit un event en dict pour serialisation JSON."""
+    if isinstance(e, dict):
+        return e
+    if hasattr(e, "model_dump"):
+        return e.model_dump()
+    if hasattr(e, "dict"):
+        return e.dict()
+    if hasattr(e, "_asdict"):
+        return e._asdict()
+    return {"raw": str(e)}
+
+
+async def _process_single_match(
+    ctx: ImportContext,
+    match_id: str,
+) -> MatchResult:
+    """Traite un match complet: stats, skill, events, assets, aliases.
+    
+    C'est la fonction centrale qui peut être parallélisée.
+    Utilise db_lock pour protéger les écritures SQLite.
+    
+    Args:
+        ctx: Contexte d'import.
+        match_id: ID du match à traiter.
+        
+    Returns:
+        MatchResult avec les informations de traitement.
+    """
+    result = MatchResult(
+        match_id=match_id,
+        inserted=False,
+        aliases_updated=0,
+        xuids_seen=set(),
+    )
+    
+    # Match déjà connu ?
+    if match_id in ctx.existing_match_ids:
+        if ctx.delta_mode:
+            result.skipped_delta = True
+            return result
+        
+        # Backfill mode: on peut compléter skill/events/assets manquants
+        await _backfill_existing_match(ctx, match_id)
+        return result
+    
+    # --- Fetch match stats (réseau, peut être parallélisé) ---
+    match_json = await _fetch_match_stats(ctx, match_id)
+    if not match_json:
+        return result
+    
+    # Extraire XUIDs pour skill et aliases
+    xuids = _extract_xuids_from_match_stats(match_json)
+    if not xuids:
+        # Fallback: si player est un XUID
+        m = XUID_RE.search(str(ctx.player))
+        if m:
+            xi = _coerce_int(m.group(1))
+            if xi is not None:
+                xuids = [xi]
+    
+    result.xuids_seen = set(xuids)
+    
+    # --- Fetch skill stats en parallèle avec les events (réseau) ---
+    skill_task = _fetch_skill_stats(ctx, match_id, xuids)
+    events_task = _fetch_highlight_events(ctx, match_id)
+    
+    skill_json, events = await asyncio.gather(skill_task, events_task)
+    
+    # --- Section critique: écriture DB (protégée par lock) ---
+    async def _write_to_db():
+        cur = ctx.con.cursor()
+        
+        # Insert match stats
+        cur.execute(
+            "INSERT INTO MatchStats(ResponseBody) VALUES (?)",
+            (json.dumps(match_json, ensure_ascii=False),),
+        )
+        
+        # Insert skill stats
+        if skill_json:
+            cur.execute(
+                "INSERT INTO PlayerMatchStats(ResponseBody, MatchId) VALUES (?, ?)",
+                (json.dumps(skill_json, ensure_ascii=False), match_id),
+            )
+        
+        # Insert highlight events
+        if events:
+            for e in events:
+                cur.execute(
+                    "INSERT INTO HighlightEvents(MatchId, ResponseBody) VALUES (?, ?)",
+                    (match_id, json.dumps(_event_to_dict(e), ensure_ascii=False)),
+                )
+        
+        # Commit tout d'un coup
+        ctx.con.commit()
+        
+        # Aliases (aussi une écriture DB)
+        aliases = 0
+        if ctx.fetch_aliases:
+            aliases = _save_aliases_from_match(ctx.con, match_json)
+        
+        return aliases
+    
+    # Exécuter l'écriture DB protégée par le lock
+    if ctx.db_lock:
+        async with ctx.db_lock:
+            result.aliases_updated = await _write_to_db()
+    else:
+        result.aliases_updated = await _write_to_db()
+    
+    # --- Import assets (non critique, peut échouer) ---
+    mi = match_json.get("MatchInfo")
+    if ctx.fetch_assets and isinstance(mi, dict):
+        if ctx.db_lock:
+            async with ctx.db_lock:
+                await _import_assets_for_match_info(
+                    mi,
+                    client=ctx.client,
+                    con=ctx.con,
+                    asset_seen=ctx.asset_seen,
+                    asset_missing=ctx.asset_missing,
+                )
+        else:
+            await _import_assets_for_match_info(
+                mi,
+                client=ctx.client,
+                con=ctx.con,
+                asset_seen=ctx.asset_seen,
+                asset_missing=ctx.asset_missing,
+            )
+    
+    result.inserted = True
+    ctx.existing_match_ids.add(match_id)
+    return result
+
+
+async def _backfill_existing_match(ctx: ImportContext, match_id: str) -> None:
+    """Complète un match existant avec skill/events/assets manquants.
+    
+    Utilisé en mode full pour backfill des données manquantes.
+    """
+    cur = ctx.con.cursor()
+    
+    # Charger le match existant
+    existing = _load_match_json_from_db(ctx.con, match_id)
+    if not existing:
+        return
+    
+    # Backfill skill si manquant
+    if ctx.fetch_skill:
+        cur.execute("SELECT 1 FROM PlayerMatchStats WHERE MatchId = ? LIMIT 1", (match_id,))
+        if not cur.fetchone():
+            xuids = _extract_xuids_from_match_stats(existing)
+            if not xuids:
+                m = XUID_RE.search(str(ctx.player))
+                if m:
+                    xi = _coerce_int(m.group(1))
+                    if xi is not None:
+                        xuids = [xi]
+            if xuids:
+                skill_json = await _fetch_skill_stats(ctx, match_id, xuids)
+                if skill_json:
+                    cur.execute(
+                        "INSERT INTO PlayerMatchStats(ResponseBody, MatchId) VALUES (?, ?)",
+                        (json.dumps(skill_json, ensure_ascii=False), match_id),
+                    )
+                    ctx.con.commit()
+    
+    # Backfill assets
+    mi = existing.get("MatchInfo")
+    if ctx.fetch_assets and isinstance(mi, dict):
+        await _import_assets_for_match_info(
+            mi,
+            client=ctx.client,
+            con=ctx.con,
+            asset_seen=ctx.asset_seen,
+            asset_missing=ctx.asset_missing,
+        )
+    
+    # Backfill highlight events si manquants
+    if ctx.fetch_highlight_events and ctx.film_mod is not None:
+        cur.execute("SELECT 1 FROM HighlightEvents WHERE MatchId = ? LIMIT 1", (match_id,))
+        if not cur.fetchone():
+            events = await _fetch_highlight_events(ctx, match_id)
+            if events:
+                for e in events:
+                    cur.execute(
+                        "INSERT INTO HighlightEvents(MatchId, ResponseBody) VALUES (?, ?)",
+                        (match_id, json.dumps(_event_to_dict(e), ensure_ascii=False)),
+                    )
+                ctx.con.commit()
+
+
+async def _process_match_with_semaphore(
+    ctx: ImportContext,
+    match_id: str,
+) -> MatchResult:
+    """Wrapper qui utilise le semaphore pour limiter la concurrence."""
+    if ctx.semaphore:
+        async with ctx.semaphore:
+            return await _process_single_match(ctx, match_id)
+    return await _process_single_match(ctx, match_id)
+
+
+async def _import_matches_loop(
+    ctx: ImportContext,
+    *,
+    match_type: str,
+    max_matches: int,
+    start_offset: int = 0,
+    parallel: int = DEFAULT_PARALLEL_MATCHES,
+) -> tuple[int, int, set[int]]:
+    """Boucle principale d'import des matchs.
+    
+    En mode delta, traitement séquentiel (arrêt au premier match connu).
+    En mode full, traitement parallèle de `parallel` matchs à la fois.
+    
+    Args:
+        ctx: Contexte d'import.
+        match_type: Type de matchs.
+        max_matches: Nombre maximum de matchs à importer.
+        start_offset: Offset de départ dans l'historique.
+        parallel: Nombre de matchs traités en parallèle (mode full uniquement).
+        
+    Returns:
+        Tuple (matchs_insérés, aliases_mis_à_jour, xuids_vus).
+    """
+    inserted_total = 0
+    aliases_total = 0
+    all_xuids: set[int] = set()
+    
+    start = start_offset
+    remaining = max_matches
+    
+    # Mode delta: traitement séquentiel obligatoire
+    if ctx.delta_mode:
+        while remaining > 0:
+            batch_size = min(25, remaining)
+            
+            match_ids = await _fetch_match_history_batch(
+                ctx, start=start, count=batch_size, match_type=match_type
+            )
+            if not match_ids:
+                break
+            
+            for mid in match_ids:
+                if remaining <= 0:
+                    break
+                    
+                result = await _process_single_match(ctx, mid)
+                
+                if result.skipped_delta:
+                    print(f"[DELTA] Match {mid} déjà connu — arrêt (delta mode).")
+                    return inserted_total, aliases_total, all_xuids
+                
+                if result.inserted:
+                    inserted_total += 1
+                    aliases_total += result.aliases_updated
+                    all_xuids.update(result.xuids_seen)
+                    
+                    if inserted_total % 10 == 0:
+                        print(f"Imported {inserted_total} matches... ({aliases_total} aliases)")
+                
+                start += 1
+                remaining -= 1
+            
+            if len(match_ids) < batch_size:
+                break
+        
+        return inserted_total, aliases_total, all_xuids
+    
+    # Mode full: traitement parallèle
+    print(f"[PARALLEL] Mode parallèle activé ({parallel} matchs simultanés)")
+    
+    while remaining > 0:
+        batch_size = min(25, remaining)
+        
+        match_ids = await _fetch_match_history_batch(
+            ctx, start=start, count=batch_size, match_type=match_type
+        )
+        if not match_ids:
+            break
+        
+        # Filtrer les matchs déjà connus (en mode full, on continue avec les autres)
+        new_match_ids = [mid for mid in match_ids if mid not in ctx.existing_match_ids]
+        skipped = len(match_ids) - len(new_match_ids)
+        
+        if new_match_ids:
+            # Traiter par sous-batches de `parallel` matchs
+            for i in range(0, len(new_match_ids), parallel):
+                sub_batch = new_match_ids[i:i + parallel]
+                if not sub_batch:
+                    break
+                
+                # Lancer les tâches en parallèle
+                tasks = [_process_match_with_semaphore(ctx, mid) for mid in sub_batch]
+                results = await asyncio.gather(*tasks, return_exceptions=True)
+                
+                for result in results:
+                    if isinstance(result, Exception):
+                        print(f"[WARN] Erreur lors du traitement d'un match: {result}")
+                        continue
+                    
+                    if result.inserted:
+                        inserted_total += 1
+                        aliases_total += result.aliases_updated
+                        all_xuids.update(result.xuids_seen)
+                
+                if inserted_total > 0 and inserted_total % 10 == 0:
+                    print(f"Imported {inserted_total} matches... ({aliases_total} aliases)")
+        
+        # Avancer dans l'historique
+        start += len(match_ids)
+        remaining -= len(match_ids)
+        
+        if len(match_ids) < batch_size:
+            break
+    
+    return inserted_total, aliases_total, all_xuids
+
+
+# ==============================================================================
+# MAIN ENTRY POINT
+# ==============================================================================
+
+
 async def main_async(argv: list[str]) -> int:
     _load_dotenv_if_present()
     ap = argparse.ArgumentParser(description="Import SPNKr -> DB compatible OpenSpartan")
@@ -874,7 +1331,38 @@ async def main_async(argv: list[str]) -> int:
 
         from aiohttp import ClientTimeout
 
-        async with ClientSession(timeout=ClientTimeout(total=45)) as session:
+        # Tenter d'utiliser le cache HTTP pour les assets (optionnel)
+        # Les assets (maps, playlists) ont un Max-Age de 5h côté serveur
+        session_class = ClientSession
+        session_kwargs: dict[str, Any] = {"timeout": ClientTimeout(total=45)}
+        
+        try:
+            from aiohttp_client_cache import CachedSession, SQLiteBackend
+            cache_dir = Path(out_db).parent / "cache"
+            cache_dir.mkdir(parents=True, exist_ok=True)
+            cache_db = cache_dir / "spnkr_http_cache.db"
+            
+            session_class = CachedSession  # type: ignore[assignment]
+            session_kwargs["cache"] = SQLiteBackend(
+                cache_name=str(cache_db),
+                expire_after=18000,  # 5 heures (comme le Max-Age des assets)
+                urls_expire_after={
+                    # Stats des matchs: pas de cache (données dynamiques)
+                    "*halostats.svc.halowaypoint.com*": 0,
+                    # Skill: pas de cache (données dynamiques)
+                    "*skill.svc.halowaypoint.com*": 0,
+                    # Assets UGC: cache 5h (maps, playlists, variants)
+                    "*discovery-infiniteugc.svc.halowaypoint.com*": 18000,
+                    # CMS (médailles, metadata): cache 24h
+                    "*gamecms-hacs.svc.halowaypoint.com*": 86400,
+                }
+            )
+            print("[CACHE] HTTP cache activé pour les assets (aiohttp-client-cache)")
+        except ImportError:
+            # Cache non disponible, on continue sans
+            pass
+
+        async with session_class(**session_kwargs) as session:
             client = HaloInfiniteClient(
                 session=session,
                 spartan_token=tokens.spartan_token,
@@ -892,238 +1380,39 @@ async def main_async(argv: list[str]) -> int:
             player = args.player
             # `--player` peut être "123..." ou gamertag. SPNKr accepte les deux.
 
-            inserted = 0
-            aliases_updated = 0
-            all_xuids_seen: set[int] = set()  # Collecte tous les XUIDs rencontrés
             asset_tables = ["Maps", "Playlists", "PlaylistMapModePairs", "GameVariants"]
             asset_seen: set[tuple[str, str, str]] = _seed_asset_seen_from_db(con, asset_tables)
             asset_missing: set[tuple[str, str, str]] = set()
 
-            start = int(args.start)
-            remaining = int(args.max_matches)
+            # Lock pour les écritures DB et semaphore pour la concurrence
+            db_lock = asyncio.Lock()
+            semaphore = asyncio.Semaphore(DEFAULT_PARALLEL_MATCHES)
 
-            while remaining > 0:
-                batch = min(25, remaining)
+            # Créer le contexte d'import
+            ctx = ImportContext(
+                client=client,
+                con=con,
+                existing_match_ids=existing_match_ids,
+                asset_seen=asset_seen,
+                asset_missing=asset_missing,
+                film_mod=film_mod,
+                fetch_skill=not args.no_skill,
+                fetch_assets=not args.no_assets,
+                fetch_highlight_events=fetch_highlight_events,
+                fetch_aliases=fetch_aliases,
+                delta_mode=delta_mode,
+                player=player,
+                db_lock=db_lock,
+                semaphore=semaphore,
+            )
 
-                async def _get_hist():
-                    resp = await client.stats.get_match_history(player, start=start, count=batch, match_type=args.match_type)
-                    return await resp.parse()
-
-                history = await _request_with_retries(_get_hist)
-                if not getattr(history, "results", None):
-                    break
-
-                match_ids = [str(r.match_id) for r in history.results]
-
-                for mid in match_ids:
-                    if remaining <= 0:
-                        break
-                    if mid in existing_match_ids:
-                        # Mode DELTA: dès qu'on rencontre un match connu, on s'arrête.
-                        # Puisque l'historique est trié du plus récent au plus ancien, 
-                        # tout ce qui suit est forcément déjà en DB.
-                        if delta_mode:
-                            print(f"[DELTA] Match {mid} déjà connu — arrêt (delta mode).")
-                            remaining = 0
-                            break
-
-                        # Backfill: PlayerMatchStats (skill) manquant sur une DB existante.
-                        # Cas typique: première import avec --no-skill, puis refresh sans --no-skill.
-                        if not args.no_skill:
-                            try:
-                                cur = con.cursor()
-                                cur.execute(
-                                    "SELECT 1 FROM PlayerMatchStats WHERE MatchId = ? LIMIT 1",
-                                    (mid,),
-                                )
-                                has_skill = cur.fetchone() is not None
-                            except Exception:
-                                has_skill = False
-
-                            if not has_skill:
-                                try:
-                                    existing = _load_match_json_from_db(con, mid)
-                                    xuids = _extract_xuids_from_match_stats(existing)
-                                    if not xuids:
-                                        # fallback: si player est un xuid
-                                        m = XUID_RE.search(str(player))
-                                        if m:
-                                            xi = _coerce_int(m.group(1))
-                                            if xi is not None:
-                                                xuids = [xi]
-
-                                    if xuids:
-                                        async def _get_skill_existing():
-                                            resp = await client.skill.get_match_skill(mid, xuids)
-                                            return await resp.json()
-
-                                        skill_json = await _request_with_retries(_get_skill_existing)
-                                        if isinstance(skill_json, dict):
-                                            cur.execute(
-                                                "INSERT INTO PlayerMatchStats(ResponseBody, MatchId) VALUES (?, ?)",
-                                                (json.dumps(skill_json, ensure_ascii=False), mid),
-                                            )
-                                            con.commit()
-                                except Exception:
-                                    # Non bloquant: certains matchs n'ont pas de skill data.
-                                    pass
-
-                        # Match déjà en DB: on peut quand même backfill les assets si demandé.
-                        if not args.no_assets:
-                            existing = _load_match_json_from_db(con, mid)
-                            mi = existing.get("MatchInfo") if isinstance(existing, dict) else None
-                            if isinstance(mi, dict):
-                                await _import_assets_for_match_info(
-                                    mi,
-                                    client=client,
-                                    con=con,
-                                    asset_seen=asset_seen,
-                                    asset_missing=asset_missing,
-                                )
-
-                        # Backfill highlight events si demandé et si absent.
-                        if fetch_highlight_events and film_mod is not None:
-                            try:
-                                cur = con.cursor()
-                                cur.execute(
-                                    "SELECT 1 FROM HighlightEvents WHERE MatchId = ? LIMIT 1",
-                                    (mid,),
-                                )
-                                has_events = cur.fetchone() is not None
-                            except Exception:
-                                has_events = False
-
-                            if not has_events:
-                                try:
-                                    async def _get_events_existing():
-                                        return await film_mod.read_highlight_events(client, match_id=mid)
-
-                                    events = await _request_with_retries(_get_events_existing)
-                                    if events:
-                                        cur = con.cursor()
-
-                                        def _event_to_dict(e: Any) -> dict[str, Any]:
-                                            if isinstance(e, dict):
-                                                return e
-                                            if hasattr(e, "model_dump"):
-                                                return e.model_dump()  # type: ignore[no-any-return]
-                                            if hasattr(e, "dict"):
-                                                return e.dict()  # type: ignore[no-any-return]
-                                            if hasattr(e, "_asdict"):
-                                                return e._asdict()  # type: ignore[no-any-return]
-                                            return {"raw": str(e)}
-
-                                        for e in events:
-                                            cur.execute(
-                                                "INSERT INTO HighlightEvents(MatchId, ResponseBody) VALUES (?, ?)",
-                                                (mid, json.dumps(_event_to_dict(e), ensure_ascii=False)),
-                                            )
-                                        con.commit()
-                                except Exception:
-                                    pass
-                        start += 1
-                        remaining -= 1
-                        continue
-
-                    # --- MatchStats ---
-                    async def _get_match():
-                        resp = await client.stats.get_match_stats(mid)
-                        return await resp.json()
-
-                    match_json = await _request_with_retries(_get_match)
-                    if not isinstance(match_json, dict):
-                        start += 1
-                        remaining -= 1
-                        continue
-
-                    cur = con.cursor()
-                    cur.execute("INSERT INTO MatchStats(ResponseBody) VALUES (?)", (json.dumps(match_json, ensure_ascii=False),))
-
-                    # --- PlayerMatchStats (skill) ---
-                    # On essaie de récupérer les xuids du match pour maximiser la qualité des TeamMmrs.
-                    xuids = _extract_xuids_from_match_stats(match_json)
-                    if not xuids:
-                        # fallback: si player est un xuid
-                        m = XUID_RE.search(str(player))
-                        if m:
-                            xi = _coerce_int(m.group(1))
-                            if xi is not None:
-                                xuids = [xi]
-
-                    if (not args.no_skill) and xuids:
-                        async def _get_skill():
-                            resp = await client.skill.get_match_skill(mid, xuids)
-                            return await resp.json()
-
-                        try:
-                            skill_json = await _request_with_retries(_get_skill)
-                            if isinstance(skill_json, dict):
-                                cur.execute(
-                                    "INSERT INTO PlayerMatchStats(ResponseBody, MatchId) VALUES (?, ?)",
-                                    (json.dumps(skill_json, ensure_ascii=False), mid),
-                                )
-                        except Exception:
-                            # Non bloquant (certains matchs n'ont pas de skill data)
-                            pass
-
-                    # Commit au plus tôt pour éviter de perdre le match si un fetch d'asset hang.
-                    con.commit()
-
-                    # --- Sauvegarder les aliases depuis le match ---
-                    if fetch_aliases:
-                        aliases_updated += _save_aliases_from_match(con, match_json)
-                        # Collecter les XUIDs pour un éventuel refresh API
-                        all_xuids_seen.update(_extract_xuids_from_match_stats(match_json))
-
-                    # --- Highlight events (par défaut) ---
-                    if fetch_highlight_events and film_mod is not None:
-                        try:
-                            async def _get_events():
-                                return await film_mod.read_highlight_events(client, match_id=mid)
-
-                            events = await _request_with_retries(_get_events)
-                            if events:
-                                cur = con.cursor()
-
-                                def _event_to_dict(e: Any) -> dict[str, Any]:
-                                    if isinstance(e, dict):
-                                        return e
-                                    if hasattr(e, "model_dump"):
-                                        return e.model_dump()  # type: ignore[no-any-return]
-                                    if hasattr(e, "dict"):
-                                        return e.dict()  # type: ignore[no-any-return]
-                                    if hasattr(e, "_asdict"):
-                                        return e._asdict()  # type: ignore[no-any-return]
-                                    return {"raw": str(e)}
-
-                                for e in events:
-                                    cur.execute(
-                                        "INSERT INTO HighlightEvents(MatchId, ResponseBody) VALUES (?, ?)",
-                                        (mid, json.dumps(_event_to_dict(e), ensure_ascii=False)),
-                                    )
-                                con.commit()
-                        except Exception:
-                            # Non bloquant: certains matchs/chunks peuvent être manquants.
-                            pass
-
-                    # --- Assets (optionnel mais utile pour les noms) ---
-                    mi = match_json.get("MatchInfo")
-                    if (not args.no_assets) and isinstance(mi, dict):
-                        await _import_assets_for_match_info(
-                            mi,
-                            client=client,
-                            con=con,
-                            asset_seen=asset_seen,
-                            asset_missing=asset_missing,
-                        )
-
-                    inserted += 1
-                    existing_match_ids.add(mid)
-                    remaining -= 1
-                    start += 1
-
-                    if inserted % 10 == 0:
-                        print(f"Imported {inserted} matches... ({aliases_updated} aliases)")
+            # Lancer l'import via la fonction refactorisée
+            inserted, aliases_updated, all_xuids_seen = await _import_matches_loop(
+                ctx,
+                match_type=args.match_type,
+                max_matches=int(args.max_matches),
+                start_offset=int(args.start),
+            )
 
             # --- Refresh aliases via API pour les XUIDs sans gamertag ---
             if fetch_aliases and all_xuids_seen:
