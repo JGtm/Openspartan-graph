@@ -78,7 +78,11 @@ def cached_compute_sessions_db(
     gap_minutes: int,
 ) -> pd.DataFrame:
     """Compute sessions sur la base (cache)."""
-    df0 = load_df(db_path, xuid, db_key=db_key)
+    df0 = load_df_optimized(db_path, xuid, db_key=db_key, include_firefight=include_firefight)
+    if df0.empty:
+        df0["session_id"] = pd.Series(dtype=int)
+        df0["session_label"] = pd.Series(dtype=str)
+        return df0
     df0 = mark_firefight(df0)
     if (not include_firefight) and ("is_firefight" in df0.columns):
         df0 = df0.loc[~df0["is_firefight"]].copy()
