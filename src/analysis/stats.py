@@ -77,6 +77,105 @@ def compute_global_ratio(df: pd.DataFrame) -> Optional[float]:
     return (float(df["kills"].sum()) + (float(df["assists"].sum()) / 2.0)) / deaths
 
 
+def extract_mode_category(pair_name: str | None) -> str:
+    """Extrait la catégorie de mode depuis le pair_name.
+    
+    Exemples:
+        "Arena:CTF on Aquarius" → "Arena"
+        "BTB:CTF" → "BTB"
+        "Firefight: Kilo Five" → "Firefight"
+        "Slayer" → "Unknown"
+    
+    Args:
+        pair_name: Nom du couple mode/carte (ex: "Arena:Slayer on Aquarius").
+        
+    Returns:
+        Catégorie du mode (Arena, BTB, Firefight, Community, etc.) ou "Unknown".
+    """
+    if not pair_name:
+        return "Unknown"
+    
+    s = str(pair_name).strip()
+    
+    # Format "Category:Mode" ou "Category:Mode on Map"
+    if ":" in s:
+        category = s.split(":", 1)[0].strip()
+        # Normaliser les noms courants
+        cat_lower = category.lower()
+        if cat_lower in ("arena", "arène"):
+            return "Arena"
+        if cat_lower in ("btb", "big team battle", "btb:"):
+            return "BTB"
+        if "firefight" in cat_lower or "pve" in cat_lower:
+            return "Firefight"
+        if cat_lower in ("ranked", "classé", "classée"):
+            return "Ranked"
+        if cat_lower in ("community", "communauté"):
+            return "Community"
+        return category.title()
+    
+    # Pas de préfixe, essayer de deviner
+    s_lower = s.lower()
+    if "firefight" in s_lower or "pve" in s_lower:
+        return "Firefight"
+    if "big team" in s_lower or "btb" in s_lower:
+        return "BTB"
+    
+    return "Unknown"
+
+
+def compute_mode_category_averages(
+    df: pd.DataFrame,
+    category: str,
+) -> dict[str, float | None]:
+    """Calcule les moyennes historiques pour une catégorie de mode.
+    
+    Args:
+        df: DataFrame des matchs avec colonnes pair_name, kills, deaths, assists.
+        category: Catégorie de mode (Arena, BTB, Firefight, etc.).
+        
+    Returns:
+        Dict avec les moyennes: avg_kills, avg_deaths, avg_assists, avg_ratio, match_count.
+    """
+    empty_result = {
+        "avg_kills": None,
+        "avg_deaths": None,
+        "avg_assists": None,
+        "avg_ratio": None,
+        "match_count": 0,
+    }
+    
+    if df.empty:
+        return empty_result
+    
+    # Filtrer par catégorie - vectorisé pour performance
+    mask = df["pair_name"].apply(extract_mode_category) == category
+    filtered = df.loc[mask]
+    
+    if filtered.empty:
+        return empty_result
+    
+    match_count = len(filtered)
+    avg_kills = filtered["kills"].mean()
+    avg_deaths = filtered["deaths"].mean()
+    avg_assists = filtered["assists"].mean()
+    
+    # Ratio moyen (somme des frags / somme des morts)
+    total_deaths = filtered["deaths"].sum()
+    if total_deaths > 0:
+        avg_ratio = (filtered["kills"].sum() + filtered["assists"].sum() / 2.0) / total_deaths
+    else:
+        avg_ratio = None
+    
+    return {
+        "avg_kills": float(avg_kills) if pd.notna(avg_kills) else None,
+        "avg_deaths": float(avg_deaths) if pd.notna(avg_deaths) else None,
+        "avg_assists": float(avg_assists) if pd.notna(avg_assists) else None,
+        "avg_ratio": float(avg_ratio) if avg_ratio is not None else None,
+        "match_count": len(filtered),
+    }
+
+
 def format_selected_matches_summary(n: int, rates: OutcomeRates) -> str:
     """Formate un résumé des matchs sélectionnés pour l'UI.
     
@@ -109,4 +208,12 @@ def format_selected_matches_summary(n: int, rates: OutcomeRates) -> str:
 
 # NOTE: format_mmss est importé depuis src.ui.formatting pour éviter la duplication.
 # Re-export pour rétrocompatibilité des imports existants.
-__all__ = ["compute_aggregated_stats", "compute_outcome_rates", "compute_global_ratio", "format_selected_matches_summary", "format_mmss"]
+__all__ = [
+    "compute_aggregated_stats",
+    "compute_outcome_rates",
+    "compute_global_ratio",
+    "format_selected_matches_summary",
+    "format_mmss",
+    "extract_mode_category",
+    "compute_mode_category_averages",
+]

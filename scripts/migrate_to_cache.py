@@ -87,10 +87,58 @@ FIREFIGHT_PATTERNS = [
 
 # XUIDs des amis proches (seuls ceux-ci comptent pour le changement de session)
 # Laisser vide pour considérer TOUS les coéquipiers
+# NOTE: Sera remplacé par la liste d'amis depuis la table Friends si disponible
 FRIENDS_XUIDS: set[str] = {
     "2533274858283686",  # Madina97294
     "2535469190789936",  # Chocoboflor
 }
+
+
+def load_friends_xuids_from_db(con: sqlite3.Connection, owner_xuid: str) -> set[str]:
+    """Charge les XUIDs des amis depuis la table Friends.
+    
+    Args:
+        con: Connexion SQLite.
+        owner_xuid: XUID du joueur principal.
+    
+    Returns:
+        Set des XUIDs des amis connus.
+    """
+    try:
+        cur = con.cursor()
+        cur.execute(
+            "SELECT friend_xuid FROM Friends WHERE owner_xuid = ?",
+            (owner_xuid,),
+        )
+        xuids = {row[0] for row in cur.fetchall() if row[0] and not row[0].startswith("unknown:")}
+        return xuids
+    except sqlite3.OperationalError:
+        return set()
+
+
+def compute_known_teammates(
+    teammates_sig: str,
+    friends_xuids: set[str],
+) -> tuple[int, bool, str]:
+    """Calcule le nombre de coéquipiers connus (amis) dans un match.
+    
+    Args:
+        teammates_sig: Signature des coéquipiers (XUIDs séparés par virgule).
+        friends_xuids: Set des XUIDs des amis connus.
+    
+    Returns:
+        Tuple (known_teammates_count, is_with_friends, friends_xuids_str).
+        friends_xuids_str contient les XUIDs des amis présents, séparés par virgule.
+    """
+    if not teammates_sig or not friends_xuids:
+        return (0, False, "")
+    
+    teammates = set(teammates_sig.split(","))
+    known = teammates & friends_xuids
+    count = len(known)
+    # Retourner les XUIDs des amis présents, triés pour cohérence
+    friends_str = ",".join(sorted(known)) if known else ""
+    return (count, count > 0, friends_str)
 
 
 def should_start_new_session_on_teammate_change(
@@ -548,13 +596,30 @@ def migrate_match_cache(
     con: sqlite3.Connection,
     xuid: str,
     dry_run: bool = False,
+    friends_xuids: set[str] | None = None,
 ) -> list[MatchForSession]:
     """Peuple MatchCache depuis MatchStats.
+    
+    Args:
+        con: Connexion SQLite.
+        xuid: XUID du joueur principal.
+        dry_run: Si True, n'effectue pas les modifications.
+        friends_xuids: Set des XUIDs des amis connus (pour is_with_friends).
     
     Returns:
         Liste des matchs pour le calcul de session.
     """
     cur = con.cursor()
+    
+    # Si pas d'amis fournis, charger depuis la DB
+    if friends_xuids is None:
+        friends_xuids = load_friends_xuids_from_db(con, xuid)
+        # Fallback sur les amis prédéfinis si DB vide
+        if not friends_xuids:
+            friends_xuids = FRIENDS_XUIDS
+    
+    if friends_xuids:
+        print(f"  → {len(friends_xuids)} amis connus pour le calcul is_with_friends")
     
     # Charger les noms d'assets
     asset_names: dict[str, dict[str, str]] = {}
@@ -648,6 +713,11 @@ def migrate_match_cache(
             outcome,
         )
         
+        # Calculer le nombre de coéquipiers connus (amis)
+        known_teammates_count, is_with_friends, friends_xuids_str = compute_known_teammates(
+            teammates_sig, friends_xuids
+        )
+        
         # Préparer la ligne pour MatchCache
         cache_rows.append((
             match_id,
@@ -681,6 +751,9 @@ def migrate_match_cache(
             perf_score,
             is_ff,
             teammates_sig,
+            known_teammates_count,
+            1 if is_with_friends else 0,
+            friends_xuids_str,
         ))
         
         matches_for_session.append(MatchForSession(
@@ -702,13 +775,17 @@ def migrate_match_cache(
             outcome, last_team_id, kills, deaths, assists, accuracy, kda,
             time_played_seconds, average_life_seconds, max_killing_spree, headshot_kills,
             my_team_score, enemy_team_score, team_mmr, enemy_mmr,
-            session_id, session_label, performance_score, is_firefight, teammates_signature
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            session_id, session_label, performance_score, is_firefight, teammates_signature,
+            known_teammates_count, is_with_friends, friends_xuids
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         cache_rows,
     )
     con.commit()
-    print(f"✓ MatchCache peuplé ({len(cache_rows)} matchs)")
+    
+    # Compter les matchs avec amis
+    with_friends_count = sum(1 for row in cache_rows if row[-1] == 1)
+    print(f"✓ MatchCache peuplé ({len(cache_rows)} matchs, {with_friends_count} avec amis)")
     
     return matches_for_session
 
@@ -1015,6 +1092,101 @@ def insert_predefined_friends(
         print(f"✓ {len(PREDEFINED_FRIENDS)} amis ajoutés")
 
 
+def update_is_with_friends(
+    con: sqlite3.Connection,
+    xuid: str,
+    dry_run: bool = False,
+) -> None:
+    """Met à jour les colonnes known_teammates_count et is_with_friends pour les matchs existants.
+    
+    Cette fonction est utile pour :
+    1. Mettre à jour les matchs après ajout de nouveaux amis
+    2. Recalculer après migration depuis une ancienne version du schéma
+    
+    Args:
+        con: Connexion SQLite.
+        xuid: XUID du joueur principal.
+        dry_run: Si True, n'effectue pas les modifications.
+    """
+    cur = con.cursor()
+    
+    # Vérifier que la table MatchCache existe
+    cur.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='MatchCache'"
+    )
+    if not cur.fetchone():
+        print("  ❌ Table MatchCache introuvable. Exécutez d'abord la migration complète :")
+        print(f"     python scripts/migrate_to_cache.py --db <path> --xuid {xuid}")
+        return
+    
+    # Vérifier si les colonnes existent, sinon les ajouter
+    cur.execute("PRAGMA table_info(MatchCache)")
+    columns = {row[1] for row in cur.fetchall()}
+    
+    if "known_teammates_count" not in columns:
+        print("  → Ajout colonne known_teammates_count...")
+        if not dry_run:
+            cur.execute("ALTER TABLE MatchCache ADD COLUMN known_teammates_count INTEGER NOT NULL DEFAULT 0")
+    
+    if "is_with_friends" not in columns:
+        print("  → Ajout colonne is_with_friends...")
+        if not dry_run:
+            cur.execute("ALTER TABLE MatchCache ADD COLUMN is_with_friends INTEGER NOT NULL DEFAULT 0")
+    
+    if "friends_xuids" not in columns:
+        print("  → Ajout colonne friends_xuids...")
+        if not dry_run:
+            cur.execute("ALTER TABLE MatchCache ADD COLUMN friends_xuids TEXT DEFAULT ''")
+    
+    if not dry_run:
+        con.commit()
+    
+    # Charger les amis depuis la DB
+    friends_xuids = load_friends_xuids_from_db(con, xuid)
+    if not friends_xuids:
+        friends_xuids = FRIENDS_XUIDS
+    
+    if not friends_xuids:
+        print("  ⚠ Aucun ami trouvé, is_with_friends sera 0 pour tous les matchs")
+        return
+    
+    print(f"  → {len(friends_xuids)} amis connus")
+    
+    # Charger tous les matchs avec leurs teammates_signature
+    cur.execute(
+        """
+        SELECT match_id, teammates_signature 
+        FROM MatchCache 
+        WHERE xuid = ?
+        """,
+        (xuid,),
+    )
+    
+    updates: list[tuple[int, int, str, str]] = []
+    with_friends_count = 0
+    
+    for (match_id, teammates_sig) in cur.fetchall():
+        count, is_with, friends_str = compute_known_teammates(teammates_sig or "", friends_xuids)
+        updates.append((count, 1 if is_with else 0, friends_str, match_id))
+        if is_with:
+            with_friends_count += 1
+    
+    if dry_run:
+        print(f"  [DRY-RUN] {len(updates)} matchs à mettre à jour ({with_friends_count} avec amis)")
+        return
+    
+    cur.executemany(
+        """
+        UPDATE MatchCache 
+        SET known_teammates_count = ?, is_with_friends = ?, friends_xuids = ?
+        WHERE match_id = ?
+        """,
+        updates,
+    )
+    con.commit()
+    print(f"✓ {len(updates)} matchs mis à jour ({with_friends_count} avec amis)")
+
+
 def run_migration(
     db_path: str,
     xuid: str,
@@ -1033,29 +1205,36 @@ def run_migration(
     with get_connection(db_path) as con:
         # Étape 1: Créer/réinitialiser les tables
         if force:
-            print("[1/5] Suppression des tables existantes...")
+            print("[1/6] Suppression des tables existantes...")
             if not dry_run:
                 drop_cache_tables(con)
         
-        print("[1/5] Création des tables de cache...")
+        print("[1/6] Création des tables de cache...")
         if not dry_run:
             create_cache_tables(con)
         
-        # Étape 2: Peupler MatchCache
-        print("\n[2/5] Migration de MatchStats → MatchCache...")
+        # Étape 2: Insérer les amis AVANT le calcul de is_with_friends
+        print("\n[2/6] Insertion des amis prédéfinis...")
+        # On fait une première passe pour insérer les amis (sans matches_data)
+        insert_predefined_friends(con, xuid, dry_run, matches_data=None)
+        
+        # Étape 3: Peupler MatchCache (avec is_with_friends correct)
+        print("\n[3/6] Migration de MatchStats → MatchCache...")
         matches = migrate_match_cache(con, xuid, dry_run)
         
-        # Étape 3: Calculer les sessions
-        print("\n[3/5] Calcul des sessions...")
+        # Étape 4: Calculer les sessions
+        print("\n[4/6] Calcul des sessions...")
         update_sessions(con, matches, dry_run)
         
-        # Étape 4: Agréger les coéquipiers
-        print("\n[4/5] Agrégation des statistiques de coéquipiers...")
+        # Étape 5: Agréger les coéquipiers
+        print("\n[5/6] Agrégation des statistiques de coéquipiers...")
         migrate_teammates_aggregate(con, xuid, dry_run, matches_data=matches)
         
-        # Étape 5: Insérer les amis
-        print("\n[5/5] Insertion des amis prédéfinis...")
+        # Étape 6: Mettre à jour les amis avec les XUID résolus + recalculer is_with_friends
+        print("\n[6/6] Finalisation des amis et is_with_friends...")
         insert_predefined_friends(con, xuid, dry_run, matches_data=matches)
+        # Recalculer is_with_friends maintenant que les amis ont leurs vrais XUIDs
+        update_is_with_friends(con, xuid, dry_run)
     
     print(f"\n{'='*60}")
     print("✓ Migration terminée avec succès !" if not dry_run else "✓ Dry-run terminé")
@@ -1089,6 +1268,11 @@ def main():
         action="store_true",
         help="Affiche ce qui serait fait sans modifier la DB",
     )
+    parser.add_argument(
+        "--update-friends",
+        action="store_true",
+        help="Met à jour uniquement is_with_friends (après ajout d'amis)",
+    )
     
     args = parser.parse_args()
     
@@ -1106,7 +1290,22 @@ def main():
         print("   Spécifiez --xuid ou définissez OPENSPARTAN_DEFAULT_XUID")
         sys.exit(1)
     
-    run_migration(db_path, xuid, force=args.force, dry_run=args.dry_run)
+    # Mode spécial: mise à jour is_with_friends uniquement
+    if args.update_friends:
+        print(f"\n{'='*60}")
+        print("Mise à jour is_with_friends")
+        print(f"{'='*60}")
+        print(f"DB: {db_path}")
+        print(f"XUID: {xuid}")
+        print(f"Mode: {'DRY-RUN' if args.dry_run else 'RÉEL'}")
+        print(f"{'='*60}\n")
+        
+        with get_connection(db_path) as con:
+            update_is_with_friends(con, xuid, dry_run=args.dry_run)
+        
+        print(f"\n✓ Terminé !")
+    else:
+        run_migration(db_path, xuid, force=args.force, dry_run=args.dry_run)
 
 
 if __name__ == "__main__":

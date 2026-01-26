@@ -77,7 +77,8 @@ def load_matches_cached(
                 outcome, last_team_id, kda, max_killing_spree, headshot_kills,
                 average_life_seconds, time_played_seconds, kills, deaths, assists,
                 accuracy, my_team_score, enemy_team_score, team_mmr, enemy_mmr,
-                session_id, session_label, performance_score, is_firefight, teammates_signature
+                session_id, session_label, performance_score, is_firefight, teammates_signature,
+                known_teammates_count, is_with_friends
             FROM MatchCache
             WHERE xuid = ?
         """
@@ -116,6 +117,7 @@ def load_matches_cached(
                 avg_life, time_played, kills, deaths, assists,
                 accuracy, my_team_score, enemy_team_score, team_mmr, enemy_mmr,
                 session_id, session_label, perf_score, is_ff, teammates_sig,
+                known_teammates_count, is_with_friends_int, friends_xuids_str,
             ) = row
             
             # Parser le timestamp
@@ -151,6 +153,9 @@ def load_matches_cached(
                     enemy_team_score=enemy_team_score,
                     team_mmr=team_mmr,
                     enemy_mmr=enemy_mmr,
+                    known_teammates_count=known_teammates_count or 0,
+                    is_with_friends=bool(is_with_friends_int),
+                    friends_xuids=friends_xuids_str or "",
                 )
             )
         
@@ -294,7 +299,8 @@ def load_session_matches_cached(
                 outcome, last_team_id, kda, max_killing_spree, headshot_kills,
                 average_life_seconds, time_played_seconds, kills, deaths, assists,
                 accuracy, my_team_score, enemy_team_score, team_mmr, enemy_mmr,
-                session_id, session_label, performance_score, is_firefight, teammates_signature
+                session_id, session_label, performance_score, is_firefight, teammates_signature,
+                known_teammates_count, is_with_friends, friends_xuids
             FROM MatchCache
             WHERE xuid = ? AND session_id = ?
             ORDER BY start_time ASC
@@ -312,6 +318,7 @@ def load_session_matches_cached(
                 avg_life, time_played, kills, deaths, assists,
                 accuracy, my_team_score, enemy_team_score, team_mmr, enemy_mmr,
                 sess_id, sess_label, perf_score, is_ff, teammates_sig,
+                known_teammates_count, is_with_friends_int, friends_xuids_str,
             ) = row
             
             try:
@@ -346,6 +353,9 @@ def load_session_matches_cached(
                     enemy_team_score=enemy_team_score,
                     team_mmr=team_mmr,
                     enemy_mmr=enemy_mmr,
+                    known_teammates_count=known_teammates_count or 0,
+                    is_with_friends=bool(is_with_friends_int),
+                    friends_xuids=friends_xuids_str or "",
                 )
             )
         

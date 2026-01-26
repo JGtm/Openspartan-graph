@@ -51,6 +51,10 @@ CREATE TABLE IF NOT EXISTS MatchCache (
     is_firefight INTEGER NOT NULL DEFAULT 0,
     -- Coéquipiers (XUIDs séparés par virgule, triés)
     teammates_signature TEXT,
+    -- Amis détectés dans l'équipe
+    known_teammates_count INTEGER NOT NULL DEFAULT 0,
+    is_with_friends INTEGER NOT NULL DEFAULT 0,
+    friends_xuids TEXT DEFAULT '',
     -- Métadonnées
     created_at TEXT DEFAULT (datetime('now')),
     updated_at TEXT DEFAULT (datetime('now'))
@@ -64,6 +68,7 @@ CREATE_MATCH_CACHE_INDEXES = [
     "CREATE INDEX IF NOT EXISTS idx_MatchCache_playlist ON MatchCache(xuid, playlist_id)",
     "CREATE INDEX IF NOT EXISTS idx_MatchCache_map ON MatchCache(xuid, map_id)",
     "CREATE INDEX IF NOT EXISTS idx_MatchCache_teammates ON MatchCache(xuid, teammates_signature)",
+    "CREATE INDEX IF NOT EXISTS idx_MatchCache_friends ON MatchCache(xuid, is_with_friends)",
 ]
 
 
@@ -177,7 +182,7 @@ CREATE TABLE IF NOT EXISTS CacheMeta (
 """
 
 # Version du schéma de cache (à incrémenter si changement majeur)
-CACHE_SCHEMA_VERSION = "1.0"
+CACHE_SCHEMA_VERSION = "1.1"
 
 
 # =============================================================================

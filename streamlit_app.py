@@ -464,14 +464,28 @@ def _is_uuid_like(s: str) -> bool:
 
 
 def _normalize_map_label(map_name: str | None) -> str | None:
+    """Normalise le nom d'une carte pour le filtre.
+    
+    - Supprime les suffixes après '-' (ex: 'Aquarius - Live Fire' → 'Aquarius')
+    - Masque les UUIDs non résolus en 'Carte inconnue'
+    
+    Args:
+        map_name: Nom brut de la carte.
+        
+    Returns:
+        Nom normalisé ou None.
+    """
     base = _clean_asset_label(map_name)
     if base is None:
         return None
     # Masquer les UUIDs non résolus
     if _is_uuid_like(base):
         return "Carte inconnue"
-    s = re.sub(r"\s*-\s*Forge\b", "", base, flags=re.IGNORECASE).strip()
-    return s or None
+    # Fusionner les cartes avec suffixe : "Aquarius - Live Fire" → "Aquarius"
+    # On garde la partie avant le premier " - "
+    if " - " in base:
+        base = base.split(" - ")[0].strip()
+    return base or None
 
 def _clear_min_matches_maps_auto() -> None:
     st.session_state["_min_matches_maps_auto"] = False

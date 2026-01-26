@@ -4,6 +4,8 @@ from src.analysis.stats import (
     compute_aggregated_stats,
     compute_outcome_rates,
     compute_global_ratio,
+    extract_mode_category,
+    compute_mode_category_averages,
 )
 from src.analysis.sessions import (
     compute_sessions,
@@ -54,4 +56,6 @@ __all__ = [
     "compute_relative_performance_score",
     "compute_performance_series",
     "MIN_MATCHES_FOR_RELATIVE",
+    "extract_mode_category",
+    "compute_mode_category_averages",
 ]

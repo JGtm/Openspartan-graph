@@ -61,6 +61,11 @@ class MatchRow:
     # MMR (Matchmaking Rating) - utilisé pour les analyses de matchmaking
     team_mmr: Optional[float] = None
     enemy_mmr: Optional[float] = None
+    
+    # Coéquipiers connus (amis)
+    known_teammates_count: int = 0
+    is_with_friends: bool = False
+    friends_xuids: str = ""  # XUIDs séparés par des virgules
 
     @property
     def ratio(self) -> float:

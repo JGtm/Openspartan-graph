@@ -24,7 +24,7 @@ from src.config import (
 from src.db import has_table
 from src.db.parsers import parse_xuid_input
 from src.analysis import compute_killer_victim_pairs, killer_victim_counts_long
-from src.analysis.stats import format_mmss
+from src.analysis.stats import format_mmss, extract_mode_category, compute_mode_category_averages
 from src.ui import (
     translate_playlist_name,
     translate_pair_name,
@@ -458,7 +458,7 @@ def render_match_view(
     if not pm:
         st.info("Stats détaillées indisponibles pour ce match (PlayerMatchStats manquant ou format inattendu).")
     else:
-        _render_expected_vs_actual(row, pm, colors)
+        _render_expected_vs_actual(row, pm, colors, df_full=df_full)
 
     # Némésis / Souffre-douleur
     _render_nemesis_section(
@@ -504,8 +504,13 @@ def render_match_view(
         st.link_button("Ouvrir sur HaloWaypoint", match_url, width="stretch")
 
 
-def _render_expected_vs_actual(row: pd.Series, pm: dict, colors: dict) -> None:
-    """Rend la section Réel vs Attendu."""
+def _render_expected_vs_actual(
+    row: pd.Series,
+    pm: dict,
+    colors: dict,
+    df_full: pd.DataFrame | None = None,
+) -> None:
+    """Rend la section Réel vs Attendu avec moyenne historique par catégorie de mode."""
     team_mmr = pm.get("team_mmr")
     enemy_mmr = pm.get("enemy_mmr")
     delta_mmr = (team_mmr - enemy_mmr) if (team_mmr is not None and enemy_mmr is not None) else None
@@ -558,6 +563,18 @@ def _render_expected_vs_actual(row: pd.Series, pm: dict, colors: dict) -> None:
         avg_life_last = row.get("average_life_seconds")
         _os_card("Durée de vie moyenne", format_mmss(avg_life_last), "")
 
+    # Calculer la moyenne historique par catégorie de mode
+    mode_category = extract_mode_category(row.get("pair_name"))
+    hist_avgs: dict[str, float | None] = {
+        "avg_kills": None,
+        "avg_deaths": None,
+        "avg_assists": None,
+        "avg_ratio": None,
+        "match_count": 0,
+    }
+    if df_full is not None and len(df_full) >= 10:
+        hist_avgs = compute_mode_category_averages(df_full, mode_category)
+
     # Graphique F / D / A
     labels = ["F", "D", "A"]
     actual_vals = [
@@ -569,6 +586,11 @@ def _render_expected_vs_actual(row: pd.Series, pm: dict, colors: dict) -> None:
         perf_k.get("expected"),
         perf_d.get("expected"),
         perf_a.get("expected"),
+    ]
+    hist_vals = [
+        hist_avgs.get("avg_kills"),
+        hist_avgs.get("avg_deaths"),
+        hist_avgs.get("avg_assists"),
     ]
 
     real_ratio = row.get("ratio")
@@ -587,7 +609,7 @@ def _render_expected_vs_actual(row: pd.Series, pm: dict, colors: dict) -> None:
         go.Bar(
             x=labels,
             y=exp_vals,
-            name="Attendu",
+            name="Attendu (MMR)",
             marker=dict(
                 color=bar_colors,
                 pattern=dict(shape="/", fgcolor="rgba(255,255,255,0.75)", solidity=0.22),
@@ -608,6 +630,23 @@ def _render_expected_vs_actual(row: pd.Series, pm: dict, colors: dict) -> None:
         ),
         secondary_y=False,
     )
+    
+    # Moyenne historique par catégorie (si disponible)
+    if hist_avgs.get("match_count", 0) >= 10:
+        # Utiliser une couleur distincte (violet)
+        exp_fig.add_trace(
+            go.Scatter(
+                x=labels,
+                y=hist_vals,
+                mode="markers+lines",
+                name=f"Moyenne {mode_category} ({hist_avgs['match_count']} matchs)",
+                line=dict(color=HALO_COLORS.violet, width=3, dash="dot"),
+                marker=dict(size=10, symbol="diamond"),
+                hovertemplate=f"%{{x}} (moy. {mode_category}): %{{y:.1f}}<extra></extra>",
+            ),
+            secondary_y=False,
+        )
+    
     exp_fig.add_trace(
         go.Scatter(
             x=labels,
@@ -620,6 +659,21 @@ def _render_expected_vs_actual(row: pd.Series, pm: dict, colors: dict) -> None:
         ),
         secondary_y=True,
     )
+    
+    # Ratio moyen historique (si disponible)
+    hist_ratio = hist_avgs.get("avg_ratio")
+    if hist_ratio is not None and hist_avgs.get("match_count", 0) >= 10:
+        exp_fig.add_trace(
+            go.Scatter(
+                x=labels,
+                y=[hist_ratio] * len(labels),
+                mode="lines",
+                name=f"Ratio moy. {mode_category}",
+                line=dict(color=HALO_COLORS.violet, width=2, dash="dash"),
+                hovertemplate=f"ratio moy. {mode_category}: %{{y:.2f}}<extra></extra>",
+            ),
+            secondary_y=True,
+        )
 
     exp_fig.update_layout(
         barmode="group",
