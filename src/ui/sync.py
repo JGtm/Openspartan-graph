@@ -182,12 +182,12 @@ def render_sync_indicator(db_path: str) -> None:
             sync_text = "🔴 Sync inconnue"
     
     # Affichage compact
-    match_info = f"({total_matches} matchs)" if total_matches > 0 else ""
-    st.markdown(
-        f"<div style='font-size: 0.85em; color: #888; margin: 4px 0 8px 0;'>"
-        f"{sync_text} {match_info}</div>",
-        unsafe_allow_html=True,
-    )
+    # match_info = f"({total_matches} matchs)" if total_matches > 0 else ""
+    # st.markdown(
+    #     f"<div style='font-size: 0.85em; color: #888; margin: 4px 0 8px 0;'>"
+    #     f"{sync_text} {match_info}</div>",
+    #     unsafe_allow_html=True,
+    # )
 
 
 def refresh_spnkr_db_via_api(

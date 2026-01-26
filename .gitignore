@@ -41,3 +41,4 @@ data/halo_unified.db
 data/halo_unified.db.bak
 *.db-shm
 *.db-wal
+data/test_sync.db
