@@ -641,7 +641,7 @@ def _cmd_sync(args: argparse.Namespace) -> int:
             print(f"  ✓ À jour")
         
         # Réparer les aliases sur les matchs récents
-        _repair_aliases_for_recent_matches(db, player, count=min(new_matches + 5, 30))
+        _repair_aliases_for_recent_matches(db, player, count=min(new_matches + 1, 30))
         
         # Fetch assets profil
         _fetch_profile_assets(player)
