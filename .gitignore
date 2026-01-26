@@ -39,3 +39,5 @@ Chocoboflor
 JGtm
 data/halo_unified.db
 data/halo_unified.db.bak
+*.db-shm
+*.db-wal
