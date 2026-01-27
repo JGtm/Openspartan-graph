@@ -152,12 +152,17 @@ def medal_icon_path(nid: int) -> Optional[str]:
     return p if os.path.exists(p) else None
 
 
-def render_medals_grid(medals: list[dict[str, int]], cols_per_row: int = 8) -> None:
+def render_medals_grid(
+    medals: list[dict[str, int]],
+    cols_per_row: int = 8,
+    deltas: dict[int, int] | None = None,
+) -> None:
     """Affiche une grille de médailles dans Streamlit.
 
     Args:
         medals: Liste de dicts avec 'name_id' et 'count'.
         cols_per_row: Nombre de colonnes (3-12, défaut 8).
+        deltas: Dict {medal_id: delta_count} pour afficher +XXX à côté du compteur.
     """
     if not medals:
         st.info("Aucune médaille.")
@@ -194,10 +199,17 @@ def render_medals_grid(medals: list[dict[str, int]], cols_per_row: int = 8) -> N
                 unsafe_allow_html=True,
             )
 
+        # Afficher le delta si fourni
+        delta_html = ""
+        if deltas is not None and nid in deltas:
+            delta_val = deltas[nid]
+            if delta_val > 0:
+                delta_html = f" <span style='color: #4CAF50; font-weight: bold;'>+{delta_val}</span>"
+        
         col.markdown(
             "<div class='os-medal-caption'>"
             + "<div class='os-medal-name'>" + name + "</div>"
-            + "<div class='os-medal-count'>x" + str(cnt) + "</div>"
+            + "<div class='os-medal-count'>x" + str(cnt) + delta_html + "</div>"
             + "</div>",
             unsafe_allow_html=True,
         )

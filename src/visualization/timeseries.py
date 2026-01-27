@@ -40,7 +40,7 @@ def plot_timeseries(df: pd.DataFrame, title: str = "Frags / Morts / Ratio") -> g
             d["kills"],
             d["deaths"],
             d["assists"],
-            d["accuracy"].round(2).astype(object),
+            pd.to_numeric(d["accuracy"], errors="coerce").fillna(0).round(2),
             d["ratio"],
         )
     )
@@ -140,7 +140,7 @@ def plot_assists_timeseries(df: pd.DataFrame, title: str = "Assistances") -> go.
             d["kills"],
             d["deaths"],
             d["assists"],
-            d["accuracy"].round(2).astype(object),
+            pd.to_numeric(d["accuracy"], errors="coerce").fillna(0).round(2),
             d["ratio"],
             d["map_name"].fillna(""),
             d["playlist_name"].fillna(""),

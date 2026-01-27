@@ -654,16 +654,20 @@ def render_h5g_commendations_section(
     *,
     counts_by_medal: dict[int, int] | None = None,
     stats_totals: dict[str, int] | None = None,
-    delta_count: int | None = None,
+    counts_by_medal_full: dict[int, int] | None = None,
+    stats_totals_full: dict[str, int] | None = None,
     df: pd.DataFrame | None = None,
+    df_full: pd.DataFrame | None = None,
 ) -> None:
     """Affiche la section des commendations Halo 5.
     
     Args:
-        counts_by_medal: Compteurs de médailles par ID.
-        stats_totals: Totaux des stats (kills, deaths, etc.).
-        delta_count: Delta à afficher en vert (si filtré).
-        df: DataFrame des matchs pour les calculs personnalisés.
+        counts_by_medal: Compteurs de médailles par ID (filtrés).
+        stats_totals: Totaux des stats (kills, deaths, etc.) filtrés.
+        counts_by_medal_full: Compteurs de médailles complets (non filtrés).
+        stats_totals_full: Totaux des stats complets (non filtrés).
+        df: DataFrame des matchs filtrés pour les calculs personnalisés.
+        df_full: DataFrame complet pour calculer les valeurs full.
     """
     abs_json = _abs_from_repo(DEFAULT_H5G_JSON_PATH)
     json_mtime = None
@@ -722,12 +726,9 @@ def render_h5g_commendations_section(
         excluded_count = 0
 
     st.subheader("Citations")
-    # Afficher le delta si filtré.
-    if delta_count is not None and delta_count > 0:
-        st.markdown(
-            f"<span style='color: #4CAF50; font-weight: bold;'>+{delta_count:,}</span> sur cette sélection".replace(",", " "),
-            unsafe_allow_html=True,
-        )
+    # Détermine si on est en mode filtré (pour afficher les deltas par citation).
+    is_filtered = (counts_by_medal_full is not None and counts_by_medal != counts_by_medal_full) or \
+                  (stats_totals_full is not None and stats_totals != stats_totals_full)
     if not items:
         c1, c2 = st.columns([2, 1])
         with c1:
@@ -798,32 +799,51 @@ def render_h5g_commendations_section(
         rule = tracking.get(_normalize_name(name_raw)) or {}
         norm_name = _normalize_name(name_raw)
         current = 0
+        current_full = 0  # Valeur sur tous les matchs (pour le delta)
         
         # Priorité aux règles personnalisées (CUSTOM_CITATION_RULES)
         if norm_name in CUSTOM_CITATION_RULES:
             custom_rule = CUSTOM_CITATION_RULES[norm_name]
             current = _compute_custom_citation_value(custom_rule, df, counts_by_medal, stats_totals)
+            # Calculer aussi la valeur full pour le delta
+            if is_filtered and df_full is not None:
+                current_full = _compute_custom_citation_value(
+                    custom_rule, df_full, 
+                    counts_by_medal_full or {}, 
+                    stats_totals_full or {}
+                )
         elif isinstance(rule.get("medal_ids"), list):
             total = 0
+            total_full = 0
             for mid in rule.get("medal_ids") or []:
                 try:
                     total += int(counts_by_medal.get(int(mid), 0))
+                    if is_filtered and counts_by_medal_full:
+                        total_full += int(counts_by_medal_full.get(int(mid), 0))
                 except Exception:
                     continue
             current = int(total)
+            current_full = int(total_full)
         elif rule.get("medal_id") is not None:
             try:
                 current = int(counts_by_medal.get(int(rule.get("medal_id")), 0))
+                if is_filtered and counts_by_medal_full:
+                    current_full = int(counts_by_medal_full.get(int(rule.get("medal_id")), 0))
             except Exception:
                 current = 0
         elif isinstance(rule.get("stat"), str) and rule.get("stat"):
             stat_key = str(rule.get("stat") or "").strip()
             try:
                 current = int(stats_totals.get(stat_key, 0))
+                if is_filtered and stats_totals_full:
+                    current_full = int(stats_totals_full.get(stat_key, 0))
             except Exception:
                 current = 0
 
-        level_label, counter_label, is_master, progress_ratio = _compute_mastery_display(current, tiers)
+        # Calcul du delta pour cette citation
+        delta_citation = current if (is_filtered and current > 0) else 0
+
+        level_label, counter_label, is_master, progress_ratio = _compute_mastery_display(current_full if is_filtered else current, tiers)
 
         with col:
             st.markdown("<div class='os-citation-top-gap'></div>", unsafe_allow_html=True)
@@ -858,7 +878,11 @@ def render_h5g_commendations_section(
                 f"<div class='{level_class}'>{html.escape(level_label)}</div>",
                 unsafe_allow_html=True,
             )
+            # Afficher le compteur avec le delta si filtré
+            delta_html = ""
+            if is_filtered and delta_citation > 0:
+                delta_html = f" <span style='color: #4CAF50; font-weight: bold;'>+{delta_citation}</span>"
             st.markdown(
-                "<div class='os-citation-counter'>" + html.escape(counter_label) + "</div>",
+                "<div class='os-citation-counter'>" + html.escape(counter_label) + delta_html + "</div>",
                 unsafe_allow_html=True,
             )

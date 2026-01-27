@@ -96,12 +96,14 @@ def render_citations_page(
     is_filtered = len(dff) < len(df_full) if not df_full.empty else False
 
     # 1) Commendations Halo 5 (référentiel offline)
-    # Afficher le delta seulement si on est en mode filtré
+    # Passer les compteurs full pour afficher les deltas par citation
     render_h5g_commendations_section(
         counts_by_medal=counts_by_medal,
         stats_totals=stats_totals,
-        delta_count=total_medals_filtered if is_filtered else None,
+        counts_by_medal_full=counts_by_medal_full if is_filtered else None,
+        stats_totals_full=stats_totals_full if is_filtered else None,
         df=dff,
+        df_full=df_full if is_filtered else None,
     )
     st.divider()
 
@@ -110,13 +112,6 @@ def render_citations_page(
     if dff.empty:
         st.info("Aucun match disponible avec les filtres actuels.")
     else:
-        # Afficher le delta si filtré.
-        if is_filtered and delta_medals > 0:
-            st.markdown(
-                f"<span style='color: #4CAF50; font-weight: bold;'>+{delta_medals:,}</span> médailles sur cette sélection".replace(",", " "),
-                unsafe_allow_html=True,
-            )
-
         top = sorted(counts_by_medal.items(), key=lambda kv: kv[1], reverse=True)
 
         if not top:
@@ -125,4 +120,12 @@ def render_citations_page(
             md = pd.DataFrame(top, columns=["name_id", "count"])
             md["label"] = md["name_id"].apply(lambda x: medal_label(int(x)))
             md_desc = md.sort_values("count", ascending=False)
-            render_medals_grid(md_desc[["name_id", "count"]].to_dict(orient="records"), cols_per_row=8)
+            # Passer les deltas par médaille si filtré
+            deltas = None
+            if is_filtered:
+                deltas = {int(nid): int(cnt) for nid, cnt in counts_by_medal.items()}
+            render_medals_grid(
+                md_desc[["name_id", "count"]].to_dict(orient="records"),
+                cols_per_row=8,
+                deltas=deltas,
+            )
