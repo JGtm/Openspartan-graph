@@ -85,3 +85,40 @@ class TestSessionCompareHistoricalAverageByCategory:
             mode_category="BTB",
         )
         assert hist_btb.get("session_count") == 1
+
+    def test_compute_similar_sessions_average_without_is_with_friends(self) -> None:
+        """Fallback: si is_with_friends est absent, comparer sur toutes les sessions."""
+        df = pd.DataFrame(
+            [
+                {
+                    "session_id": 10,
+                    "pair_name": "Arena:Slayer on Aquarius",
+                    "kills": 10,
+                    "deaths": 5,
+                    "assists": 2,
+                    "outcome": 2,
+                    "average_life_seconds": 30.0,
+                    "accuracy": 45.0,
+                },
+                {
+                    "session_id": 11,
+                    "pair_name": "BTB:CTF on Highpower",
+                    "kills": 20,
+                    "deaths": 10,
+                    "assists": 5,
+                    "outcome": 2,
+                    "average_life_seconds": 40.0,
+                    "accuracy": 55.0,
+                },
+            ]
+        )
+
+        hist = compute_similar_sessions_average(
+            df,
+            is_with_friends=False,
+            exclude_session_ids=None,
+            same_friends_xuids=None,
+            mode_category="BTB",
+        )
+        assert hist.get("session_count") == 1
+        assert hist.get("win_rate") is not None

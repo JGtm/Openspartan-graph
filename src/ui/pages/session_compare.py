@@ -190,9 +190,6 @@ def compute_similar_sessions_average(
     if all_sessions_df.empty or "session_id" not in all_sessions_df.columns:
         return {}
     
-    if "is_with_friends" not in all_sessions_df.columns:
-        return {}
-    
     exclude_ids = set(exclude_session_ids or [])
     
     # Filtrer les sessions exclues
@@ -201,7 +198,11 @@ def compute_similar_sessions_average(
         return {}
     
     # Mode "mêmes amis" : matcher les sessions avec exactement les mêmes amis
-    if same_friends_xuids and len(same_friends_xuids) > 0:
+    # NOTE: Si la colonne `is_with_friends` n'existe pas, on ne peut pas faire
+    # de comparaison solo/amis. Dans ce cas, on considère "toutes sessions".
+    if "is_with_friends" not in df.columns:
+        matching_session_ids = df["session_id"].dropna().unique().tolist()
+    elif same_friends_xuids and len(same_friends_xuids) > 0:
         matching_session_ids = []
         for session_id, group in df.groupby("session_id"):
             session_friends = get_session_friends_signature(group)
@@ -680,13 +681,23 @@ def render_session_comparison_page(
     exclude_ids = [sid for sid in [session_a_id, session_b_id] if sid is not None]
     
     # Déterminer le type de session (solo vs avec amis) - basé sur la session B (celle qu'on compare)
-    session_b_with_friends = is_session_with_friends(df_session_b)
-    session_b_friends = get_session_friends_signature(df_session_b)
+    has_with_friends_col = "is_with_friends" in all_sessions_df.columns
+    session_b_with_friends = is_session_with_friends(df_session_b) if has_with_friends_col else False
+    session_b_friends = get_session_friends_signature(df_session_b) if has_with_friends_col else set()
     session_b_category = _infer_session_dominant_category(df_session_b)
     
     # Option de comparaison : mêmes amis vs solo/avec amis
     compare_mode = "same_friends"  # Par défaut : mêmes amis si possible
-    if session_b_with_friends and len(session_b_friends) > 0:
+    if not has_with_friends_col:
+        # Fallback: pas d'info amis => comparer sur toutes les sessions
+        hist_avg = compute_similar_sessions_average(
+            all_sessions_df,
+            is_with_friends=False,
+            exclude_session_ids=exclude_ids,
+            mode_category=session_b_category,
+        )
+        compare_mode = "all"
+    elif session_b_with_friends and len(session_b_friends) > 0:
         # Essayer d'abord avec les mêmes amis
         hist_avg = compute_similar_sessions_average(
             all_sessions_df,
@@ -717,7 +728,13 @@ def render_session_comparison_page(
         compare_mode = "solo"
     
     # Construire le label du type de session
-    if session_b_with_friends and len(session_b_friends) > 0:
+    if not has_with_friends_col:
+        session_type_label = "(amis indisponibles) 🎮"
+        compare_label = (
+            f"toutes sessions ({hist_avg.get('session_count', 0)} sessions)"
+            f" — catégorie {_CATEGORY_FR.get(session_b_category, session_b_category)}"
+        )
+    elif session_b_with_friends and len(session_b_friends) > 0:
         # Récupérer les gamertags des amis (depuis la table Friends si possible)
         friends_names = _get_friends_names(df_session_b)
         if friends_names:
