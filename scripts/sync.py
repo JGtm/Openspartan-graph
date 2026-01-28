@@ -451,10 +451,15 @@ def rebuild_match_cache(db_path: str, xuid: str | None = None) -> tuple[bool, st
             con.commit()
             
             # Mettre à jour les métadonnées
+            # NOTE: total_inserted compte les INSERT/REPLACE effectués.
+            # Le nombre de lignes finales peut être inférieur si la clé primaire
+            # de MatchCache provoque des remplacements. On persiste donc le COUNT(*) réel.
+            cur.execute("SELECT COUNT(*) FROM MatchCache")
+            actual_count = int(cur.fetchone()[0] or 0)
             cur.execute(
                 """INSERT OR REPLACE INTO CacheMeta (key, value, updated_at)
                    VALUES ('match_cache_count', ?, ?)""",
-                (str(total_inserted), _get_iso_now()),
+                (str(actual_count), _get_iso_now()),
             )
             con.commit()
             
