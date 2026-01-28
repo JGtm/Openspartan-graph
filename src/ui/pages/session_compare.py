@@ -22,9 +22,42 @@ from src.ui.components.performance import (
     get_score_class,
 )
 from src.analysis.performance_score import compute_performance_series
+from src.analysis.mode_categories import infer_custom_category_from_pair_name
 
 if TYPE_CHECKING:
     pass
+
+
+_CATEGORY_FR: dict[str, str] = {
+    "Assassin": "Assassin",
+    "Fiesta": "Fiesta",
+    "BTB": "Grande bataille en équipe",
+    "Ranked": "Classé",
+    "Firefight": "Baptême du feu",
+    "Other": "Autre",
+}
+
+
+def _infer_session_dominant_category(df_session: pd.DataFrame) -> str:
+    """Infère la catégorie dominante d'une session.
+
+    On applique la catégorisation custom (alignée sidebar) à chaque match via
+    `pair_name`, puis on prend la catégorie la plus fréquente.
+    """
+    if df_session.empty or "pair_name" not in df_session.columns:
+        return "Other"
+
+    cats = (
+        df_session["pair_name"]
+        .apply(infer_custom_category_from_pair_name)
+        .fillna("Other")
+        .astype(str)
+    )
+    if cats.empty:
+        return "Other"
+
+    vc = cats.value_counts()
+    return str(vc.index[0]) if not vc.empty else "Other"
 
 
 def _get_friends_names(df_session: pd.DataFrame) -> set[str]:
@@ -135,6 +168,7 @@ def compute_similar_sessions_average(
     is_with_friends: bool,
     exclude_session_ids: list[int] | None = None,
     same_friends_xuids: set[str] | None = None,
+    mode_category: str | None = None,
 ) -> dict:
     """Calcule la moyenne des sessions similaires.
     
@@ -147,9 +181,11 @@ def compute_similar_sessions_average(
         is_with_friends: True pour sessions avec amis, False pour solo.
         exclude_session_ids: Session IDs à exclure du calcul.
         same_friends_xuids: Si fourni, ne matcher que les sessions avec ces amis exacts.
+        mode_category: Si fourni, ne garder que les sessions dont la catégorie dominante
+            correspond (Assassin/Fiesta/BTB/Ranked/Firefight/Other).
         
     Returns:
-        Dict avec kd_ratio, win_rate, avg_life, session_count, friends_label.
+        Dict avec kd_ratio, win_rate, accuracy, avg_life_seconds, session_count, etc.
     """
     if all_sessions_df.empty or "session_id" not in all_sessions_df.columns:
         return {}
@@ -181,6 +217,26 @@ def compute_similar_sessions_average(
     
     if len(matching_session_ids) == 0:
         return {}
+
+    # Filtrer par catégorie dominante si demandée
+    if mode_category:
+        df_candidates = df[df["session_id"].isin(matching_session_ids)].copy()
+        if df_candidates.empty:
+            return {}
+
+        dom_by_session = (
+            df_candidates.assign(
+                _cat=df_candidates["pair_name"].apply(infer_custom_category_from_pair_name)
+            )
+            .groupby("session_id")["_cat"]
+            .apply(lambda s: s.value_counts().index[0] if len(s) else "Other")
+        )
+
+        matching_session_ids = [
+            sid for sid in matching_session_ids if dom_by_session.get(sid) == mode_category
+        ]
+        if len(matching_session_ids) == 0:
+            return {}
     
     # Filtrer les matchs des sessions correspondantes
     df_matching = df[df["session_id"].isin(matching_session_ids)]
@@ -197,13 +253,24 @@ def compute_similar_sessions_average(
     total_matches = len(df_matching)
     
     # K/D ratio moyen par session
-    session_stats = df_matching.groupby("session_id").agg({
+    agg_spec: dict[str, object] = {
         "kills": "sum",
         "deaths": "sum",
         "assists": "sum",
         "outcome": lambda x: (x == 2).sum() / len(x) * 100 if len(x) > 0 else 0,
         "average_life_seconds": "mean",
-    }).rename(columns={"outcome": "win_rate"})
+    }
+    acc_col: str | None = None
+    if "accuracy" in df_matching.columns:
+        acc_col = "accuracy"
+    elif "shots_accuracy" in df_matching.columns:
+        acc_col = "shots_accuracy"
+    if acc_col:
+        agg_spec[acc_col] = "mean"
+
+    session_stats = df_matching.groupby("session_id").agg(agg_spec).rename(
+        columns={"outcome": "win_rate"}
+    )
     
     # Calculer K/D par session puis moyenne
     session_stats["kd_ratio"] = session_stats.apply(
@@ -214,10 +281,12 @@ def compute_similar_sessions_average(
     avg_kd = session_stats["kd_ratio"].mean()
     avg_win_rate = session_stats["win_rate"].mean()
     avg_life = session_stats["average_life_seconds"].mean()
+    avg_accuracy = session_stats[acc_col].mean() if acc_col and acc_col in session_stats.columns else None
     
     return {
         "kd_ratio": avg_kd,
         "win_rate": avg_win_rate,
+        "accuracy": avg_accuracy,
         "avg_life_seconds": avg_life,
         "kills_per_match": total_kills / total_matches if total_matches > 0 else 0,
         "deaths_per_match": total_deaths / total_matches if total_matches > 0 else 0,
@@ -606,6 +675,7 @@ def render_session_comparison_page(
     # Déterminer le type de session (solo vs avec amis) - basé sur la session B (celle qu'on compare)
     session_b_with_friends = is_session_with_friends(df_session_b)
     session_b_friends = get_session_friends_signature(df_session_b)
+    session_b_category = _infer_session_dominant_category(df_session_b)
     
     # Option de comparaison : mêmes amis vs solo/avec amis
     compare_mode = "same_friends"  # Par défaut : mêmes amis si possible
@@ -616,6 +686,7 @@ def render_session_comparison_page(
             is_with_friends=True,
             exclude_session_ids=exclude_ids,
             same_friends_xuids=session_b_friends,
+            mode_category=session_b_category,
         )
         
         # Si pas assez de sessions avec les mêmes amis, fallback sur "avec amis"
@@ -625,6 +696,7 @@ def render_session_comparison_page(
                 is_with_friends=True,
                 exclude_session_ids=exclude_ids,
                 same_friends_xuids=None,  # N'importe quels amis
+                mode_category=session_b_category,
             )
             compare_mode = "any_friends"
     else:
@@ -633,6 +705,7 @@ def render_session_comparison_page(
             all_sessions_df,
             is_with_friends=False,
             exclude_session_ids=exclude_ids,
+            mode_category=session_b_category,
         )
         compare_mode = "solo"
     
@@ -647,12 +720,21 @@ def render_session_comparison_page(
             session_type_label = f"avec {len(session_b_friends)} ami(s) 👥"
         
         if compare_mode == "same_friends":
-            compare_label = f"mêmes amis ({hist_avg.get('session_count', 0)} sessions)"
+            compare_label = (
+                f"mêmes amis ({hist_avg.get('session_count', 0)} sessions)"
+                f" — catégorie {_CATEGORY_FR.get(session_b_category, session_b_category)}"
+            )
         else:
-            compare_label = f"sessions avec amis ({hist_avg.get('session_count', 0)} sessions)"
+            compare_label = (
+                f"sessions avec amis ({hist_avg.get('session_count', 0)} sessions)"
+                f" — catégorie {_CATEGORY_FR.get(session_b_category, session_b_category)}"
+            )
     else:
         session_type_label = "solo 🎮"
-        compare_label = f"sessions solo ({hist_avg.get('session_count', 0)} sessions)"
+        compare_label = (
+            f"sessions solo ({hist_avg.get('session_count', 0)} sessions)"
+            f" — catégorie {_CATEGORY_FR.get(session_b_category, session_b_category)}"
+        )
     
     # Déterminer qui est meilleur
     score_a = perf_a.get("score")
